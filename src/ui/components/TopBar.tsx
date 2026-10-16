@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud } from 'lucide-react';
+import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
 import { usePersist } from '../../state/persistence';
 import { useAuth, signIn } from '../../cloud/cloud';
@@ -26,7 +26,7 @@ function Position() {
   return <div className="pos" title="Bar . beat . sixteenth">{formatPosition({ timeSignature: ts }, pos)}</div>;
 }
 
-export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () => void; browserOpen: boolean; agentOpen: boolean; toggleBrowser: () => void; toggleAgent: () => void }) {
+export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () => void; onOpenHelp: () => void; browserOpen: boolean; agentOpen: boolean; toggleBrowser: () => void; toggleAgent: () => void }) {
   const name = useDaw((s) => s.project.name);
   const bpm = useDaw((s) => s.project.bpm);
   const key = useDaw((s) => s.project.key);
@@ -52,7 +52,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
   return (
     <header className="topbar">
-      <button className="btn icon" title="Toggle browser" onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
+      <button className="btn icon" title="Show or hide the sound browser" onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
       <div className="brand"><Logo /> Vibe</div>
       <input
         className="project-name"
@@ -61,17 +61,18 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
         onChange={(e) => update('Rename project', (d) => { d.name = e.target.value; }, { coalesce: true })}
       />
       <span className="save-state">{saveState === 'saved' ? (user ? (syncing ? 'Syncing…' : 'Saved') : 'Saved locally') : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Edited'}</span>
-      <button className="btn icon" title="Projects" onClick={props.onOpenProjects}><FolderOpen size={16} /></button>
+      <button className="btn icon" title="Open, create, or delete projects" onClick={props.onOpenProjects}><FolderOpen size={16} /></button>
       <button className="btn icon" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={() => useDaw.getState().undo()}><Undo2 size={16} /></button>
       <button className="btn icon" title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => useDaw.getState().redo()}><Redo2 size={16} /></button>
 
       <div className="transport">
         <button className="btn icon" title="Back to start (Home)" onClick={() => stop(true)}><SkipBack size={16} /></button>
+        <button className="btn icon" title="Stop" onClick={() => stop(false)}><Square size={14} fill="currentColor" /></button>
         <button className={`play ${playing ? 'playing' : ''}`} title="Play / pause (Space)" onClick={() => void togglePlay()}>
           {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
         </button>
         <button className={`btn icon ${loop ? 'on' : ''}`} title="Loop (L)" onClick={() => update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; })}><Repeat size={16} /></button>
-        <button className={`btn icon ${metronome ? 'on' : ''}`} title="Metronome" onClick={() => useTransport.getState().setMetronome(!metronome)}><Metronome size={16} /></button>
+        <button className={`btn icon ${metronome ? 'on' : ''}`} title="Metronome click" onClick={() => useTransport.getState().setMetronome(!metronome)}><Metronome size={16} /></button>
       </div>
 
       <div className="lcd">
@@ -112,8 +113,9 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
           <button className="btn" onClick={() => signIn().catch((e) => toast(e.message, 'error'))} title="Sign in to sync projects and samples"><LogIn size={15} /> Sign in</button>
         ))}
         {user && <Cloud size={14} color="var(--faint)" aria-label="Cloud sync on" />}
-        <button className="btn icon" title="Settings" onClick={props.onOpenSettings}><Settings size={16} /></button>
-        <button className="btn icon" title="Toggle agent (Ctrl+L)" onClick={props.toggleAgent} aria-pressed={props.agentOpen}><PanelRight size={16} /></button>
+        <button className="btn icon" title="Help and keyboard shortcuts (?)" onClick={props.onOpenHelp}><CircleQuestionMark size={16} /></button>
+        <button className="btn icon" title="Settings: Gemini key, model, account" onClick={props.onOpenSettings}><Settings size={16} /></button>
+        <button className="btn icon" title="Show or hide the Producer chat (Ctrl+L)" onClick={props.toggleAgent} aria-pressed={props.agentOpen}><PanelRight size={16} /></button>
       </div>
     </header>
   );

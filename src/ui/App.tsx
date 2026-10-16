@@ -10,6 +10,9 @@ import { useToasts } from './toast';
 import { useDaw } from '../state/store';
 import { togglePlay, stop } from '../engine/api';
 import { isTypingTarget } from './hooks';
+import { Tooltips } from './Tooltips';
+import { HelpModal } from './components/HelpModal';
+import { copySelectedClips, deleteSelectedClips, duplicateSelectedClips, pasteClips, splitAtPlayhead } from './actions';
 
 function Toasts() {
   const toasts = useToasts((s) => s.toasts);
@@ -23,6 +26,7 @@ function Toasts() {
 export function App() {
   const [settings, setSettings] = useState(false);
   const [projects, setProjects] = useState(false);
+  const [help, setHelp] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(true);
   const [agentOpen, setAgentOpen] = useState(true);
   const [focusAgent, setFocusAgent] = useState(0);
@@ -47,34 +51,14 @@ export function App() {
       if (e.code === 'Space') { e.preventDefault(); void togglePlay(); return; }
       if (e.key === 'Home') { stop(true); return; }
       if (k === 'l' && !mod) { daw.update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; }); return; }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && daw.selection.clipIds.length) {
-        const ids = new Set(daw.selection.clipIds);
-        daw.update('Delete clips', (d) => { for (const t of d.tracks) t.clips = t.clips.filter((c) => !ids.has(c.id)); });
-        daw.select({ clipIds: [] });
-        if (daw.editorClipId && ids.has(daw.editorClipId)) daw.openEditor(null);
-        return;
-      }
-      if (mod && k === 'd' && daw.selection.clipIds.length) {
-        e.preventDefault();
-        const ids = new Set(daw.selection.clipIds);
-        const fresh: string[] = [];
-        daw.update('Duplicate clips', (d) => {
-          for (const t of d.tracks) {
-            const sel = t.clips.filter((c) => ids.has(c.id));
-            if (!sel.length) continue;
-            const start = Math.min(...sel.map((c) => c.start));
-            const end = Math.max(...sel.map((c) => c.start + c.length));
-            for (const c of sel) {
-              d.nextId++;
-              const copy = { ...structuredClone(c), id: `c${d.nextId}`, start: c.start + (end - start) };
-              delete copy.aiPending;
-              t.clips.push(copy);
-              fresh.push(copy.id);
-            }
-          }
-        });
-        daw.select({ clipIds: fresh });
-      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && daw.selection.clipIds.length) { deleteSelectedClips(); return; }
+      if (mod && k === 'd') { e.preventDefault(); duplicateSelectedClips(); return; }
+      if (mod && k === 'c') { copySelectedClips(); return; }
+      if (mod && k === 'x') { copySelectedClips(true); return; }
+      if (mod && k === 'v') { e.preventDefault(); pasteClips(); return; }
+      if (mod && k === 'e') { e.preventDefault(); splitAtPlayhead(); return; }
+      if (e.key === '?') { setHelp(true); return; }
+      if (e.key === 'Escape') { daw.select({ clipIds: [] }); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -85,6 +69,7 @@ export function App() {
       <TopBar
         onOpenSettings={() => setSettings(true)}
         onOpenProjects={() => setProjects(true)}
+        onOpenHelp={() => setHelp(true)}
         browserOpen={browserOpen}
         agentOpen={agentOpen}
         toggleBrowser={() => setBrowserOpen((v) => !v)}
@@ -99,6 +84,8 @@ export function App() {
       <InlineAI />
       {settings && <SettingsModal onClose={() => setSettings(false)} />}
       {projects && <ProjectsModal onClose={() => setProjects(false)} />}
+      {help && <HelpModal onClose={() => setHelp(false)} />}
+      <Tooltips />
       <Toasts />
     </div>
   );
