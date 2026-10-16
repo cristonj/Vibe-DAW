@@ -272,6 +272,19 @@ export class EngineGraph {
 
   // ---------------------------------------------------------------- scheduling
 
+  /**
+   * Schedule a transport callback that ignores duplicate firings at the same time
+   * (Tone can re-fire an event on a clock-block boundary; a doubled note is louder).
+   */
+  private once(cb: (time: number) => void, at: string): number {
+    let last = -Infinity;
+    return this.transport.schedule((time) => {
+      if (Math.abs(time - last) < 0.002) return;
+      last = time;
+      cb(time);
+    }, at);
+  }
+
   private ticks(beat: number): string {
     return `${Math.max(0, Math.round(beat * this.transport.PPQ))}i`;
   }
@@ -314,21 +327,29 @@ export class EngineGraph {
       const durSec = beatsToSeconds(p, Math.max(0.01, durBeats));
       const trackId = s.track.id;
       if (s.ghost) {
-        s.events.push(this.transport.schedule((time) => { for (const d of this.duckTargets(trackId)) d.duck!(time); }, this.ticks(beat)));
+        s.events.push(this.once((time) => { for (const d of this.duckTargets(trackId)) d.duck!(time); }, this.ticks(beat)));
         continue;
       }
       if (isDrums) {
         const lane = laneByNote.get(n.pitch);
         if (!lane) continue;
-        const id = this.transport.schedule((time) => {
-          this.triggerDrum(s, lane, time, n.velocity);
-          for (const d of this.duckTargets(trackId)) d.duck!(time);
+        const id = this.once((time) => {
+          try {
+            this.triggerDrum(s, lane, time, n.velocity);
+            for (const d of this.duckTargets(trackId)) d.duck!(time);
+          } catch (e) {
+            console.warn('Drum hit failed', e); // never let one bad event stall the transport
+          }
         }, this.ticks(beat));
         s.events.push(id);
       } else {
-        const id = this.transport.schedule((time) => {
-          s.instrument?.trigger(n.pitch, durSec, time, n.velocity);
-          for (const d of this.duckTargets(trackId)) d.duck!(time);
+        const id = this.once((time) => {
+          try {
+            s.instrument?.trigger(n.pitch, durSec, time, n.velocity);
+            for (const d of this.duckTargets(trackId)) d.duck!(time);
+          } catch (e) {
+            console.warn('Note failed', e); // never let one bad event stall the transport
+          }
         }, this.ticks(beat));
         s.events.push(id);
       }
@@ -361,7 +382,7 @@ export class EngineGraph {
 
   private async scheduleAudio(s: Strip, clip: AudioClip) {
     if (!getLoadedBuffer(clip.sampleId)) await loadBuffer(clip.sampleId);
-    const id = this.transport.schedule((time) => this.startAudioVoice(s, clip, time, 0), this.ticks(clip.start));
+    const id = this.once((time) => this.startAudioVoice(s, clip, time, 0), this.ticks(clip.start));
     s.events.push(id);
   }
 
@@ -422,7 +443,11 @@ export class EngineGraph {
       },
     };
     s.audioVoices.add(voice);
-    const cleanup = () => { s.audioVoices.delete(voice); node.dispose(); gain.dispose(); };
+    const cleanup = () => {
+      s.audioVoices.delete(voice);
+      // Offline 'ended' fires on Tone's clock, ahead of the rendered audio — don't cut the clip short.
+      if (!context.isOffline) { node.dispose(); gain.dispose(); }
+    };
     node.onended = cleanup;
   }
 

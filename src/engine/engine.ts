@@ -129,11 +129,11 @@ export function seek(beat: number) {
 function startPlayheadLoop() {
   cancelAnimationFrame(raf);
   const tick = () => {
-    if (!transport) return;
-    if (transport.state === 'started') {
-      useTransport.getState().setPosition(transport.ticks / transport.PPQ);
-      raf = requestAnimationFrame(tick);
-    }
+    if (!transport || !useTransport.getState().playing) return;
+    // Keep looping while we're playing: the transport starts slightly in the future,
+    // so its state reads 'stopped' for the first frames.
+    if (transport.state === 'started') useTransport.getState().setPosition(transport.ticks / transport.PPQ);
+    raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);
 }

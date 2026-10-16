@@ -709,3 +709,6 @@ kbd {
 .shortcuts { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .shortcuts td { padding: 4px 0; color: var(--muted); }
 .shortcuts td:first-child { width: 150px; }
+
+.playhead-grip { position: absolute; top: 0; bottom: 0; left: -5px; width: 11px; pointer-events: auto; cursor: ew-resize; }
+.ruler .marks { cursor: ew-resize; }
