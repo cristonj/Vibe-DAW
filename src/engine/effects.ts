@@ -207,7 +207,14 @@ export function createEffect(effect: Effect): EffectUnit {
       const sat = new Tone.WaveShaper(tanhCurve(0.25), 2048);
       const noise = new Tone.Noise('pink').start();
       const noiseHp = new Tone.Filter({ type: 'highpass', frequency: 1800 });
-      const noiseGain = new Tone.Gain(num(p.noise, 0.15) * 0.035);
+      // Vinyl noise follows the music: an envelope follower on the input drives the
+      // noise level, so there's no hiss/static when the track is silent or stopped.
+      const noiseGain = new Tone.Gain(0);
+      const follower = new Tone.Follower(0.08);
+      const noiseAmount = new Tone.Multiply(num(p.noise, 0.15) * 0.12);
+      input.connect(follower);
+      follower.connect(noiseAmount);
+      noiseAmount.connect(noiseGain.gain);
       const chainOut = new Tone.Gain(1);
       input.chain(wow, flutter, sat, hp, lp, chainOut);
       noise.chain(noiseHp, noiseGain, chainOut);
@@ -217,10 +224,10 @@ export function createEffect(effect: Effect): EffectUnit {
         update: (q) => {
           if (q.wow !== undefined) { wow.depth.value = num(q.wow, 0.35) * 0.25; flutter.depth.value = num(q.wow, 0.35) * 0.04; }
           if (q.tone !== undefined) lp.frequency.value = 2500 + num(q.tone, 0.45) * 9000;
-          if (q.noise !== undefined) noiseGain.gain.value = num(q.noise, 0.15) * 0.035;
+          if (q.noise !== undefined) noiseAmount.factor.value = num(q.noise, 0.15) * 0.12;
           if (q.wet !== undefined) wd.setWet(num(q.wet, 1));
         },
-        dispose: () => { [input, wow, flutter, lp, hp, sat, noise, noiseHp, noiseGain, chainOut].forEach((n) => n.dispose()); wd.dispose(); },
+        dispose: () => { [input, wow, flutter, lp, hp, sat, noise, noiseHp, noiseGain, follower, noiseAmount, chainOut].forEach((n) => n.dispose()); wd.dispose(); },
       };
     }
     case 'limiter': {

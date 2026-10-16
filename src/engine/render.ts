@@ -88,11 +88,14 @@ async function renderPass(spec: PassSpec): Promise<Float32Array[]> {
       }
       const clock = ctx as unknown as OfflineInternals;
       const block = 128 / sampleRate;
+      // Step in exact integer blocks: accumulating floats drifts, and Tone then fires
+      // events that land on a block boundary twice (doubled notes in the bounce).
+      let step = Math.round(clock._currentTime / block);
       const advance = (to: number) => {
         const limit = Math.min(to, duration);
         while (clock._currentTime < limit) {
           clock.emit('tick');
-          clock._currentTime += block;
+          clock._currentTime = ++step * block;
         }
       };
       advance(WINDOW_SEC + AHEAD_SEC);

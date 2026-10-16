@@ -4,7 +4,7 @@ import { useDaw, useTransport } from '../../state/store';
 import { beatsPerBar, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
 import type { AudioClip, Clip, MidiClip, Project, Track } from '../../model/types';
-import { seek } from '../../engine/api';
+import { seek, stop, play } from '../../engine/api';
 import { getSampleMeta } from '../../samples/library';
 import { audioClipRate, repeatNotes } from '../../model/edit';
 import { usePeaks } from '../hooks';
@@ -135,7 +135,7 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
             loopRef.current = { startBeat: s };
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           } else {
-            seek(snapBeat(b, 0.25, bpb));
+            scrub(e, (ev) => beatAt(ev as unknown as RPointerEvent), bpb);
           }
         }}
         onPointerMove={(e) => {
@@ -146,7 +146,7 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
           update('Set loop', (d) => { d.loop = { enabled: true, start: Math.min(a, b), end: Math.max(a, b) }; }, { coalesce: true });
         }}
         onPointerUp={() => { loopRef.current = null; }}
-        title="Click to move the playhead · Shift-drag to set the loop"
+        title="Click or drag to move the playhead · Shift-drag to set the loop"
       >
         {Array.from({ length: bars + 1 }, (_, i) => (
           <div key={i}>
@@ -165,6 +165,30 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
   );
 }
 
+/**
+ * Drag to move the playhead. While dragging, only the position moves (no audio
+ * restarts); on release, playback resumes from there if it was playing.
+ */
+function scrub(e: RPointerEvent, toBeat: (ev: PointerEvent | RPointerEvent) => number, bpb: number) {
+  e.preventDefault();
+  const el = e.currentTarget as HTMLElement;
+  el.setPointerCapture(e.pointerId);
+  const wasPlaying = useTransport.getState().playing;
+  if (wasPlaying) stop(false);
+  const at = (ev: PointerEvent | RPointerEvent) => Math.max(0, snapBeat(toBeat(ev), 0.25, bpb));
+  useTransport.getState().setPosition(at(e));
+  const onMove = (ev: PointerEvent) => useTransport.getState().setPosition(at(ev));
+  const onUp = (ev: PointerEvent) => {
+    el.removeEventListener('pointermove', onMove);
+    el.removeEventListener('pointerup', onUp);
+    const b = at(ev);
+    if (wasPlaying) void play(b);
+    else seek(b);
+  };
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+}
+
 function Playhead({ zoom, scroller }: { zoom: number; scroller: React.RefObject<HTMLDivElement | null> }) {
   const pos = useTransport((s) => s.position);
   const playing = useTransport((s) => s.playing);
@@ -176,7 +200,19 @@ function Playhead({ zoom, scroller }: { zoom: number; scroller: React.RefObject<
     const visibleRight = el.scrollLeft + el.clientWidth;
     if (x > visibleRight - 60 || x < el.scrollLeft + HEADER_W) el.scrollLeft = Math.max(0, x - HEADER_W - 80);
   }, [x, playing, follow, scroller]);
-  return <div className="playhead" style={{ left: x }} />;
+  const bpb = beatsPerBar(useDaw.getState().project);
+  return (
+    <div className="playhead" style={{ left: x }}>
+      <div
+        className="playhead-grip"
+        title="Drag to move the playhead"
+        onPointerDown={(e) => {
+          const timeline = (e.currentTarget.closest('.timeline') as HTMLElement).getBoundingClientRect();
+          scrub(e, (ev) => (ev.clientX - timeline.left - HEADER_W) / useDaw.getState().zoom, bpb);
+        }}
+      />
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------- empty state

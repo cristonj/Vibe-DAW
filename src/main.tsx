@@ -21,7 +21,7 @@ async function boot() {
     const [tools, api, analysis, agent, library, llm, settings] = await Promise.all([
       import('./agent/tools'), import('./engine/api'), import('./samples/analysis'), import('./agent/agent'), import('./samples/library'), import('./agent/llm'), import('./state/settings'),
     ]);
-    Object.assign(window, { __vibe: { useDaw, tools, render: api, engine: api, analysis, agent, library, llm, settings } });
+    Object.assign(window, { __vibe: { useDaw, tools, render: api, engine: api, analysis, agent, library, llm, settings, liveContext: async () => (await api.loadEngine(), (await import('tone')).getContext()) } });
   }
 }
 

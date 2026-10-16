@@ -77,16 +77,18 @@ function eight08(spec: InstrumentSpec, body: AudioBuffer): Instrument {
   let p = { ...defaultPresetParams('bass808'), ...spec.params };
   const out = new Tone.Gain(1);
   const ROOT = 36;
-  let active: { src: Tone.ToneBufferSource; gain: Tone.Gain; end: number; midi: number } | null = null;
+  let active: { src: Tone.ToneBufferSource; gain: Tone.Gain; start: number; end: number; midi: number } | null = null;
 
   const trigger = (midi: number, dur: number, time: number, v: number) => {
     const rate = Math.pow(2, (midi - ROOT) / 12);
+    if (active && Math.abs(active.start - time) < 1e-4 && active.midi === midi) return; // duplicate event
     // Overlapping notes slide (classic trap 808 glide) instead of retriggering.
     if (active && active.end > time + 0.005 && p.glide > 0) {
       active.src.playbackRate.cancelScheduledValues(time);
       active.src.playbackRate.setValueAtTime(active.src.playbackRate.getValueAtTime(time), time);
       active.src.playbackRate.exponentialRampToValueAtTime(rate, time + p.glide);
       active.end = time + dur;
+      active.start = time;
       active.midi = midi;
       active.gain.gain.cancelScheduledValues(time);
       active.gain.gain.setValueAtTime(active.gain.gain.getValueAtTime(time), time);
@@ -105,17 +107,19 @@ function eight08(spec: InstrumentSpec, body: AudioBuffer): Instrument {
       prev.src.stop(time + 0.02);
     }
     const context = out.context;
-    const gain = new Tone.Gain({ gain: 0, context }).connect(out);
+    // Start at the note's level (no automation at the onset): offline renders hand us
+    // event times a hair behind the clock, and an onset ramp there could zero the note.
+    const gain = new Tone.Gain({ gain: vel(v), context }).connect(out);
     const src = new Tone.ToneBufferSource({ url: body, playbackRate: rate, context }).connect(gain);
-    gain.gain.setValueAtTime(vel(v), time);
     gain.gain.setValueAtTime(vel(v), time + dur);
     gain.gain.linearRampToValueAtTime(0, time + dur + 0.05);
     src.start(time);
     src.stop(time + dur + 0.06);
-    const voice = { src, gain, end: time + dur, midi };
+    const voice = { src, gain, start: time, end: time + dur, midi };
     src.onended = () => {
-      gain.dispose();
-      src.dispose();
+      // Offline, Tone fires 'ended' on its own clock, which runs ahead of the audio
+      // actually rendered; disposing then would cut the note. The render frees it.
+      if (!context.isOffline) { gain.dispose(); src.dispose(); }
       if (active === voice) active = null;
     };
     active = voice;
@@ -299,9 +303,20 @@ function synth(spec: InstrumentSpec): Instrument {
         v.set({ envelope: { attack: p.attack, release: p.release }, filterEnvelope: { octaves: Math.log2(Math.max(700, p.cutoff) / 600) } });
       };
       apply(params);
+      // Mono: notes that start together (a chord) collapse to the highest one.
+      let lastStart = -1;
+      let lastMidi = -1;
       return {
         output: out,
-        trigger: (midi, dur, time, ve) => v.triggerAttackRelease(midiToFreq(midi), Math.max(0.02, dur), time, vel(ve)),
+        trigger: (midi, dur, time, ve) => {
+          if (Math.abs(time - lastStart) < 1e-4) {
+            if (midi > lastMidi) { v.setNote(midiToFreq(midi), time); lastMidi = midi; }
+            return;
+          }
+          lastStart = time;
+          lastMidi = midi;
+          v.triggerAttackRelease(midiToFreq(midi), Math.max(0.02, dur), time, vel(ve));
+        },
         releaseAll: (t) => v.triggerRelease(t),
         setParams: apply,
         dispose: () => { v.dispose(); vib.dispose(); out.dispose(); },
