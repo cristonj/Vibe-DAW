@@ -47,6 +47,8 @@ interface KeymapState {
   overrides: Partial<Record<ActionId, string[]>>;
   setBinding: (id: ActionId, combos: string[]) => void;
   reset: (id?: ActionId) => void;
+  /** Replace every override at once (used when shortcuts sync from another device). */
+  replaceAll: (overrides: Partial<Record<ActionId, string[]>>) => void;
 }
 
 function save(o: Partial<Record<ActionId, string[]>>) {
@@ -54,7 +56,7 @@ function save(o: Partial<Record<ActionId, string[]>>) {
 }
 
 export const useKeymap = create<KeymapState>((set, get) => ({
-  overrides: load(),
+  overrides: sanitizeKeymap(load()),
   setBinding: (id, combos) => {
     const overrides = { ...get().overrides, [id]: combos };
     save(overrides);
@@ -66,7 +68,21 @@ export const useKeymap = create<KeymapState>((set, get) => ({
     save(overrides);
     set({ overrides });
   },
+  replaceAll: (raw) => {
+    const overrides = sanitizeKeymap(raw);
+    save(overrides);
+    set({ overrides });
+  },
 }));
+
+export function sanitizeKeymap(raw: unknown): Partial<Record<ActionId, string[]>> {
+  const out: Partial<Record<ActionId, string[]>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, combos] of Object.entries(raw)) {
+    if (Object.hasOwn(ACTIONS, id) && Array.isArray(combos)) out[id as ActionId] = combos.filter((c): c is string => typeof c === 'string').slice(0, 8);
+  }
+  return out;
+}
 
 export function bindings(id: ActionId): string[] {
   return useKeymap.getState().overrides[id] ?? ACTIONS[id].defaults;

@@ -38,9 +38,16 @@ interface ThemeState {
 const KEY = 'vibe:theme';
 const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}'); } catch { return {}; } })();
 
+/** Valid theme id and accent color, falling back to defaults (also used for synced preferences). */
+export function sanitizeAppearance(v: { theme?: unknown; accent?: unknown }): { theme: ThemeId; accent: string } {
+  return {
+    theme: typeof v.theme === 'string' && Object.hasOwn(THEMES, v.theme) ? (v.theme as ThemeId) : 'midnight',
+    accent: typeof v.accent === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v.accent) ? v.accent : ACCENTS[0],
+  };
+}
+
 export const useTheme = create<ThemeState>((set, get) => ({
-  theme: saved.theme in THEMES ? saved.theme : 'midnight',
-  accent: typeof saved.accent === 'string' ? saved.accent : ACCENTS[0],
+  ...sanitizeAppearance(saved),
   scale: typeof saved.scale === 'number' ? saved.scale : 1,
   set: (patch) => {
     set(patch);

@@ -123,7 +123,8 @@ export const useDaw = create<DawState>((set, get) => ({
     const prev = s.past[s.past.length - 1];
     if (!prev || s.transaction) return;
     set({
-      project: prev.project,
+      // Undo is a new change as far as sync is concerned: newer than what other devices hold.
+      project: { ...prev.project, updatedAt: Date.now() },
       past: s.past.slice(0, -1),
       future: [{ project: s.project, label: prev.label }, ...s.future],
       lastLabel: '',
@@ -135,7 +136,7 @@ export const useDaw = create<DawState>((set, get) => ({
     const next = s.future[0];
     if (!next || s.transaction) return;
     set({
-      project: next.project,
+      project: { ...next.project, updatedAt: Date.now() },
       past: [...s.past, { project: s.project, label: next.label }],
       future: s.future.slice(1),
       lastLabel: '',

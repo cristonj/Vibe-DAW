@@ -81,6 +81,7 @@ export async function saveProjectToCloud(p: Project): Promise<void> {
 
 export async function listCloudProjects(): Promise<CloudProjectInfo[]> {
   if (!currentUser) return [];
+  if (cloudIndex) return [...cloudIndex.values()].sort((a, b) => b.updatedAt - a.updatedAt);
   const { collection, getDocs, orderBy, query, limit } = await import('firebase/firestore');
   const snap = await getDocs(query(collection(await db(), 'users', currentUser.uid, 'projects'), orderBy('updatedAt', 'desc'), limit(100)));
   return snap.docs.map((d) => ({ id: d.id, name: String(d.get('name') ?? 'Untitled'), updatedAt: Number(d.get('updatedAt') ?? 0) }));
@@ -98,6 +99,59 @@ export async function deleteCloudProject(id: string) {
   if (!currentUser) return;
   const { doc, deleteDoc } = await import('firebase/firestore');
   await deleteDoc(doc(await db(), 'users', currentUser.uid, 'projects', id));
+}
+
+export interface CloudProjectChange {
+  type: 'added' | 'modified' | 'removed';
+  info: CloudProjectInfo;
+  /** True when this device wrote the change and Firestore has not confirmed it yet. */
+  local: boolean;
+  load: () => Project | null;
+}
+
+// Live index of the signed-in user's cloud projects, kept by watchCloudProjects.
+let cloudIndex: Map<string, CloudProjectInfo> | null = null;
+
+/** Last updatedAt the cloud has for a project, or undefined if unknown. */
+export function cloudUpdatedAt(id: string): number | undefined {
+  return cloudIndex?.get(id)?.updatedAt;
+}
+
+/**
+ * Listen to the user's projects collection. The first callback carries every project
+ * (initial = true) so callers can reconcile; later ones carry what other devices changed.
+ */
+export async function watchCloudProjects(onChange: (changes: CloudProjectChange[], initial: boolean) => void): Promise<() => void> {
+  if (!currentUser) return () => {};
+  const { collection, onSnapshot } = await import('firebase/firestore');
+  const index = new Map<string, CloudProjectInfo>();
+  let initial = true;
+  const unsubscribe = onSnapshot(collection(await db(), 'users', currentUser.uid, 'projects'), { includeMetadataChanges: true }, (snap) => {
+    // Reconciling against an offline cache could mistake missing projects for deleted ones.
+    if (initial && snap.metadata.fromCache) return;
+    const docChanges = initial ? snap.docs.map((doc) => ({ type: 'added' as const, doc })) : snap.docChanges();
+    const changes: CloudProjectChange[] = docChanges.map((c) => {
+      const d = c.doc;
+      const info = { id: d.id, name: String(d.get('name') ?? 'Untitled'), updatedAt: Number(d.get('updatedAt') ?? 0) };
+      if (c.type === 'removed') index.delete(d.id);
+      else index.set(d.id, info);
+      return {
+        type: c.type, info, local: d.metadata.hasPendingWrites,
+        load: () => { try { return JSON.parse(String(d.get('data'))) as Project; } catch { return null; } },
+      };
+    });
+    cloudIndex = index;
+    const first = initial;
+    initial = false;
+    if (first || changes.length) onChange(changes, first);
+  }, (e) => {
+    console.warn('Cloud project sync unavailable', e);
+    useAuth.setState({ lastSyncError: e.message });
+  });
+  return () => {
+    unsubscribe();
+    if (cloudIndex === index) cloudIndex = null;
+  };
 }
 
 // ---------------------------------------------------------------- samples

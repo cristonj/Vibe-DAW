@@ -32,6 +32,7 @@ describe('clip copying', () => {
     expect(result.tracks[0].clips[1].start).toBe(10);
     expect(result.tracks[1].clips[1].start).toBe(12);
     useDaw.getState().undo();
-    expect(useDaw.getState().project).toBe(p);
+    expect({ ...useDaw.getState().project, updatedAt: p.updatedAt }).toEqual(p);
+    expect(useDaw.getState().project.updatedAt).toBeGreaterThanOrEqual(p.updatedAt);
   });
 });

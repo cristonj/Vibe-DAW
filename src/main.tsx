@@ -5,7 +5,7 @@ import { App } from './ui/App';
 import { initLibrary } from './samples/library';
 import { loadEngineOnFirstGesture } from './engine/api';
 import { useDaw } from './state/store';
-import { loadInitialProject, startAutosave, usePersist } from './state/persistence';
+import { loadInitialProject, startAutosave, startCloudSync } from './state/persistence';
 import { initCloud } from './cloud/cloud';
 import { applyTheme } from './state/theme';
 
@@ -19,7 +19,7 @@ async function initialize() {
   useDaw.getState().replaceProject(project);
   loadEngineOnFirstGesture();
   startAutosave();
-  void initCloud().then(() => usePersist.getState().refresh());
+  void initCloud().then(startCloudSync);
   if (import.meta.env.DEV) {
     // Dev-only handle for automated smoke tests: drive tools and renders without the LLM.
     // Audio modules (render/engine) go through the lazy facade so dev also stays gesture-clean.

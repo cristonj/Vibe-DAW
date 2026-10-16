@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { hostedAiEnabled } from '../cloud/config';
 
-// User preferences, persisted to localStorage. The API key never leaves this browser
-// except in requests to Google's Gemini endpoint.
+// User preferences, persisted to localStorage. When signed in, they also sync to the
+// user's own Firestore tree (see cloud/prefs.ts); the API key is otherwise only sent
+// to Google's Gemini endpoint.
 
 export const MODELS = [
   { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', blurb: 'Fast, strong producer. Default.' },
@@ -41,17 +42,26 @@ function load(): Partial<SettingsState> {
 }
 
 const envKey = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '';
-const saved = load();
+const THINKING: Thinking[] = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'];
+
+export type SettingsValues = Omit<SettingsState, 'set'>;
+
+/** Fill defaults and drop invalid values, for localStorage and for settings synced from another device. */
+export function sanitizeSettings(saved: Partial<Record<keyof SettingsValues, unknown>>): SettingsValues {
+  return {
+    model: MODELS.some((m) => m.id === saved.model) ? (saved.model as ModelId) : 'gemini-3.8-flash',
+    connection: hostedAiEnabled ? (saved.connection === 'apikey' ? 'apikey' : 'firebase') : 'apikey',
+    apiKey: typeof saved.apiKey === 'string' ? saved.apiKey : '',
+    thinking: THINKING.includes(saved.thinking as Thinking) ? (saved.thinking as Thinking) : 'MEDIUM',
+    autoListen: typeof saved.autoListen === 'boolean' ? saved.autoListen : true,
+    latency: saved.latency === 'low' ? 'low' : 'stable',
+    listeningQuality: saved.listeningQuality === 'balanced' || saved.listeningQuality === 'compact' ? saved.listeningQuality : 'full',
+    listeningChannels: saved.listeningChannels === 'mono' ? 'mono' : 'stereo',
+  };
+}
 
 export const useSettings = create<SettingsState>((set, get) => ({
-  model: MODELS.some((m) => m.id === saved.model) ? (saved.model as ModelId) : 'gemini-3.8-flash',
-  connection: hostedAiEnabled ? saved.connection ?? 'firebase' : 'apikey',
-  apiKey: saved.apiKey ?? '',
-  thinking: saved.thinking ?? 'MEDIUM',
-  autoListen: saved.autoListen ?? true,
-  latency: saved.latency === 'low' ? 'low' : 'stable',
-  listeningQuality: saved.listeningQuality === 'balanced' || saved.listeningQuality === 'compact' ? saved.listeningQuality : 'full',
-  listeningChannels: saved.listeningChannels === 'mono' ? 'mono' : 'stereo',
+  ...sanitizeSettings(load()),
   set: (patch) => {
     set(patch);
     const { set: _s, ...rest } = { ...get() };
