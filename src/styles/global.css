@@ -631,9 +631,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .composer-row .spacer { flex: 1; }
 .composer .status { color: var(--agent); font-size: 12px; display: flex; align-items: center; gap: 6px; }
 .attach-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--agent-wash); color: var(--agent); font-size: 11.5px; }
-.mic.listening { color: #fff; background: var(--rec); animation: mic-pulse 1.4s ease-in-out infinite; }
-.mic.listening:hover { background: var(--rec); color: #fff; }
-@keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 93, 115, 0.45); } 50% { box-shadow: 0 0 0 5px rgba(255, 93, 115, 0); } }
+.rec-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); }
+.rec-row .spacer { flex: 1; }
+.rec-row .btn { height: 24px; padding: 0 8px; }
+.rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); animation: rec-pulse 1.4s ease-in-out infinite; }
+@keyframes rec-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 93, 115, 0.5); } 50% { box-shadow: 0 0 0 5px rgba(255, 93, 115, 0); } }
+.rec-limit { color: var(--faint); font-size: 11.5px; }
+.send.recording { background: var(--rec); color: #fff; }
+.voice-note { display: flex; width: fit-content; align-items: center; gap: 6px; margin: 2px 0; padding: 4px 10px 4px 8px; border-radius: 999px; background: var(--agent-wash); color: var(--agent); font-size: 12px; font-weight: 600; }
+.voice-note:hover { background: var(--hover); }
+.msg-user .voice-note + * { margin-top: 4px; }
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .send { width: 30px; height: 30px; border-radius: var(--radius-s); display: grid; place-items: center; background: var(--agent); color: #1a1430; }

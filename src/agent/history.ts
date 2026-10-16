@@ -1,6 +1,7 @@
 import type { Content, Part } from './llm';
 
-// Audio is sent to the stateless ears calls, never carried through producer turns.
+// Audio never lives in history: ears calls are stateless, and voice messages are
+// re-attached to each request of their run (see agent.ts).
 // Compact whole exchanges: a signed function call and its response are indivisible.
 export const CONTEXT_BUDGET = 64_000;
 const TARGET = 40_000;

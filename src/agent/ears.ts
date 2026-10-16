@@ -167,26 +167,3 @@ export async function analyzeReference(data: ArrayBuffer, name: string, signal?:
   signal?.throwIfAborted();
   return concise(text, 4000);
 }
-
-/** Transcribe a recorded voice message (for browsers without built-in speech recognition). */
-export async function transcribeSpeech(data: ArrayBuffer, signal?: AbortSignal): Promise<string> {
-  const buf = await decodeAudio(data);
-  signal?.throwIfAborted();
-  // Speech needs far less than music: 16 kHz mono keeps the upload small.
-  const audio = prepareListeningAudio(audioBufferToPcm(buf, 180), 'compact', 'mono', 180);
-  const text = await generateText({
-    system: 'You transcribe voice messages that a music producer speaks to an AI production assistant inside a DAW.',
-    contents: [{
-      role: 'user',
-      parts: [
-        { inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(audio.wav) } },
-        { text: 'Transcribe this voice message word for word, in the language spoken. Expect production terms (808, hi-hats, BPM, reverb, sidechain, artist names). Return only the transcript with normal punctuation, no quotes or commentary. If there is no speech, return an empty response.' },
-      ],
-    }],
-    thinking: 'MINIMAL',
-    signal,
-    maxOutputTokens: 1200,
-  });
-  signal?.throwIfAborted();
-  return text.trim();
-}

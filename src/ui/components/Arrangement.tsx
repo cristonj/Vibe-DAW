@@ -11,6 +11,7 @@ import { PHONE, uiZoom, usePeaks, useMediaQuery } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
+import { toast } from '../toast';
 import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, placeSample, splitAtPlayhead } from '../actions';
 
 const HEADER_W = 200;
@@ -327,31 +328,59 @@ export function Arrangement() {
       useDaw.getState().setZoom(nz);
       requestAnimationFrame(() => { el.scrollLeft = anchorBeat * nz - x; });
     };
+    // Scrolling the timeline sideways yourself during playback stops it following the playhead,
+    // so the view doesn't yank back. Only deliberate user gestures count, never our own scrolling.
+    const unfollow = () => {
+      const d = useDaw.getState();
+      if (!d.followPlayhead || !useTransport.getState().playing) return;
+      d.setFollow(false);
+      toast('Stopped following the playhead. Turn Follow back on in the toolbar.');
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.target !== el) return;
+      // A press on the scroller itself near its bottom edge is the horizontal scrollbar
+      // (classic scrollbars sit below clientHeight; overlay ones float over the last few pixels).
+      const y = (e.clientY - el.getBoundingClientRect().top) / uiZoom();
+      if (el.scrollWidth > el.clientWidth && y > el.clientHeight - 14) unfollow();
+    };
     const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
+      if (!(e.ctrlKey || e.metaKey)) {
+        if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) unfollow();
+        return;
+      }
       e.preventDefault();
       zoomAround(e.clientX, useDaw.getState().zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
     };
     // Two-finger pinch zooms the timeline horizontally on touch screens.
     let pinch: { dist: number; zoom: number } | null = null;
     const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY) || 1;
+    let swipe: { x: number; y: number } | null = null;
     const onTouchStart = (e: TouchEvent) => {
+      // One finger on empty timeline or an unselected clip pans; selected clips, the ruler and the playhead drag instead.
+      const t = e.target as Element;
+      swipe = e.touches.length === 1 && !t.closest('.clip.selected, .ruler .marks, .playhead-grip, .track-head') ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
       if (e.touches.length !== 2) return;
       abortTouchDrag.current?.();
       pinch = { dist: spread(e.touches), zoom: useDaw.getState().zoom };
     };
     const onTouchMove = (e: TouchEvent) => {
+      if (swipe && e.touches.length === 1) {
+        const dx = Math.abs(e.touches[0].clientX - swipe.x), dy = Math.abs(e.touches[0].clientY - swipe.y);
+        if (dx > 12 && dx > dy) { swipe = null; unfollow(); }
+      }
       if (!pinch || e.touches.length !== 2) return;
       e.preventDefault();
       zoomAround((e.touches[0].clientX + e.touches[1].clientX) / 2, pinch.zoom * (spread(e.touches) / pinch.dist));
     };
     const onTouchEnd = (e: TouchEvent) => { if (e.touches.length < 2) pinch = null; };
+    el.addEventListener('pointerdown', onPointerDown);
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', onTouchEnd);
     el.addEventListener('touchcancel', onTouchEnd);
     return () => {
+      el.removeEventListener('pointerdown', onPointerDown);
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);

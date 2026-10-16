@@ -4,7 +4,7 @@ import { ACTIONS, bindings, useKeymap, type ActionId } from '../../state/keymap'
 
 const HOW_TO: Array<[string, string]> = [
   ['Make a beat with AI', 'Type what you want in the Producer panel on the right, e.g. “sad trap beat with guitar”. Everything it adds is outlined in purple until you click Keep.'],
-  ['Talk instead of typing', 'Tap the mic in the Producer panel and say what you want. Your words appear in the box so you can check them before sending.'],
+  ['Talk instead of typing', 'Tap the mic in the Producer panel, say what you want, then tap send. The Producer hears your voice directly; you can also type a note to go with it.'],
   ['Add a track', 'Use Add track in the toolbar, or drag an instrument or sound from the left panel onto the timeline.'],
   ['Write notes or drums', 'Select a track and click New clip (or double-click an empty spot on its lane). The editor opens at the bottom.'],
   ['Lengthen a pattern', 'Drag its right edge on the timeline. It snaps to whole bars and repeats what is inside (hold Shift for fine steps).'],
