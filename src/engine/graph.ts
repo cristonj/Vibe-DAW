@@ -149,7 +149,7 @@ export class EngineGraph {
   // ---------------------------------------------------------------- sync
 
   /** Bring the graph in line with the project. Only changed parts are rebuilt/rescheduled. */
-  async sync(p: Project, preloaded?: Map<string, InstrumentAssets>): Promise<void> {
+  async sync(p: Project, preloaded?: Map<string, InstrumentAssets>, deferNewFreezes = false): Promise<void> {
     if (this.disposed) return;
     const prev = this.project;
     this.project = p;
@@ -205,7 +205,7 @@ export class EngineGraph {
         await this.scheduleTrack(s);
         continue;
       }
-      const frozen = this.opts.frozenTracks?.get(track.id) ?? (this.opts.live ? frozenFor(p, track) : null);
+      const frozen = this.opts.live && deferNewFreezes && !s.frozen ? null : this.opts.frozenTracks?.get(track.id) ?? (this.opts.live ? frozenFor(p, track) : null);
       const key = instKey(track);
       if (!frozen || this.opts.live) {
       if (key !== s.instKey) {

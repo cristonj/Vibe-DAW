@@ -19,9 +19,11 @@ let running = false;
 let latest: Project | null = null;
 let onChange: (() => void) | null = null;
 let sampleRate = 48000;
+let generation = 0;
+let queued = new Map<string, string>();
 
 export function configureFreeze(rate: number, changed: () => void) {
-  if (sampleRate !== rate) { cache.clear(); failed.clear(); }
+  if (sampleRate !== rate) { cache.clear(); failed.clear(); queued.clear(); generation++; }
   sampleRate = rate;
   onChange = changed;
 }
@@ -52,45 +54,65 @@ function freezable(t: Track) {
 
 /** Queue background freezes for any track whose sound changed. */
 export function scheduleFreeze(p: Project) {
-  if (latest?.id !== p.id) { cache.clear(); failed.clear(); }
+  const switched = latest?.id !== p.id;
+  if (switched) { cache.clear(); failed.clear(); generation++; }
   latest = p;
   const ids = new Set(p.tracks.map((t) => t.id));
   for (const id of cache.keys()) if (!ids.has(id)) cache.delete(id);
   for (const id of failed.keys()) if (!ids.has(id)) failed.delete(id);
-  clearTimeout(timer);
-  timer = setTimeout(() => void work(), 1200);
+  const next = new Map(p.tracks.filter(freezable).map((t) => [t.id, freezeSignature(p, t)]));
+  const changed = switched || next.size !== queued.size || [...next].some(([id, sig]) => queued.get(id) !== sig);
+  queued = next;
+  // Mixer/UI edits and freeze-completion syncs must not keep postponing the queue.
+  if (changed) {
+    clearTimeout(timer);
+    timer = setTimeout(() => { timer = undefined; void work(); }, 1200);
+  }
 }
 
 async function work() {
   if (running) return;
   running = true;
+  const inFlight = new Set<string>();
   try {
-    while (latest) {
-      const p = latest;
-      const todo = p.tracks.find((t) => freezable(t) && cache.get(t.id)?.sig !== freezeSignature(p, t) && failed.get(t.id) !== freezeSignature(p, t));
-      if (!todo) break;
-      const sig = freezeSignature(p, todo);
-      // Pre-fader: neutral volume/pan; the live channel applies the real mixer settings.
-      const solo: Project = { ...p, tracks: p.tracks.map((t) => (t.id === todo.id ? { ...t, volumeDb: 0, pan: 0, mute: false, solo: false } : { ...t, solo: false })) };
-      const span = activeSpan(todo, 0, Infinity)!;
-      const startBeat = span[0];
-      try {
-        const pcm = await renderProject(solo, { startBeat, endBeat: span[1], onlyTracks: [todo.id], sampleRate, master: false, reuseFrozen: false });
-        const current = latest?.tracks.find((t) => t.id === todo.id);
-        if (!latest || latest.id !== p.id || !current || freezeSignature(latest, current) !== sig) continue;
-        const bytes = pcm.channels.reduce((sum, c) => sum + c.byteLength, 0);
-        const used = [...cache.values()].reduce((sum, f) => sum + f.buffer.length * f.buffer.numberOfChannels * 4, 0) - (cache.get(todo.id)?.buffer.length ?? 0) * 8;
-        // Leave large projects live instead of repeatedly evicting and re-freezing tracks.
-        if (used + bytes > MAX_CACHE_BYTES) { failed.set(todo.id, sig); continue; }
-        const buffer = new AudioBuffer({ length: pcm.channels[0].length, numberOfChannels: 2, sampleRate });
-        pcm.channels.forEach((d, i) => buffer.copyToChannel(d as Float32Array<ArrayBuffer>, i));
-        cache.set(todo.id, { sig, buffer, startBeat });
-        onChange?.();
-      } catch (e) {
-        console.warn('Freeze failed; track keeps playing live', e);
-        failed.set(todo.id, sig);
+    // Native offline contexts render on separate audio threads. Keep construction
+    // serialized by renderProject's context lock, but let their DSP overlap. Leave
+    // a core for playback/UI and bound simultaneous graphs and PCM allocations.
+    const workers = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 2) - 1));
+    await Promise.all(Array.from({ length: workers }, async () => {
+      while (latest) {
+        const p = latest;
+        // Longest first avoids leaving a single expensive track until the end.
+        const job = p.tracks
+          .filter((t) => freezable(t) && !inFlight.has(t.id))
+          .map((t) => ({ t, sig: freezeSignature(p, t), span: activeSpan(t, 0, Infinity) }))
+          .filter((x): x is { t: Track; sig: string; span: [number, number] } => !!x.span && cache.get(x.t.id)?.sig !== x.sig && failed.get(x.t.id) !== x.sig)
+          .sort((a, b) => (b.span[1] - b.span[0]) - (a.span[1] - a.span[0]))[0];
+        if (!job) break;
+        const { t: todo, sig, span } = job;
+        const rate = sampleRate, version = generation;
+        inFlight.add(todo.id);
+        // Pre-fader: neutral volume/pan; the live channel applies the real mixer settings.
+        const solo: Project = { ...p, tracks: p.tracks.map((t) => (t.id === todo.id ? { ...t, volumeDb: 0, pan: 0, mute: false, solo: false } : { ...t, solo: false })) };
+        const startBeat = span[0];
+        try {
+          const pcm = await renderProject(solo, { startBeat, endBeat: span[1], onlyTracks: [todo.id], sampleRate: rate, master: false, reuseFrozen: false });
+          const current = latest?.tracks.find((t) => t.id === todo.id);
+          if (version !== generation || !latest || !current || freezeSignature(latest, current) !== sig) continue;
+          const bytes = pcm.channels.reduce((sum, c) => sum + c.byteLength, 0);
+          const used = [...cache.values()].reduce((sum, f) => sum + f.buffer.length * f.buffer.numberOfChannels * 4, 0) - (cache.get(todo.id)?.buffer.length ?? 0) * 8;
+          // Leave large projects live instead of repeatedly evicting and re-freezing tracks.
+          if (used + bytes > MAX_CACHE_BYTES) { failed.set(todo.id, sig); continue; }
+          const buffer = new AudioBuffer({ length: pcm.channels[0].length, numberOfChannels: 2, sampleRate: rate });
+          pcm.channels.forEach((d, i) => buffer.copyToChannel(d as Float32Array<ArrayBuffer>, i));
+          cache.set(todo.id, { sig, buffer, startBeat });
+          onChange?.();
+        } catch (e) {
+          console.warn('Freeze failed; track keeps playing live', e);
+          if (version === generation) failed.set(todo.id, sig);
+        } finally { inFlight.delete(todo.id); }
       }
-    }
+    }));
   } finally {
     running = false;
   }

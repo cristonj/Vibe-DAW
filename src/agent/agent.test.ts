@@ -8,6 +8,7 @@ vi.mock('../state/settings', () => ({ aiAvailable: () => ({ ok: true }), useSett
 import { runAgent, steerAgent, stopAgent, useAgent } from './agent';
 import { useDaw } from '../state/store';
 import { createProject } from '../model/project';
+import type { PlanStep } from './tools';
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -71,5 +72,37 @@ describe('agent steering', () => {
     expect(mocks.tool).not.toHaveBeenCalled();
     expect(useAgent.getState().items).toEqual([]);
     expect(useDaw.getState().project.name).toBe('Other project');
+  });
+});
+
+describe('live checklist', () => {
+  it('updates the same card during work and supplies the latest state after compaction', async () => {
+    const initial: PlanStep[] = [{ title: 'Build drums', status: 'active' }, { title: 'Balance bass', status: 'pending' }];
+    const updated: PlanStep[] = [{ title: 'Build drums', status: 'done' }, { title: 'Balance bass', status: 'active' }];
+    const final = deferred<LlmResult>();
+    const planCall = (): LlmResult => ({ content: { role: 'model', parts: [{ functionCall: { name: 'update_plan', args: {} } }] } });
+    mocks.stream.mockResolvedValueOnce(planCall()).mockResolvedValueOnce({ content: { role: 'model', parts: [
+      { functionCall: { name: 'update_plan', args: { updates: [{ step: 1, status: 'done' }, { step: 2, status: 'active' }] } } },
+      { functionCall: { name: 'manage_context', args: { action: 'compact' } } },
+    ] } }).mockReturnValueOnce(final.promise);
+    mocks.tool.mockResolvedValueOnce({ result: { ok: true }, summary: 'Checklist', plan: initial })
+      .mockResolvedValueOnce({ result: { ok: true }, summary: 'Checklist', plan: updated })
+      .mockResolvedValueOnce({ result: { ok: true }, summary: 'Compacted', contextSummary: 'Keep building the beat.' });
+    const run = runAgent('Make a beat');
+    await vi.waitFor(() => expect(mocks.stream).toHaveBeenCalledTimes(3));
+    const cards = useAgent.getState().items.filter((i) => i.kind === 'plan');
+    expect(cards).toHaveLength(1);
+    expect(cards[0].steps).toEqual(updated);
+    expect(useAgent.getState().running).toBe(true);
+    expect(mocks.tool.mock.calls[1][2].plan).toEqual(initial);
+    expect(mocks.tool.mock.calls[2][2].plan).toEqual(updated);
+    const request = mocks.stream.mock.calls[2][0] as LlmRequest;
+    expect(request.system).toContain('1. [done] Build drums');
+    expect(request.system).toContain('2. [active] Balance bass');
+    expect(useAgent.getState().items.some((i) => i.kind === 'tool' && i.name === 'update_plan')).toBe(false);
+    final.resolve(answer());
+    await run;
+    // Ending a run never marks unfinished work complete automatically.
+    expect(useAgent.getState().items.find((i) => i.id === cards[0].id)).toMatchObject({ steps: updated });
   });
 });

@@ -23,6 +23,7 @@ export interface ToolContext {
   /** The user's request, given to the ears as the target vibe. */
   goal: string;
   context?: { chars: number; budget: number };
+  plan?: readonly PlanStep[];
 }
 
 export interface ToolOutcome {
@@ -34,7 +35,6 @@ export interface ToolOutcome {
   sampleIds?: string[];
   clipIds?: string[];
   contextSummary?: string;
-  audioReviewIds?: string[];
 }
 
 interface ToolDef {
@@ -808,7 +808,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
       const heard = await Promise.all(ids.map(async (id) => {
         try {
           const r = await audition(id, a.question ? String(a.question) : undefined, ctx.signal);
-          return { id, name: getSampleMeta(id)?.name, heard: r.heard, reviewId: r.reviewId };
+          return { id, name: getSampleMeta(id)?.name, heard: r.heard };
         } catch (e) {
           return { id, error: (e as Error).message };
         }
@@ -818,7 +818,6 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
         summary: `Listened to ${ids.length} sample${ids.length > 1 ? 's' : ''}`,
         heard: heard.map((h) => `**${h.name ?? h.id}** — ${'heard' in h ? h.heard : h.error}`).join('\n\n'),
         sampleIds: ids,
-        audioReviewIds: heard.flatMap((h) => h.reviewId ? [h.reviewId] : []),
       };
     },
   },
@@ -851,7 +850,6 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
         result: { heard: r.heard, measured: r.stats, bars: `${r.startBar}–${r.endBar}` },
         summary: `Listened to bars ${r.startBar}–${r.endBar - 1}${(a.track_ids as string[] | undefined)?.length ? ' (soloed)' : ''}`,
         heard: r.heard,
-        audioReviewIds: [r.reviewId],
       };
     },
   },
@@ -890,12 +888,32 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
     readOnly: true,
     decl: {
       name: 'update_plan',
-      description: 'Show the user your step-by-step plan as a checklist and keep it updated as you work (mark steps active/done). Use for any multi-step request.',
-      parameters: obj({ steps: A(obj({ title: S('Short step'), status: S('pending | active | done', { enum: ['pending', 'active', 'done'] }) }, ['title', 'status']), 'All steps, in order') }, ['steps']),
+      description: 'Create or revise your live checklist with steps, or update individual existing steps with updates. Use one of steps or updates. Mark a step active before working on it and done as soon as its work is verified, then activate the next step. Updates appear immediately in the same checklist.',
+      parameters: obj({
+        steps: A(obj({ title: S('Short step'), status: S('Step status', { enum: ['pending', 'active', 'done'] }) }, ['title', 'status']), 'Replace the entire checklist, in order'),
+        updates: A(obj({ step: N('1-based step number in the current checklist'), status: S('New status', { enum: ['pending', 'active', 'done'] }), title: S('Optional revised title') }, ['step', 'status']), 'Update only these steps; preserve all others'),
+      }),
     },
-    run: (a) => {
-      const steps = ((a.steps as PlanStep[]) ?? []).map((s) => ({ title: String(s.title), status: (['pending', 'active', 'done'].includes(s.status) ? s.status : 'pending') as PlanStep['status'] }));
-      return { result: { ok: true }, summary: 'Updated plan', plan: steps };
+    run: (a, ctx) => {
+      const replacing = a.steps !== undefined;
+      if (replacing === (a.updates !== undefined)) throw new ToolError('Provide either steps or updates, not both.');
+      const entries = replacing ? a.steps : a.updates;
+      if (!Array.isArray(entries) || !entries.length) throw new ToolError('Provide a non-empty list of checklist steps or updates.');
+      const steps: PlanStep[] = replacing ? [] : (ctx.plan ?? []).map((s) => ({ ...s }));
+      if (!replacing && !steps.length) throw new ToolError('Create a checklist with steps before updating it.');
+      for (const entry of entries) {
+        if (!entry || typeof entry !== 'object' || !['pending', 'active', 'done'].includes(entry.status)) throw new ToolError('Each checklist status must be pending, active, or done.');
+        const status = entry.status as PlanStep['status'];
+        if (replacing) {
+          if (typeof entry.title !== 'string' || !entry.title.trim()) throw new ToolError('Each checklist step needs a non-empty title.');
+          steps.push({ title: entry.title.trim(), status });
+        } else {
+          if (!Number.isInteger(entry.step) || entry.step < 1 || entry.step > steps.length) throw new ToolError(`Step must be an integer from 1 to ${steps.length}.`);
+          if (entry.title !== undefined && (typeof entry.title !== 'string' || !entry.title.trim())) throw new ToolError('Checklist titles must be non-empty strings.');
+          steps[entry.step - 1] = { title: entry.title?.trim() ?? steps[entry.step - 1].title, status };
+        }
+      }
+      return { result: { ok: true, steps }, summary: 'Updated checklist', plan: steps };
     },
   },
   {

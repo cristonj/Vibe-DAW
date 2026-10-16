@@ -11,7 +11,6 @@ import { runTool, toolDeclarations, type AgentMode, type PlanStep } from './tool
 import { diffProjects } from './diff';
 import { findClip } from '../model/project';
 import { compactHistory, CONTEXT_BUDGET, historySize, summarizeHistory, withProjectState } from './history';
-import { clearAudioReviews } from './audioReviews';
 
 // The agent loop: stream a turn, run whatever tools the model calls, feed results
 // back, repeat until it answers in plain text. All edits land in one undo step and
@@ -22,7 +21,7 @@ const MAX_TURNS = 48;
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; checkpoint: Project; focus?: string; steering?: 'queued' | 'applied' | 'cancelled' }
   | { kind: 'assistant'; id: string; text: string; thinking: string; streaming: boolean }
-  | { kind: 'tool'; id: string; name: string; args: Record<string, unknown>; status: 'running' | 'done' | 'error'; summary: string; heard?: string; sampleIds?: string[]; clipIds?: string[]; audioReviewIds?: string[] }
+  | { kind: 'tool'; id: string; name: string; args: Record<string, unknown>; status: 'running' | 'done' | 'error'; summary: string; heard?: string; sampleIds?: string[]; clipIds?: string[] }
   | { kind: 'plan'; id: string; steps: PlanStep[] }
   | { kind: 'changes'; id: string; lines: string[]; checkpoint: Project; state: 'pending' | 'kept' | 'reverted' }
   | { kind: 'error'; id: string; text: string };
@@ -55,7 +54,6 @@ export const useAgent = create<AgentState>((set) => ({
   clear: () => {
     useAgent.getState().abort?.abort();
     useDaw.getState().endTransaction();
-    clearAudioReviews();
     set({ items: [], history: [], tokens: { input: 0, output: 0 }, steering: [], context: { chars: 0, compactions: 0 }, running: false, abort: null, status: '' });
   },
 }));
@@ -145,6 +143,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   const tools = toolDeclarations(mode);
   const system = systemPrompt(mode) + '\n\nUse manage_context to inspect the context budget or compact your working memory with a concise summary of goals, steering, decisions, useful sample/track ids, listening findings and unfinished work. Automatic compaction also runs when needed. Latest steering supersedes conflicting earlier instructions; skipped tool calls were not executed.';
   let planId: string | null = null;
+  let plan: PlanStep[] = [];
   let malformedRetried = false;
   let goal = text;
   let requestedSummary: string | undefined;
@@ -178,7 +177,9 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
       push({ kind: 'assistant', id: aid, text: '', thinking: '', streaming: true });
       setStatus(turn === 0 ? 'Thinking…' : 'Working…');
       const res = await streamGenerate(
-        { system, contents: history, tools, thinking: settings.thinking, signal: abort.signal },
+        // Keep the live checklist outside compacted history so progress is never
+        // lost when old tool exchanges are summarized.
+        { system: system + `\n\n<checklist_state>\n${plan.length ? plan.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join('\n') : 'No checklist yet for this run.'}\n</checklist_state>`, contents: history, tools, thinking: settings.thinking, signal: abort.signal },
         {
           onText: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, text: it.text + d } : it)); },
           onThought: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, thinking: it.thinking + d } : it)); },
@@ -222,12 +223,13 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
         const tid = nid();
         push({ kind: 'tool', id: tid, name: call.name, args: call.args ?? {}, status: 'running', summary: '' });
         setStatus(statusFor(call.name));
-        const out = await runTool(call.name, call.args ?? {}, { signal: abort.signal, goal, context: { chars: historySize(history), budget: CONTEXT_BUDGET } }, mode);
+        const out = await runTool(call.name, call.args ?? {}, { signal: abort.signal, goal, plan, context: { chars: historySize(history), budget: CONTEXT_BUDGET } }, mode);
         checkActive();
         if (out.contextSummary !== undefined) requestedSummary = out.contextSummary;
         const failed = 'error' in out.result;
-        patch(tid, (it) => (it.kind === 'tool' ? { ...it, status: failed ? 'error' : 'done', summary: out.summary, heard: out.heard, sampleIds: out.sampleIds, clipIds: out.clipIds, audioReviewIds: out.audioReviewIds } : it));
-        if (out.plan) {
+        patch(tid, (it) => (it.kind === 'tool' ? { ...it, status: failed ? 'error' : 'done', summary: out.summary, heard: out.heard, sampleIds: out.sampleIds, clipIds: out.clipIds } : it));
+        if (out.plan && !failed) {
+          plan = out.plan;
           if (planId) patch(planId, (it) => (it.kind === 'plan' ? { ...it, steps: out.plan! } : it));
           else { planId = nid(); push({ kind: 'plan', id: planId, steps: out.plan }); }
           // The plan card replaces the tool row.

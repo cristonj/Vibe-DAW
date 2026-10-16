@@ -22,6 +22,7 @@ let starting = false;
 let previewRequest = 0;
 let syncing: Promise<void> = Promise.resolve();
 let pending: Project | null = null;
+let syncedProject: Project | null = null;
 let raf = 0;
 let previewSrc: Tone.Player | null = null;
 let loadingListeners: Array<(loading: boolean) => void> = [];
@@ -46,7 +47,11 @@ export function initEngine() {
   transport = Tone.getTransport();
   graph = new EngineGraph({ live: true });
   graph.setMetronome(useTransport.getState().metronome);
-  configureFreeze(Tone.getContext().sampleRate, () => queueSync(getProject()));
+  // Install completed freezes on the next playback/update rather than repeatedly
+  // switching sounding tracks between live and frozen in the middle of a listen.
+  configureFreeze(Tone.getContext().sampleRate, () => {
+    if (!useTransport.getState().playing) queueSync(getProject());
+  });
   queueSync(getProject());
   useDaw.subscribe((s, prev) => {
     if (s.project !== prev.project) {
@@ -64,6 +69,7 @@ function queueSync(p: Project) {
   if (syncRunning) return;
   syncRunning = true;
   syncing = Promise.resolve().then(async () => {
+    let held: { beat: number; request: number } | null = null;
     setLoading(true);
     try {
       while (pending && graph) {
@@ -72,7 +78,21 @@ function queueSync(p: Project) {
         try {
           const assets = await preloadProject(next);
           if (pending) continue; // A newer edit superseded this load.
-          await contextLock.run(() => graph!.sync(next, assets));
+          const applied = await contextLock.run(async () => {
+            if (pending) return false; // An edit may also arrive while waiting for the lock.
+            if (!held && transport?.state === 'started' && useTransport.getState().playing && needsPlaybackHold(syncedProject, next)) {
+              const at = realtimeContext!.immediate();
+              held = { beat: transport.getTicksAtTime(at) / transport.PPQ, request: playRequest };
+              // Pause now, before disposing/rescheduling any sounding nodes. The
+              // transport's pause event releases voices; resume chases the new notes.
+              transport.pause(at);
+              useTransport.getState().setPosition(held.beat);
+            }
+            await graph!.sync(next, assets, !held && useTransport.getState().playing);
+            syncedProject = next;
+            return true;
+          });
+          if (!applied) continue;
           syncError = null;
           scheduleFreeze(next);
         } catch (e) {
@@ -82,8 +102,28 @@ function queueSync(p: Project) {
       }
     } finally {
       syncRunning = false;
+      // A stop, pause, seek, or explicit play issued during an async graph update
+      // owns the transport. Never override it with an automatic resume.
+      const resume = held as { beat: number; request: number } | null;
+      if (resume && resume.request === playRequest && useTransport.getState().playing) {
+        if (syncError) useTransport.getState().setPlaying(false);
+        else if (transport) {
+          transport.ticks = Math.round(resume.beat * transport.PPQ);
+          transport.start('+0.05');
+          startPlayheadLoop();
+        }
+      }
       setLoading(false);
     }
+  });
+}
+
+/** Mixer controls stay live; changes that rebuild nodes/events need a short hold. */
+function needsPlaybackHold(before: Project | null, after: Project): boolean {
+  if (!before || before.bpm !== after.bpm || before.swing !== after.swing || before.timeSignature !== after.timeSignature || before.loop !== after.loop || before.master.effects !== after.master.effects || before.tracks.length !== after.tracks.length) return true;
+  return after.tracks.some((t, i) => {
+    const old = before.tracks[i];
+    return old.id !== t.id || old.kind !== t.kind || old.instrument !== t.instrument || old.drumLanes !== t.drumLanes || old.clips !== t.clips || old.effects !== t.effects;
   });
 }
 
@@ -107,6 +147,7 @@ export async function play(fromBeat?: number) {
   starting = true;
   try {
   await ensureAudio();
+  queueSync(getProject()); // Pick up any freezes completed during the last playback.
   await engineSettled();
   if (!transport || request !== playRequest) return;
   const t = transport;
@@ -137,8 +178,9 @@ export function pause() {
   ++playRequest;
   starting = false;
   if (!transport) return;
-  const pos = transport.ticks / transport.PPQ;
-  transport.pause();
+  const at = realtimeContext!.immediate();
+  const pos = transport.getTicksAtTime(at) / transport.PPQ;
+  transport.pause(at);
   graph?.panic();
   useTransport.getState().setPlaying(false);
   useTransport.getState().setPosition(pos);
@@ -153,7 +195,7 @@ export async function togglePlay() {
 export function seek(beat: number) {
   const b = Number.isFinite(beat) ? Math.max(0, beat) : 0;
   useTransport.getState().setPosition(b);
-  if (transport && transport.state === 'started') {
+  if (transport && useTransport.getState().playing) {
     void play(b);
   }
 }
@@ -164,7 +206,7 @@ function startPlayheadLoop() {
     if (!transport || !useTransport.getState().playing) return;
     // Keep looping while we're playing: the transport starts slightly in the future,
     // so its state reads 'stopped' for the first frames.
-    if (transport.state === 'started') useTransport.getState().setPosition(transport.ticks / transport.PPQ);
+    if (transport.state === 'started') useTransport.getState().setPosition(transport.getTicksAtTime(realtimeContext!.immediate()) / transport.PPQ);
     raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);

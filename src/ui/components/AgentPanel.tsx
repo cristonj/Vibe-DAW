@@ -7,8 +7,6 @@ import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } f
 import { analyzeReference } from '../../agent/ears';
 import { useSettings, MODELS, aiAvailable } from '../../state/settings';
 import { useDaw } from '../../state/store';
-import { previewSample, stop, stopPreview } from '../../engine/api';
-import { useAudioReviews } from '../../agent/audioReviews';
 import { Markdown } from '../Markdown';
 import { toast } from '../toast';
 
@@ -26,18 +24,6 @@ const SUGGESTIONS = [
   'Turn this loop into a full 2-minute arrangement',
   'Make the drums hit harder and add hat rolls',
 ];
-
-function ReviewAudio({ id }: { id: string }) {
-  const review = useAudioReviews((s) => s.reviews.get(id));
-  if (!review) return <small className="review-expired">This older excerpt has been released from memory.</small>;
-  return <div className="review-audio">
-    <span>{review.label}</span>
-    <audio controls preload="none" src={review.url} aria-label={`Listen to ${review.label}`} onPlay={(e) => {
-      stop(); stopPreview();
-      for (const audio of document.querySelectorAll('audio')) if (audio !== e.currentTarget) audio.pause();
-    }} />
-  </div>;
-}
 
 function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan' }>; pinned?: boolean }) {
   const done = item.steps.filter((s) => s.status === 'done').length;
@@ -63,9 +49,6 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
           {item.summary || <span style={{ color: 'var(--faint)' }}>{item.name.replace(/_/g, ' ')}…</span>}
         </div>
         <div className="actions">
-          {item.sampleIds?.slice(0, 1).map((id) => (
-            <button key={id} className="btn icon" style={{ width: 22, height: 22 }} title="Preview sound" onClick={() => void previewSample(id)}><Play size={11} fill="currentColor" /></button>
-          ))}
           {item.clipIds?.length ? (
             <button className="btn icon" style={{ width: 22, height: 22 }} title="Open in editor" onClick={() => { select({ clipIds: item.clipIds! }); openEditor(item.clipIds![0]); }}><Eye size={12} /></button>
           ) : null}
@@ -74,8 +57,6 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
       {item.heard && (
         <section className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
           <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b><span>Producer notes</span></header>
-          {item.audioReviewIds?.map((id) => <ReviewAudio key={id} id={id} />)}
-          {!!item.audioReviewIds?.length && <small className="review-caption">The same audio excerpt sent to the Producer.</small>}
           <div className="review-notes"><Markdown text={item.heard} /></div>
         </section>
       )}

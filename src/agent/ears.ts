@@ -7,7 +7,6 @@ import { arrayBufferToBase64, audioBufferToPcm } from '../engine/wav';
 import { describeStats, mixStats, estimatePitch, estimateTempo, estimateKey } from '../samples/analysis';
 import { decodeAudio, getSampleMeta, loadBuffer, updateSampleMeta } from '../samples/library';
 import { generateText } from './llm';
-import { registerAudioReview, useAudioReviews } from './audioReviews';
 import { useSettings } from '../state/settings';
 import { prepareListeningAudio } from './listeningAudio';
 
@@ -42,7 +41,6 @@ export interface ListenResult {
   seconds: number;
   startBar: number;
   endBar: number;
-  reviewId: string;
 }
 
 export async function listen(req: ListenRequest): Promise<ListenResult> {
@@ -60,7 +58,7 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
   const { listeningQuality, listeningChannels } = useSettings.getState();
   const cacheKey = JSON.stringify([startBar, endBar, req.trackIds, req.question, req.goal, listeningQuality, listeningChannels]);
   const cached = listenCache.get(p)?.get(cacheKey);
-  if (cached && useAudioReviews.getState().reviews.has(cached.reviewId)) return cached;
+  if (cached) return cached;
 
   const pcm = await renderProject(p, {
     startBeat: barToBeat(p, startBar),
@@ -84,7 +82,7 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
     req.question ? `Question: ${req.question}` : 'Give your honest critique.',
   ].filter(Boolean).join('\n');
 
-  const heard = cached?.heard ?? await generateText({
+  const heard = await generateText({
     system: EARS_SYSTEM,
     contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(audio.wav) } }, { text: prompt }] }],
     thinking: 'LOW',
@@ -92,7 +90,7 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
     maxOutputTokens: 1600,
   });
   req.signal?.throwIfAborted();
-  const result = { heard: concise(heard, 2400), stats: describeStats(stats), seconds: stats.durationSec, startBar, endBar, reviewId: registerAudioReview(audio.wav, `Mix · bars ${startBar}–${Math.ceil(endBar) - 1} · ${audio.label}${req.trackIds?.length ? ' · selected tracks' : ''}`) };
+  const result = { heard: concise(heard, 2400), stats: describeStats(stats), seconds: stats.durationSec, startBar, endBar };
   const cache = listenCache.get(p) ?? new Map<string, ListenResult>();
   if (cache.size >= 12) cache.delete(cache.keys().next().value!);
   cache.set(cacheKey, result);
@@ -104,7 +102,7 @@ const SAMPLE_SYSTEM = `You are auditioning a sample for a music producer. Listen
 what it is (instrument/sound), character and texture, apparent pitch/key and tempo feel if any, genres it fits, and anything wrong (clicks, noise, off-tempo, clipped, fades).
 Be literal about what you hear. No preamble.`;
 
-export async function audition(sampleId: string, question?: string, signal?: AbortSignal): Promise<{ heard: string; reviewId: string }> {
+export async function audition(sampleId: string, question?: string, signal?: AbortSignal): Promise<{ heard: string }> {
   signal?.throwIfAborted();
   const meta = getSampleMeta(sampleId);
   if (!meta) throw new Error(`No sample with id ${sampleId}`);
@@ -116,7 +114,7 @@ export async function audition(sampleId: string, question?: string, signal?: Abo
   const pcm = preview.pcm;
   const { listeningQuality, listeningChannels } = useSettings.getState();
   const audio = prepareListeningAudio(pcm, listeningQuality, listeningChannels, 30);
-  if (!question && meta.aiDescription && meta.aiDescriptionAudio === audio.label && meta.aiDescriptionContext === preview.signature) return { heard: concise(meta.aiDescription, 1200), reviewId: registerAudioReview(audio.wav, `${meta.name} · ${audio.label}`) };
+  if (!question && meta.aiDescription && meta.aiDescriptionAudio === audio.label && meta.aiDescriptionContext === preview.signature) return { heard: concise(meta.aiDescription, 1200) };
   const facts: string[] = [`Duration ${buf.duration.toFixed(2)} s`, `category "${meta.category}"`];
   if (meta.bpm) facts.push(`tagged ${meta.bpm} BPM`);
   if (meta.key) facts.push(`tagged key ${meta.key}`);
@@ -141,7 +139,7 @@ export async function audition(sampleId: string, question?: string, signal?: Abo
   signal?.throwIfAborted();
   const result = concise(text, 1200);
   if (!question) updateSampleMeta(sampleId, { aiDescription: result, aiDescriptionAudio: audio.label, aiDescriptionContext: preview.signature });
-  return { heard: result, reviewId: registerAudioReview(audio.wav, `${meta.name} · ${audio.label}`) };
+  return { heard: result };
 }
 
 /** Listen to arbitrary user-provided audio (a reference track) and extract a production brief. */
