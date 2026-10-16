@@ -7,7 +7,8 @@ import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } f
 import { analyzeReference } from '../../agent/ears';
 import { useSettings, MODELS, aiAvailable } from '../../state/settings';
 import { useDaw } from '../../state/store';
-import { previewSample } from '../../engine/api';
+import { previewSample, stop, stopPreview } from '../../engine/api';
+import { useAudioReviews } from '../../agent/audioReviews';
 import { Markdown } from '../Markdown';
 import { toast } from '../toast';
 
@@ -25,6 +26,31 @@ const SUGGESTIONS = [
   'Turn this loop into a full 2-minute arrangement',
   'Make the drums hit harder and add hat rolls',
 ];
+
+function ReviewAudio({ id }: { id: string }) {
+  const review = useAudioReviews((s) => s.reviews.get(id));
+  if (!review) return <small className="review-expired">This older excerpt has been released from memory.</small>;
+  return <div className="review-audio">
+    <span>{review.label}</span>
+    <audio controls preload="none" src={review.url} aria-label={`Listen to ${review.label}`} onPlay={(e) => {
+      stop(); stopPreview();
+      for (const audio of document.querySelectorAll('audio')) if (audio !== e.currentTarget) audio.pause();
+    }} />
+  </div>;
+}
+
+function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan' }>; pinned?: boolean }) {
+  const done = item.steps.filter((s) => s.status === 'done').length;
+  return <details className={`plan ${pinned ? 'pinned-plan' : ''}`} open>
+    <summary className="plan-title"><ListChecks size={14} /><b>Checklist</b><span>{done}/{item.steps.length}</span></summary>
+    <div className="plan-steps">{item.steps.map((s, i) => (
+      <div key={i} className={`plan-step ${s.status}`}>
+        <span className="box">{s.status === 'done' ? <Check size={10} strokeWidth={3} /> : null}</span>
+        {s.title}
+      </div>
+    ))}</div>
+  </details>;
+}
 
 function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
   const Icon = TOOL_ICONS[item.name] ?? Sparkles;
@@ -46,10 +72,12 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
         </div>
       </div>
       {item.heard && (
-        <div className="heard">
-          <div className="heard-label"><Ear size={12} /> {item.name === 'listen' ? 'What I heard' : 'Auditioned'}</div>
-          <Markdown text={item.heard} />
-        </div>
+        <section className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
+          <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b><span>Producer notes</span></header>
+          {item.audioReviewIds?.map((id) => <ReviewAudio key={id} id={id} />)}
+          {!!item.audioReviewIds?.length && <small className="review-caption">The same audio excerpt sent to the Producer.</small>}
+          <div className="review-notes"><Markdown text={item.heard} /></div>
+        </section>
       )}
     </>
   );
@@ -62,6 +90,7 @@ function Item({ item }: { item: ChatItem }) {
         <div className="msg-user">
           <button className="btn icon restore" title="Restore the project to before this message" onClick={() => revertTo(item.checkpoint)}><RotateCcw size={13} /></button>
           {item.focus && <span className="focus">On {item.focus}</span>}
+          {item.steering && <span className="focus">{item.steering === 'queued' ? 'Steering queued' : item.steering === 'applied' ? 'Steering applied' : 'Steering not applied (run stopped)'}</span>}
           {item.text}
         </div>
       );
@@ -80,17 +109,7 @@ function Item({ item }: { item: ChatItem }) {
     case 'tool':
       return <ToolRow item={item} />;
     case 'plan':
-      return (
-        <div className="plan">
-          <div className="plan-title">Plan</div>
-          {item.steps.map((s, i) => (
-            <div key={i} className={`plan-step ${s.status}`}>
-              <span className="box">{s.status === 'done' ? <Check size={10} strokeWidth={3} /> : null}</span>
-              {s.title}
-            </div>
-          ))}
-        </div>
-      );
+      return <Plan item={item} />;
     case 'changes':
       return (
         <div className={`changes ${item.state}`}>
@@ -118,6 +137,7 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
   const status = useAgent((s) => s.status);
   const mode = useAgent((s) => s.mode);
   const tokens = useAgent((s) => s.tokens);
+  const context = useAgent((s) => s.context);
   const model = useSettings((s) => s.model);
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Array<{ name: string; text: string }>>([]);
@@ -126,6 +146,7 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const stick = useRef(true);
+  const latestPlan = items.findLast((it): it is Extract<ChatItem, { kind: 'plan' }> => it.kind === 'plan');
 
   useEffect(() => { if (focusSignal) taRef.current?.focus(); }, [focusSignal]);
 
@@ -135,7 +156,7 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
   }, [items]);
 
   const send = (t = text) => {
-    if (!t.trim() || running) return;
+    if (!t.trim() || analyzing) return;
     const att = attachments.map((a) => `<reference_track name="${a.name}">\n${a.text}\n</reference_track>`);
     void runAgent(t, { attachments: att });
     setText('');
@@ -163,11 +184,13 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
       <div className="agent-head">
         <div className="agent-title"><span className={`agent-dot ${running ? 'busy' : ''}`} /> Producer</div>
         <div className="seg" role="radiogroup" aria-label="Agent mode">
-          <button className={mode === 'agent' ? 'on' : ''} onClick={() => useAgent.getState().setMode('agent')} role="radio" aria-checked={mode === 'agent'} title="The agent edits your project">Agent</button>
-          <button className={mode === 'ask' ? 'on' : ''} onClick={() => useAgent.getState().setMode('ask')} role="radio" aria-checked={mode === 'ask'} title="Read-only: questions and feedback">Ask</button>
+          <button className={mode === 'agent' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('agent')} role="radio" aria-checked={mode === 'agent'} title="The agent edits your project">Agent</button>
+          <button className={mode === 'ask' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('ask')} role="radio" aria-checked={mode === 'ask'} title="Read-only: questions and feedback">Ask</button>
         </div>
         <button className="btn icon" title="New chat" disabled={running} onClick={() => useAgent.getState().clear()}><Plus size={15} /></button>
       </div>
+
+      {latestPlan && <Plan key={latestPlan.id} item={latestPlan} pinned />}
 
       <div className="feed" ref={feedRef} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; }}>
         {items.length === 0 ? (
@@ -176,7 +199,7 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
             <p>It edits the session like you would, listens to every sound it picks, and checks the mix by ear. Everything it does is one undo away.</p>
             {SUGGESTIONS.map((s) => <button key={s} className="suggestion" onClick={() => send(s)}>{s}</button>)}
           </div>
-        ) : items.map((it) => <Item key={it.id} item={it} />)}
+        ) : items.filter((it) => it.id !== latestPlan?.id).map((it) => <Item key={it.id} item={it} />)}
       </div>
 
       <div className="composer">
@@ -197,9 +220,9 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
             ref={taRef}
             value={text}
             rows={2}
-            placeholder={mode === 'agent' ? 'Describe what to make or change…' : 'Ask about your track…'}
+            placeholder={running ? 'Steer the agent while it works…' : mode === 'agent' ? 'Describe what to make or change…' : 'Ask about your track…'}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
             aria-label="Message the agent"
           />
           <div className="composer-row">
@@ -214,15 +237,15 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
               {MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
             <div className="spacer" />
-            {running ? (
+            {running && (
               <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} fill="currentColor" /></button>
-            ) : (
-              <button className="send" onClick={() => send()} disabled={!text.trim()} title="Send (Enter)" aria-label="Send"><ArrowUp size={16} /></button>
             )}
+            <button className="send" onClick={() => send()} disabled={!text.trim() || analyzing} title={running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
           </div>
         </div>
         <div className="agent-foot">
           <span>Ctrl+K edits a selected clip</span>
+          {context.compactions > 0 && <span title="Older exchanges are summarized automatically. The agent can also manage its own working memory.">Memory compacted {context.compactions}×</span>}
           {tokens.input + tokens.output > 0 && <span>{Math.round((tokens.input + tokens.output) / 1000)}k tokens</span>}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { DRUM_LANE_NOTES, TRACK_COLORS, defaultPresetParams } from './catalog';
+import { current, isDraft, type Draft } from 'immer';
 import type { AudioClip, Clip, DrumLane, Effect, MidiClip, Project, Track, TrackKind } from './types';
 
 export function uid(): string {
@@ -166,5 +167,5 @@ export function isSilencedBySolo(p: Project, t: Track): boolean {
 }
 
 export function cloneDeep<T>(v: T): T {
-  return structuredClone(v);
+  return structuredClone(isDraft(v) ? current(v as Draft<T>) : v) as T;
 }

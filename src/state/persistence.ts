@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { del, get as idbGet, set as idbSet } from 'idb-keyval';
+import { del, get as idbGet, setMany, update as idbUpdate } from 'idb-keyval';
 import type { Project } from '../model/types';
 import { createProject } from '../model/project';
 import { useDaw } from './store';
@@ -37,41 +37,83 @@ export const usePersist = create<PersistState>((set) => ({
   },
 }));
 
-async function writeLocal(p: Project) {
-  await idbSet(key(p.id), p);
-  const index = (await idbGet<ProjectEntry[]>(INDEX)) ?? [];
-  const next = [{ id: p.id, name: p.name, updatedAt: p.updatedAt, where: 'local' as const }, ...index.filter((e) => e.id !== p.id)];
-  await idbSet(INDEX, next);
-  await idbSet(LAST, p.id);
+let localQueue: Promise<void> = Promise.resolve();
+function serializeLocal(fn: () => Promise<void>) {
+  const result = localQueue.then(fn, fn);
+  localQueue = result.catch(() => undefined);
+  return result;
+}
+
+function writeLocal(p: Project) {
+  return serializeLocal(async () => {
+    const index = (await idbGet<ProjectEntry[]>(INDEX)) ?? [];
+    const next = [{ id: p.id, name: p.name, updatedAt: p.updatedAt, where: 'local' as const }, ...index.filter((e) => e.id !== p.id)];
+    // Commit the document, index and last-opened pointer together.
+    await setMany([[key(p.id), p], [INDEX, next], [LAST, p.id]]);
+  });
 }
 
 let localTimer: ReturnType<typeof setTimeout> | undefined;
 let cloudTimer: ReturnType<typeof setTimeout> | undefined;
+let maxTimer: ReturnType<typeof setTimeout> | undefined;
+let autosaveCleanup: (() => void) | undefined;
+let savedProject: Project | null = null;
+let saveInFlight: Promise<void> | null = null;
+
+/** Save pending edits before navigation; a completed older save must not mark newer edits saved. */
+export function flushAutosave(): Promise<void> {
+  clearTimeout(localTimer);
+  clearTimeout(maxTimer);
+  maxTimer = undefined;
+  if (saveInFlight) return saveInFlight;
+  if (savedProject === useDaw.getState().project) return Promise.resolve();
+  saveInFlight = (async () => {
+    usePersist.setState({ saveState: 'saving' });
+    try {
+      while (savedProject !== useDaw.getState().project) {
+        const p = useDaw.getState().project;
+        await writeLocal(p);
+        savedProject = p;
+      }
+      usePersist.setState({ saveState: 'saved' });
+    } catch (e) {
+      usePersist.setState({ saveState: 'error' });
+      throw e;
+    } finally { saveInFlight = null; }
+  })();
+  return saveInFlight;
+}
 
 export function startAutosave() {
-  useDaw.subscribe((s, prev) => {
+  if (autosaveCleanup) return autosaveCleanup;
+  const save = () => { void flushAutosave().catch((e) => console.error('Autosave failed', e)); };
+  const unsubscribe = useDaw.subscribe((s, prev) => {
     if (s.project === prev.project) return;
     usePersist.setState({ saveState: 'unsaved' });
     clearTimeout(localTimer);
-    localTimer = setTimeout(async () => {
-      usePersist.setState({ saveState: 'saving' });
-      try {
-        await writeLocal(useDaw.getState().project);
-        usePersist.setState({ saveState: 'saved' });
-      } catch (e) {
-        console.error(e);
-        usePersist.setState({ saveState: 'error' });
-      }
-    }, 700);
+    localTimer = setTimeout(save, 700);
+    // Continuous dragging/typing must not postpone saving indefinitely.
+    maxTimer ??= setTimeout(save, 5000);
+    clearTimeout(cloudTimer);
     if (useAuth.getState().user) {
-      clearTimeout(cloudTimer);
-      cloudTimer = setTimeout(() => { saveProjectToCloud(useDaw.getState().project).catch((e) => console.warn('Cloud save failed', e)); }, 4000);
+      const p = s.project;
+      cloudTimer = setTimeout(() => { saveProjectToCloud(p).catch((e) => console.warn('Cloud save failed', e)); }, 4000);
     }
   });
-  window.addEventListener('beforeunload', () => {
+  const hidden = () => { if (document.visibilityState === 'hidden') save(); };
+  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', hidden);
+  autosaveCleanup = () => {
+    unsubscribe();
     clearTimeout(localTimer);
-    void writeLocal(useDaw.getState().project);
-  });
+    clearTimeout(cloudTimer);
+    clearTimeout(maxTimer);
+    maxTimer = undefined;
+    window.removeEventListener('pagehide', save);
+    document.removeEventListener('visibilitychange', hidden);
+    autosaveCleanup = undefined;
+  };
+  return autosaveCleanup;
 }
 
 export async function loadInitialProject(): Promise<Project> {
@@ -88,6 +130,7 @@ export async function loadInitialProject(): Promise<Project> {
 }
 
 export async function openProject(id: string) {
+  await flushAutosave();
   let p = await idbGet<Project>(key(id)).catch(() => undefined);
   if (useAuth.getState().user) {
     try {
@@ -98,33 +141,44 @@ export async function openProject(id: string) {
     }
   }
   if (!p) throw new Error('Project not found');
-  useDaw.getState().replaceProject(p);
+  await flushAutosave();
   useAgent.getState().clear();
-  await idbSet(LAST, p.id);
+  useDaw.getState().replaceProject(p);
+  await flushAutosave();
 }
 
 export async function newProject(name?: string) {
+  await flushAutosave();
   const p = createProject(name);
-  useDaw.getState().replaceProject(p);
   useAgent.getState().clear();
-  await writeLocal(p);
+  useDaw.getState().replaceProject(p);
+  await flushAutosave();
   await usePersist.getState().refresh();
 }
 
 export async function duplicateProject() {
+  await flushAutosave();
   const cur = useDaw.getState().project;
   const p: Project = { ...structuredClone(cur), id: createProject().id, name: `${cur.name} (copy)`, createdAt: Date.now(), updatedAt: Date.now() };
+  useAgent.getState().clear();
   useDaw.getState().replaceProject(p);
-  await writeLocal(p);
+  await flushAutosave();
   await usePersist.getState().refresh();
 }
 
 export async function deleteProject(id: string) {
-  await del(key(id));
-  const index = (await idbGet<ProjectEntry[]>(INDEX)) ?? [];
-  await idbSet(INDEX, index.filter((e) => e.id !== id));
+  clearTimeout(cloudTimer);
+  if (useDaw.getState().project.id === id) {
+    // Switch first so a queued autosave cannot recreate the deleted project.
+    useAgent.getState().clear();
+    useDaw.getState().replaceProject(createProject());
+    await flushAutosave();
+  }
+  await serializeLocal(async () => {
+    await del(key(id));
+    await idbUpdate<ProjectEntry[]>(INDEX, (index) => (index ?? []).filter((e) => e.id !== id));
+  });
   try { await deleteCloudProject(id); } catch { /* not in cloud */ }
-  if (useDaw.getState().project.id === id) await newProject();
   await usePersist.getState().refresh();
 }
 

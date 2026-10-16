@@ -22,6 +22,7 @@ export interface ToolContext {
   signal: AbortSignal;
   /** The user's request, given to the ears as the target vibe. */
   goal: string;
+  context?: { chars: number; budget: number };
 }
 
 export interface ToolOutcome {
@@ -32,6 +33,8 @@ export interface ToolOutcome {
   heard?: string;
   sampleIds?: string[];
   clipIds?: string[];
+  contextSummary?: string;
+  audioReviewIds?: string[];
 }
 
 interface ToolDef {
@@ -155,6 +158,19 @@ const DESIGN_PARAMS_SCHEMA = {
 // ---------------------------------------------------------------- tool definitions
 
 const TOOLS: ToolDef[] = [
+  {
+    readOnly: true,
+    decl: {
+      name: 'manage_context',
+      description: 'Manage your working memory. Inspect the current character budget, or compact older completed exchanges into your own concise summary. Preserve the user goal, latest steering, decisions, useful ids, listening findings and unfinished tasks. Raw audio is never retained in producer history.',
+      parameters: obj({ action: S('inspect | compact', { enum: ['inspect', 'compact'] }), summary: S('For compact: your durable working-memory summary, up to 6000 characters') }, ['action']),
+    },
+    run: (a, ctx) => {
+      if (a.action !== 'inspect' && a.action !== 'compact') throw new ToolError('action must be inspect or compact');
+      const summary = a.action === 'compact' ? str(a.summary, 'summary')!.slice(0, 6000) : undefined;
+      return { result: { ...ctx.context, compaction: summary === undefined ? 'not requested' : 'scheduled before the next model turn' }, summary: summary === undefined ? 'Checked working memory' : 'Compacted working memory', contextSummary: summary };
+    },
+  },
   {
     readOnly: true,
     decl: { name: 'get_project_state', description: 'Re-read the full current project (tracks, clips, mixer). The state is already attached to each user message; use this after many edits.' },
@@ -791,16 +807,18 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
       if (!ids.length) throw new ToolError('Give at least one sample id');
       const heard = await Promise.all(ids.map(async (id) => {
         try {
-          return { id, name: getSampleMeta(id)?.name, heard: await audition(id, a.question ? String(a.question) : undefined, ctx.signal) };
+          const r = await audition(id, a.question ? String(a.question) : undefined, ctx.signal);
+          return { id, name: getSampleMeta(id)?.name, heard: r.heard, reviewId: r.reviewId };
         } catch (e) {
           return { id, error: (e as Error).message };
         }
       }));
       return {
-        result: { auditions: heard },
+        result: { auditions: heard.map(({ id, name, ...rest }) => ({ id, name, ...('heard' in rest ? { heard: rest.heard } : { error: rest.error }) })) },
         summary: `Listened to ${ids.length} sample${ids.length > 1 ? 's' : ''}`,
         heard: heard.map((h) => `**${h.name ?? h.id}** — ${'heard' in h ? h.heard : h.error}`).join('\n\n'),
         sampleIds: ids,
+        audioReviewIds: heard.flatMap((h) => h.reviewId ? [h.reviewId] : []),
       };
     },
   },
@@ -809,7 +827,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
     enabled: () => useSettings.getState().autoListen,
     decl: {
       name: 'listen',
-      description: 'Bounce part of the song and LISTEN to it, returning an honest critique plus measured levels/spectrum. Use after building each layer and before finishing. Max ~90 s per listen.',
+      description: 'Bounce part of the song and LISTEN to the same full-quality stereo mix as the editor, returning an honest critique plus measured levels/spectrum. Use after building each layer and before finishing. Max ~60 s per listen; listen to additional ranges separately.',
       parameters: obj({
         start_bar: N('From bar (default 1)'),
         end_bar: N('To bar, exclusive (default end of song)'),
@@ -833,6 +851,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
         result: { heard: r.heard, measured: r.stats, bars: `${r.startBar}–${r.endBar}` },
         summary: `Listened to bars ${r.startBar}–${r.endBar - 1}${(a.track_ids as string[] | undefined)?.length ? ' (soloed)' : ''}`,
         heard: r.heard,
+        audioReviewIds: [r.reviewId],
       };
     },
   },

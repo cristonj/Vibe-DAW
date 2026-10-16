@@ -26,8 +26,8 @@ export function sliceClip(p: Project, clip: Clip, from: number, to: number, samp
     const rel0 = a - clip.start;
     const rel1 = b - clip.start;
     const notes: Note[] = clip.notes
-      .filter((n) => n.start >= rel0 - EPS && n.start < rel1 - EPS)
-      .map((n) => ({ ...n, id: uid(), start: n.start - rel0, duration: Math.min(n.duration, rel1 - n.start) }));
+      .filter((n) => n.start + n.duration > rel0 + EPS && n.start < rel1 - EPS)
+      .map((n) => ({ ...n, id: uid(), start: Math.max(n.start, rel0) - rel0, duration: Math.min(n.start + n.duration, rel1) - Math.max(n.start, rel0) }));
     return { ...(base as MidiClip), notes };
   }
   const rate = audioClipRate(p, clip, sampleBpm?.(clip.sampleId));
@@ -80,6 +80,7 @@ export interface DrumHit { lane: string; beat: number; velocity: number }
  */
 export function parseSteps(lane: string, pattern: string, stepsPerBar: number, beatsPerBar: number, totalBeats: number, baseVelocity = 0.85): DrumHit[] {
   const steps = pattern.replace(/[\s|]/g, '');
+  if (!(stepsPerBar > 0) || !Number.isFinite(stepsPerBar) || !(beatsPerBar > 0) || !Number.isFinite(beatsPerBar) || !Number.isFinite(totalBeats)) throw new Error('Pattern timing must be finite and positive.');
   if (!steps.length) return [];
   if (/[^xXo.\-234]/.test(steps)) throw new Error(`Pattern for "${lane}" has unknown characters. Use x X o . and 2/3/4 for rolls.`);
   const stepBeats = beatsPerBar / stepsPerBar;
@@ -236,10 +237,12 @@ export function transformNotes(clip: MidiClip, op: NoteOp, amount: number | unde
     }
     case 'legato': {
       const sorted = [...notes].sort((a, b) => a.start - b.start);
-      sorted.forEach((n) => {
-        const next = sorted.find((m) => m.start > n.start + EPS);
-        n.duration = next ? next.start - n.start : Math.max(n.duration, clip.length - n.start);
-      });
+      let next = 0;
+      for (let i = 0; i < sorted.length; i++) {
+        next = Math.max(next, i + 1);
+        while (next < sorted.length && sorted[next].start <= sorted[i].start + EPS) next++;
+        sorted[i].duration = next < sorted.length ? sorted[next].start - sorted[i].start : Math.max(sorted[i].duration, clip.length - sorted[i].start);
+      }
       return 'made legato';
     }
     case 'staccato': {

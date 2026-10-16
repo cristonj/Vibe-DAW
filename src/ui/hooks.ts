@@ -22,6 +22,7 @@ export function usePeaks(sampleId: string | undefined, reverse = false): Float32
   const key = `${sampleId}|${reverse}`;
   const [peaks, setPeaks] = useState<Float32Array | null>(() => peakCache.get(key) ?? null);
   useEffect(() => {
+    setPeaks(peakCache.get(key) ?? null);
     if (!sampleId) return;
     const cached = peakCache.get(key);
     if (cached) { setPeaks(cached); return; }
@@ -32,8 +33,9 @@ export function usePeaks(sampleId: string | undefined, reverse = false): Float32
       let p = waveformPeaks(buf, 2048);
       if (reverse) p = p.slice().reverse();
       peakCache.set(key, p);
+      if (peakCache.size > 256) peakCache.delete(peakCache.keys().next().value!);
       setPeaks(p);
-    })();
+    })().catch((e) => console.warn('Waveform could not load', e));
     return () => { alive = false; };
   }, [sampleId, key, reverse]);
   return peaks;

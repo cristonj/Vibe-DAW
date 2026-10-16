@@ -1,23 +1,23 @@
 import type { Project } from '../model/types';
-import { barToBeat, beatsPerBar, beatsToSeconds, projectLength } from '../model/project';
+import { barToBeat, beatToBar, beatsPerBar, beatsToSeconds, projectLength, secondsToBeats } from '../model/project';
 import { formatKey } from '../model/theory';
-import { renderProject } from '../engine/api';
-import { arrayBufferToBase64, audioBufferToPcm, encodeWav, slicePcm, toMono, type PcmData } from '../engine/wav';
+import { renderProject, renderSamplePreview } from '../engine/api';
+import { getProject } from '../state/store';
+import { arrayBufferToBase64, audioBufferToPcm } from '../engine/wav';
 import { describeStats, mixStats, estimatePitch, estimateTempo, estimateKey } from '../samples/analysis';
 import { decodeAudio, getSampleMeta, loadBuffer, updateSampleMeta } from '../samples/library';
 import { generateText } from './llm';
+import { registerAudioReview, useAudioReviews } from './audioReviews';
+import { useSettings } from '../state/settings';
+import { prepareListeningAudio } from './listeningAudio';
 
 // The agent's ears. Gemini hears the actual rendered audio (not the MIDI), and we
 // pair what it hears with objective measurements so feedback is grounded.
 
-const LISTEN_RATE = 16000; // Gemini downsamples audio to ~16 kHz mono anyway
-const MAX_LISTEN_SECONDS = 90;
+const MAX_LISTEN_SECONDS = 60;
 
-function toWavBase64(pcm: PcmData, maxSeconds = MAX_LISTEN_SECONDS): string {
-  const mono = toMono(pcm, LISTEN_RATE);
-  const clipped = mono.channels[0].length > maxSeconds * LISTEN_RATE ? slicePcm(mono, 0, maxSeconds) : mono;
-  return arrayBufferToBase64(encodeWav(clipped, 16));
-}
+const concise = (text: string, chars: number) => text.length <= chars ? text : text.slice(0, chars) + '…';
+const listenCache = new WeakMap<Project, Map<string, ListenResult>>();
 
 const EARS_SYSTEM = `You are the ears of an AI music producer working inside a DAW. You will hear a rendered audio excerpt.
 Listen closely and report what is actually audible — never guess from the description alone.
@@ -42,26 +42,36 @@ export interface ListenResult {
   seconds: number;
   startBar: number;
   endBar: number;
+  reviewId: string;
 }
 
 export async function listen(req: ListenRequest): Promise<ListenResult> {
+  req.signal?.throwIfAborted();
   const p = req.project;
   const bpb = beatsPerBar(p);
   const lastBar = Math.ceil(projectLength(p) / bpb) + 1;
-  const startBar = Math.max(1, Math.floor(req.startBar ?? 1));
+  const startBar = Math.max(1, Math.min(lastBar - 1, Math.floor(req.startBar ?? 1)));
   let endBar = Math.min(lastBar, Math.ceil(req.endBar ?? lastBar));
   const barSec = beatsToSeconds(p, bpb);
   if ((endBar - startBar) * barSec > MAX_LISTEN_SECONDS) endBar = startBar + Math.floor(MAX_LISTEN_SECONDS / barSec);
   if (endBar <= startBar) endBar = startBar + 1;
+  const endBeat = Math.min(barToBeat(p, endBar), barToBeat(p, startBar) + secondsToBeats(p, MAX_LISTEN_SECONDS));
+  endBar = beatToBar(p, endBeat);
+  const { listeningQuality, listeningChannels } = useSettings.getState();
+  const cacheKey = JSON.stringify([startBar, endBar, req.trackIds, req.question, req.goal, listeningQuality, listeningChannels]);
+  const cached = listenCache.get(p)?.get(cacheKey);
+  if (cached && useAudioReviews.getState().reviews.has(cached.reviewId)) return cached;
 
   const pcm = await renderProject(p, {
     startBeat: barToBeat(p, startBar),
-    endBeat: barToBeat(p, endBar),
+    endBeat,
     onlyTracks: req.trackIds?.length ? req.trackIds : null,
-    tail: 0.5,
-    sampleRate: 22050, // Gemini hears ~16 kHz anyway; halves render time
+    tail: 0,
+    sampleRate: 44100,
   });
-  const stats = mixStats(pcm);
+  req.signal?.throwIfAborted();
+  const audio = prepareListeningAudio(pcm, listeningQuality, listeningChannels);
+  const stats = mixStats(audio.pcm);
   const trackNames = req.trackIds?.length
     ? p.tracks.filter((t) => req.trackIds!.includes(t.id)).map((t) => t.name).join(', ')
     : 'full mix';
@@ -70,29 +80,43 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
     `Excerpt: bars ${startBar}–${endBar - 1} (${trackNames}). ${p.bpm} BPM, ${formatKey(p.key)}, ${p.timeSignature.join('/')}. One bar = ${barSec.toFixed(2)} s; 0:00 in the audio is the start of bar ${startBar}.`,
     req.goal ? `What the producer is going for: ${req.goal}` : '',
     `Measured: ${describeStats(stats)}.`,
+    `Audio provided: ${audio.label}. ${listeningChannels === 'mono' ? 'This is a mono downmix; do not judge stereo width or panning.' : ''}`,
     req.question ? `Question: ${req.question}` : 'Give your honest critique.',
   ].filter(Boolean).join('\n');
 
-  const heard = await generateText({
+  const heard = cached?.heard ?? await generateText({
     system: EARS_SYSTEM,
-    contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: toWavBase64(pcm) } }, { text: prompt }] }],
+    contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(audio.wav) } }, { text: prompt }] }],
     thinking: 'LOW',
     signal: req.signal,
+    maxOutputTokens: 1600,
   });
-  return { heard, stats: describeStats(stats), seconds: stats.durationSec, startBar, endBar };
+  req.signal?.throwIfAborted();
+  const result = { heard: concise(heard, 2400), stats: describeStats(stats), seconds: stats.durationSec, startBar, endBar, reviewId: registerAudioReview(audio.wav, `Mix · bars ${startBar}–${Math.ceil(endBar) - 1} · ${audio.label}${req.trackIds?.length ? ' · selected tracks' : ''}`) };
+  const cache = listenCache.get(p) ?? new Map<string, ListenResult>();
+  if (cache.size >= 12) cache.delete(cache.keys().next().value!);
+  cache.set(cacheKey, result);
+  listenCache.set(p, cache);
+  return result;
 }
 
 const SAMPLE_SYSTEM = `You are auditioning a sample for a music producer. Listen and describe it in 2-4 short lines:
 what it is (instrument/sound), character and texture, apparent pitch/key and tempo feel if any, genres it fits, and anything wrong (clicks, noise, off-tempo, clipped, fades).
 Be literal about what you hear. No preamble.`;
 
-export async function audition(sampleId: string, question?: string, signal?: AbortSignal): Promise<string> {
+export async function audition(sampleId: string, question?: string, signal?: AbortSignal): Promise<{ heard: string; reviewId: string }> {
+  signal?.throwIfAborted();
   const meta = getSampleMeta(sampleId);
   if (!meta) throw new Error(`No sample with id ${sampleId}`);
-  if (!question && meta.aiDescription) return meta.aiDescription;
   const buf = await loadBuffer(sampleId);
   if (!buf) throw new Error(`Couldn't load audio for ${meta.name}`);
-  const pcm = audioBufferToPcm(buf);
+  signal?.throwIfAborted();
+  const preview = await renderSamplePreview(getProject(), sampleId);
+  signal?.throwIfAborted();
+  const pcm = preview.pcm;
+  const { listeningQuality, listeningChannels } = useSettings.getState();
+  const audio = prepareListeningAudio(pcm, listeningQuality, listeningChannels, 30);
+  if (!question && meta.aiDescription && meta.aiDescriptionAudio === audio.label && meta.aiDescriptionContext === preview.signature) return { heard: concise(meta.aiDescription, 1200), reviewId: registerAudioReview(audio.wav, `${meta.name} · ${audio.label}`) };
   const facts: string[] = [`Duration ${buf.duration.toFixed(2)} s`, `category "${meta.category}"`];
   if (meta.bpm) facts.push(`tagged ${meta.bpm} BPM`);
   if (meta.key) facts.push(`tagged key ${meta.key}`);
@@ -109,30 +133,40 @@ export async function audition(sampleId: string, question?: string, signal?: Abo
   }
   const text = await generateText({
     system: SAMPLE_SYSTEM,
-    contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: toWavBase64(pcm, 30) } }, { text: `Sample "${meta.name}". ${facts.join(', ')}.${question ? `\nQuestion: ${question}` : ''}` }] }],
+    contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(audio.wav) } }, { text: `Sample "${meta.name}". ${facts.join(', ')}. ${preview.context} Audio: ${audio.label}.${question ? `\nQuestion: ${question}` : ''}` }] }],
     thinking: 'MINIMAL',
     signal,
+    maxOutputTokens: 800,
   });
-  if (!question) updateSampleMeta(sampleId, { aiDescription: text });
-  return text;
+  signal?.throwIfAborted();
+  const result = concise(text, 1200);
+  if (!question) updateSampleMeta(sampleId, { aiDescription: result, aiDescriptionAudio: audio.label, aiDescriptionContext: preview.signature });
+  return { heard: result, reviewId: registerAudioReview(audio.wav, `${meta.name} · ${audio.label}`) };
 }
 
 /** Listen to arbitrary user-provided audio (a reference track) and extract a production brief. */
 export async function analyzeReference(data: ArrayBuffer, name: string, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
   const buf = await decodeAudio(data);
-  const pcm = audioBufferToPcm(buf);
+  signal?.throwIfAborted();
+  const pcm = audioBufferToPcm(buf, 60);
+  const { listeningQuality, listeningChannels } = useSettings.getState();
+  const audio = prepareListeningAudio(pcm, listeningQuality, listeningChannels);
   const tempo = estimateTempo(pcm);
   const key = estimateKey(pcm);
-  return generateText({
+  const text = await generateText({
     system: 'You are a producer breaking down a reference track so another producer can make something in the same style (not a copy). Be specific.',
     contents: [{
       role: 'user',
       parts: [
-        { inlineData: { mimeType: 'audio/wav', data: toWavBase64(pcm, 75) } },
+        { inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(audio.wav) } },
         { text: `Reference "${name}". Measured tempo ≈${tempo?.bpm ?? '?'} BPM (could be half/double), key ≈${key?.key ?? '?'}.\nBreak it down: tempo feel, key/mood, drum pattern (kick/snare/hat placement, rolls), bass/808 behavior, melodic instruments & processing, arrangement, mix character. Then give a recipe as bullet points.` },
       ],
     }],
     thinking: 'LOW',
     signal,
+    maxOutputTokens: 1800,
   });
+  signal?.throwIfAborted();
+  return concise(text, 4000);
 }

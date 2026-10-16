@@ -1,5 +1,5 @@
 import { useDaw, useTransport } from '../state/store';
-import { beatsPerBar, createMidiClip, createTrack } from '../model/project';
+import { beatsPerBar, cloneDeep, createMidiClip, createTrack } from '../model/project';
 import type { TrackKind } from '../model/types';
 import { sliceClip } from '../model/edit';
 import { getSampleMeta } from '../samples/library';
@@ -22,15 +22,16 @@ export function duplicateSelectedClips() {
   const ids = new Set(daw.selection.clipIds);
   if (!ids.size) return;
   const fresh: string[] = [];
+  const selected = daw.project.tracks.flatMap((t) => t.clips.filter((c) => ids.has(c.id)));
+  if (!selected.length) return;
+  const shift = Math.max(...selected.map((c) => c.start + c.length)) - Math.min(...selected.map((c) => c.start));
   daw.update('Duplicate clips', (d) => {
     for (const t of d.tracks) {
       const sel = t.clips.filter((c) => ids.has(c.id));
       if (!sel.length) continue;
-      const start = Math.min(...sel.map((c) => c.start));
-      const end = Math.max(...sel.map((c) => c.start + c.length));
       for (const c of sel) {
         d.nextId++;
-        const copy = { ...structuredClone(c), id: `c${d.nextId}`, start: c.start + (end - start) };
+        const copy = { ...cloneDeep(c), id: `c${d.nextId}`, start: c.start + shift };
         delete copy.aiPending;
         t.clips.push(copy);
         fresh.push(copy.id);

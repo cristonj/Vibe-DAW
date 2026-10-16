@@ -5,7 +5,8 @@ import { EngineGraph, preloadProject } from './graph';
 import { contextLock } from './lock';
 import { configureFreeze, scheduleFreeze } from './freeze';
 import type { Project } from '../model/types';
-import { getLoadedBuffer, loadBuffer } from '../samples/library';
+import { renderSamplePreview } from './samplePreview';
+import { pcmToAudioBuffer } from './wav';
 
 // Live playback engine: one EngineGraph on the realtime AudioContext, kept in sync
 // with the store. Everything here captures the realtime context/transport once,
@@ -13,7 +14,12 @@ import { getLoadedBuffer, loadBuffer } from '../samples/library';
 
 let graph: EngineGraph | null = null;
 let transport: ReturnType<typeof Tone.getTransport> | null = null;
-let started = false;
+let realtimeContext: Tone.Context | null = null;
+let syncRunning = false;
+let syncError: unknown = null;
+let playRequest = 0;
+let starting = false;
+let previewRequest = 0;
 let syncing: Promise<void> = Promise.resolve();
 let pending: Project | null = null;
 let raf = 0;
@@ -35,13 +41,18 @@ export function initEngine() {
   // A larger output buffer ('playback') trades a few ms of latency for no dropouts
   // with heavy projects; a DAW's transport doesn't need game-level latency.
   const low = useSettings.getState().latency === 'low';
-  Tone.setContext(new Tone.Context({ latencyHint: low ? 'interactive' : 'playback', lookAhead: low ? 0.06 : 0.12 }), true);
+  realtimeContext = new Tone.Context({ latencyHint: low ? 'interactive' : 'playback', lookAhead: low ? 0.06 : 0.12 });
+  Tone.setContext(realtimeContext, true);
   transport = Tone.getTransport();
   graph = new EngineGraph({ live: true });
+  graph.setMetronome(useTransport.getState().metronome);
   configureFreeze(Tone.getContext().sampleRate, () => queueSync(getProject()));
   queueSync(getProject());
   useDaw.subscribe((s, prev) => {
-    if (s.project !== prev.project) queueSync(s.project);
+    if (s.project !== prev.project) {
+      if (s.project.id !== prev.project.id) stop(true);
+      queueSync(s.project);
+    }
   });
   useTransport.subscribe((s, prev) => {
     if (s.metronome !== prev.metronome) graph?.setMetronome(s.metronome);
@@ -50,18 +61,27 @@ export function initEngine() {
 
 function queueSync(p: Project) {
   pending = p;
-  syncing = syncing.then(async () => {
-    const next = pending;
-    pending = null;
-    if (!next || !graph) return;
+  if (syncRunning) return;
+  syncRunning = true;
+  syncing = Promise.resolve().then(async () => {
     setLoading(true);
     try {
-      const assets = await preloadProject(next);
-      await contextLock.run(() => graph!.sync(next, assets));
-      scheduleFreeze(next);
-    } catch (e) {
-      console.error('Engine sync failed', e);
+      while (pending && graph) {
+        const next = pending;
+        pending = null;
+        try {
+          const assets = await preloadProject(next);
+          if (pending) continue; // A newer edit superseded this load.
+          await contextLock.run(() => graph!.sync(next, assets));
+          syncError = null;
+          scheduleFreeze(next);
+        } catch (e) {
+          syncError = e;
+          console.error('Engine sync failed', e);
+        }
+      }
     } finally {
+      syncRunning = false;
       setLoading(false);
     }
   });
@@ -74,31 +94,36 @@ export async function engineSettled(): Promise<void> {
     last = syncing;
     await syncing;
   }
+  if (syncError) throw syncError;
 }
 
 export async function ensureAudio() {
-  if (!started) {
-    await Tone.start();
-    started = true;
-  }
+  // Offline rendering may currently own Tone's global context.
+  if (realtimeContext?.state !== 'running') await realtimeContext?.resume();
 }
 
 export async function play(fromBeat?: number) {
+  const request = ++playRequest;
+  starting = true;
+  try {
   await ensureAudio();
   await engineSettled();
-  if (!transport) return;
+  if (!transport || request !== playRequest) return;
   const t = transport;
-  const at = fromBeat ?? useTransport.getState().position;
-  if (t.state === 'started') t.stop();
+  const at = Math.max(0, fromBeat ?? useTransport.getState().position);
+  t.stop();
+  graph?.panic();
   t.ticks = Math.round(at * t.PPQ);
   t.start('+0.05');
   useTransport.getState().setPlaying(true);
   startPlayheadLoop();
+  } finally { if (request === playRequest) starting = false; }
 }
 
 export function stop(rewind = false) {
-  if (!transport) return;
-  transport.stop();
+  ++playRequest;
+  starting = false;
+  transport?.stop();
   graph?.panic();
   useTransport.getState().setPlaying(false);
   cancelAnimationFrame(raf);
@@ -109,6 +134,8 @@ export function stop(rewind = false) {
 }
 
 export function pause() {
+  ++playRequest;
+  starting = false;
   if (!transport) return;
   const pos = transport.ticks / transport.PPQ;
   transport.pause();
@@ -119,12 +146,12 @@ export function pause() {
 }
 
 export async function togglePlay() {
-  if (useTransport.getState().playing) pause();
+  if (starting || useTransport.getState().playing) pause();
   else await play();
 }
 
 export function seek(beat: number) {
-  const b = Math.max(0, beat);
+  const b = Number.isFinite(beat) ? Math.max(0, beat) : 0;
   useTransport.getState().setPosition(b);
   if (transport && transport.state === 'started') {
     void play(b);
@@ -144,20 +171,29 @@ function startPlayheadLoop() {
 }
 
 export function previewNote(trackId: string, midi: number, velocity = 0.8) {
-  void ensureAudio().then(() => graph?.previewNote(trackId, midi, velocity));
+  void ensureAudio().then(engineSettled).then(() => graph?.previewNote(trackId, midi, velocity)).catch((e) => console.warn('Preview failed', e));
 }
 
 /** Audition a library sample through the master bus. */
 export async function previewSample(sampleId: string) {
-  await ensureAudio();
-  const buf = getLoadedBuffer(sampleId) ?? (await loadBuffer(sampleId));
-  if (!buf) return;
   stopPreview();
-  previewSrc = new Tone.Player({ url: buf, volume: -4 }).toDestination();
-  previewSrc.start();
+  const request = previewRequest;
+  await ensureAudio();
+  const { pcm } = await renderSamplePreview(getProject(), sampleId);
+  if (request !== previewRequest) return;
+  const buf = pcmToAudioBuffer(pcm);
+  await contextLock.run(() => {
+    if (request !== previewRequest || !realtimeContext) return;
+    previewSrc = new Tone.Player({ context: realtimeContext, url: buf, volume: 0 });
+    previewSrc.connect(realtimeContext.destination);
+    const current = previewSrc;
+    current.onstop = () => { if (previewSrc === current) previewSrc = null; current.dispose(); };
+    current.start();
+  });
 }
 
 export function stopPreview() {
+  ++previewRequest;
   previewSrc?.stop();
   previewSrc?.dispose();
   previewSrc = null;

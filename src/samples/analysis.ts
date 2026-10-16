@@ -76,12 +76,15 @@ function monoOf(pcm: PcmData): Float32Array {
 export function onsetEnvelope(mono: Float32Array, sr: number, hop = 512, size = 1024): { env: Float64Array; hopSec: number } {
   const frames = Math.max(0, Math.floor((mono.length - size) / hop) + 1);
   const env = new Float64Array(frames);
-  let prev: Float64Array | null = null;
+  const prev = new Float64Array(size / 2);
   forEachSpectrum(mono, size, hop, (mag, f) => {
     let flux = 0;
-    if (prev) for (let k = 1; k < mag.length; k++) { const d = Math.log1p(mag[k]) - Math.log1p(prev[k]); if (d > 0) flux += d; }
+    for (let k = 1; k < mag.length; k++) {
+      const value = Math.log1p(mag[k]);
+      if (f > 0) flux += Math.max(0, value - prev[k]);
+      prev[k] = value;
+    }
     env[f] = flux;
-    prev = mag.slice();
   });
   return { env, hopSec: hop / sr };
 }
@@ -163,12 +166,23 @@ export function estimateKey(pcm: PcmData): { key: string; confidence: number } |
 
 /** Fundamental of a pitched one-shot (808s, bass notes, keys hits). */
 export function estimatePitch(pcm: PcmData): { midi: number; note: string; hz: number } | null {
-  const mono = monoOf(pcm);
-  const sr = pcm.sampleRate;
-  const start = Math.floor(0.04 * sr);
-  const len = Math.min(Math.floor(0.25 * sr), mono.length - start);
-  if (len < 2048) return null;
-  const x = mono.subarray(start, start + len);
+  const sourceRate = pcm.sampleRate;
+  const step = Math.max(1, Math.floor(sourceRate / 11025));
+  const sr = sourceRate / step;
+  const start = Math.floor(0.04 * sourceRate);
+  const len = Math.floor(Math.min(0.25 * sourceRate, (pcm.channels[0]?.length ?? 0) - start) / step);
+  if (len < 512) return null;
+  // Low-pass and decimate only the analysis window. YIN's quadratic work does not
+  // need 44/96 kHz data, and mixing an entire reference track here wastes memory.
+  const x = new Float32Array(len);
+  let energy = 0;
+  for (let i = 0; i < len; i++) {
+    let value = 0;
+    for (const ch of pcm.channels) for (let k = 0; k < step; k++) value += ch[start + i * step + k];
+    x[i] = value / (step * pcm.channels.length);
+    energy += x[i] * x[i];
+  }
+  if (energy / len < 1e-10) return null;
   const minLag = Math.floor(sr / 1200), maxLag = Math.floor(sr / 25);
   // YIN difference function
   const d = new Float64Array(maxLag + 1);
@@ -189,7 +203,10 @@ export function estimatePitch(pcm: PcmData): { midi: number; note: string; hz: n
     }
   }
   if (bestTau < 0) return null;
-  const hz = sr / bestTau;
+  const left = d[bestTau - 1], mid = d[bestTau], right = d[bestTau + 1];
+  const curvature = left - 2 * mid + right;
+  const offset = curvature && Number.isFinite(right) ? Math.max(-0.5, Math.min(0.5, (left - right) / (2 * curvature))) : 0;
+  const hz = sr / (bestTau + offset);
   const midi = Math.round(69 + 12 * Math.log2(hz / 440));
   return { midi, note: midiToNote(midi), hz: Math.round(hz * 10) / 10 };
 }
@@ -281,7 +298,7 @@ export function waveformPeaks(buf: { getChannelData(c: number): Float32Array; nu
     for (let b = 0; b < buckets; b++) {
       let m = 0;
       const s = Math.floor(b * step), e = Math.min(buf.length, Math.floor((b + 1) * step));
-      for (let i = s; i < e; i += 4) { const a = Math.abs(d[i]); if (a > m) m = a; }
+      for (let i = s; i < e; i++) { const a = Math.abs(d[i]); if (a > m) m = a; }
       if (m > out[b]) out[b] = m;
     }
   }

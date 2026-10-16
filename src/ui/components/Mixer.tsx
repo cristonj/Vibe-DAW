@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { memo, useRef } from 'react';
 import { useDaw } from '../../state/store';
 import type { Track } from '../../model/types';
 import { getMasterLevels, getTrackLevel } from '../../engine/api';
@@ -17,7 +17,7 @@ function Meter({ read }: { read: () => number }) {
   return <div className="meter" aria-hidden><div className="fill" ref={fill} /></div>;
 }
 
-function Strip({ track, selected }: { track: Track; selected: boolean }) {
+const Strip = memo(function Strip({ track, selected }: { track: Track; selected: boolean }) {
   const { update, select, setBottom } = useDaw.getState();
   const set = (label: string, fn: (t: Track) => void, coalesce = false) => update(label, (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) fn(t); }, { coalesce });
   return (
@@ -38,7 +38,7 @@ function Strip({ track, selected }: { track: Track; selected: boolean }) {
       </div>
     </div>
   );
-}
+});
 
 export function Mixer() {
   const tracks = useDaw((s) => s.project.tracks);

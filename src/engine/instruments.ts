@@ -39,7 +39,9 @@ export async function prepareInstrument(spec: InstrumentSpec): Promise<Instrumen
     let body = body808Cache.get(key);
     if (!body) {
       body = bass808({ note: 36, decay: p.decay, punch: p.punch, drive: p.drive });
+      if (body808Cache.size >= 32) body808Cache.delete(body808Cache.keys().next().value!);
       body808Cache.set(key, body);
+      void body.catch(() => { if (body808Cache.get(key) === body) body808Cache.delete(key); });
     }
     return { body808: await body };
   }
@@ -64,7 +66,7 @@ function sampled(spec: InstrumentSpec, zones: Record<string, AudioBuffer>): Inst
   apply(p);
   return {
     output: out,
-    trigger: (midi, dur, time, v) => sampler.triggerAttackRelease(Tone.Frequency(midi, 'midi').toFrequency(), Math.max(0.03, dur), time, vel(v)),
+    trigger: (midi, dur, time, v) => sampler.triggerAttackRelease(midiToFreq(midi), Math.max(0.03, dur), time, vel(v)),
     releaseAll: (t) => sampler.releaseAll(t),
     setParams: apply,
     dispose: () => { sampler.dispose(); tone.dispose(); out.dispose(); },
@@ -77,19 +79,31 @@ function eight08(spec: InstrumentSpec, body: AudioBuffer): Instrument {
   let p = { ...defaultPresetParams('bass808'), ...spec.params };
   const out = new Tone.Gain(1);
   const ROOT = 36;
-  let active: { src: Tone.ToneBufferSource; gain: Tone.Gain; start: number; end: number; midi: number } | null = null;
+  const resources = new Set<{ dispose(): void }>();
+  let active: { src: Tone.ToneBufferSource; gain: Tone.Gain; start: number; end: number; midi: number; remaining: number; rateFrom: number; rateTo: number; glide: number } | null = null;
 
   const trigger = (midi: number, dur: number, time: number, v: number) => {
     const rate = Math.pow(2, (midi - ROOT) / 12);
     if (active && Math.abs(active.start - time) < 1e-4 && active.midi === midi) return; // duplicate event
     // Overlapping notes slide (classic trap 808 glide) instead of retriggering.
-    if (active && active.end > time + 0.005 && p.glide > 0) {
+    if (active) {
+      const elapsed = Math.max(0, time - active.start);
+      const g = Math.min(elapsed, active.glide);
+      const k = active.glide > 0 ? Math.log(active.rateTo / active.rateFrom) / active.glide : 0;
+      const consumed = Math.abs(k) > 1e-9 ? active.rateFrom * Math.expm1(k * g) / k : active.rateFrom * g;
+      active.remaining -= consumed + Math.max(0, elapsed - active.glide) * active.rateTo;
+    }
+    if (active && active.remaining > 0.005 && active.end > time + 0.005 && p.glide > 0) {
+      const currentRate = active.src.playbackRate.getValueAtTime(time);
       active.src.playbackRate.cancelScheduledValues(time);
-      active.src.playbackRate.setValueAtTime(active.src.playbackRate.getValueAtTime(time), time);
+      active.src.playbackRate.setValueAtTime(currentRate, time);
       active.src.playbackRate.exponentialRampToValueAtTime(rate, time + p.glide);
       active.end = time + dur;
       active.start = time;
       active.midi = midi;
+      active.rateFrom = currentRate;
+      active.rateTo = rate;
+      active.glide = p.glide;
       active.gain.gain.cancelScheduledValues(time);
       active.gain.gain.setValueAtTime(active.gain.gain.getValueAtTime(time), time);
       active.gain.gain.linearRampToValueAtTime(vel(v), time + 0.01);
@@ -115,11 +129,12 @@ function eight08(spec: InstrumentSpec, body: AudioBuffer): Instrument {
     gain.gain.linearRampToValueAtTime(0, time + dur + 0.05);
     src.start(time);
     src.stop(time + dur + 0.06);
-    const voice = { src, gain, start: time, end: time + dur, midi };
+    const voice = { src, gain, start: time, end: time + dur, midi, remaining: body.duration, rateFrom: rate, rateTo: rate, glide: 0 };
+    resources.add(src); resources.add(gain);
     src.onended = () => {
       // Offline, Tone fires 'ended' on its own clock, which runs ahead of the audio
       // actually rendered; disposing then would cut the note. The render frees it.
-      if (!context.isOffline) { gain.dispose(); src.dispose(); }
+      if (!context.isOffline) { gain.dispose(); src.dispose(); resources.delete(src); resources.delete(gain); }
       if (active === voice) active = null;
     };
     active = voice;
@@ -137,7 +152,7 @@ function eight08(spec: InstrumentSpec, body: AudioBuffer): Instrument {
       active = null;
     },
     setParams: (params) => { p = { ...p, ...params }; },
-    dispose: () => { active?.src.dispose(); active?.gain.dispose(); out.dispose(); },
+    dispose: () => { for (const resource of resources) resource.dispose(); resources.clear(); out.dispose(); },
   };
 }
 

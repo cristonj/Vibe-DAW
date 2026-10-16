@@ -6,9 +6,10 @@ export interface PcmData {
   channels: Float32Array[];
 }
 
-export function audioBufferToPcm(buf: AudioBuffer): PcmData {
+export function audioBufferToPcm(buf: AudioBuffer, maxSeconds = Infinity): PcmData {
   const channels: Float32Array[] = [];
-  for (let c = 0; c < buf.numberOfChannels; c++) channels.push(buf.getChannelData(c).slice());
+  const end = Math.min(buf.length, Math.ceil(Math.max(0, maxSeconds) * buf.sampleRate));
+  for (let c = 0; c < buf.numberOfChannels; c++) channels.push(buf.getChannelData(c).slice(0, end));
   return { sampleRate: buf.sampleRate, channels };
 }
 
@@ -62,17 +63,22 @@ export function toMono(pcm: PcmData, targetRate = pcm.sampleRate): PcmData {
 }
 
 export function resample(data: Float32Array, from: number, to: number): Float32Array {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from <= 0 || to <= 0) throw new RangeError('Sample rates must be finite and positive.');
   const ratio = from / to;
   const outLen = Math.floor(data.length / ratio);
   const out = new Float32Array(outLen);
-  const win = Math.max(1, Math.floor(ratio));
+  const kernels = ratio > 1 ? resampleKernels(ratio) : null;
   for (let i = 0; i < outLen; i++) {
     const pos = i * ratio;
-    if (win > 1) {
-      let s = 0;
+    if (kernels) {
       const start = Math.floor(pos);
-      for (let k = 0; k < win && start + k < data.length; k++) s += data[start + k];
-      out[i] = s / win;
+      const kernel = kernels[Math.min(255, Math.floor((pos - start) * 256))];
+      let value = 0, weight = 0;
+      for (let k = 0; k < kernel.length; k++) {
+        const at = start + k - 15;
+        if (at >= 0 && at < data.length) { value += data[at] * kernel[k]; weight += kernel[k]; }
+      }
+      out[i] = weight ? value / weight : 0;
     } else {
       const i0 = Math.floor(pos);
       const f = pos - i0;
@@ -80,6 +86,23 @@ export function resample(data: Float32Array, from: number, to: number): Float32A
     }
   }
   return out;
+}
+
+const kernelCache = new Map<number, Float64Array[]>();
+function resampleKernels(ratio: number): Float64Array[] {
+  let kernels = kernelCache.get(ratio);
+  if (kernels) return kernels;
+  // A windowed sinc low-pass removes frequencies above the new Nyquist limit,
+  // preventing bright hats/sibilance from aliasing into the AI's midrange.
+  const cutoff = 0.94 / ratio;
+  kernels = Array.from({ length: 256 }, (_, phase) => Float64Array.from({ length: 32 }, (_, k) => {
+    const distance = k - 15 - phase / 256;
+    const x = Math.PI * cutoff * distance;
+    return cutoff * (Math.abs(x) < 1e-10 ? 1 : Math.sin(x) / x) * (0.5 + 0.5 * Math.cos(Math.PI * distance / 16));
+  }));
+  if (kernelCache.size >= 16) kernelCache.delete(kernelCache.keys().next().value!);
+  kernelCache.set(ratio, kernels);
+  return kernels;
 }
 
 export function arrayBufferToBase64(buf: ArrayBuffer): string {

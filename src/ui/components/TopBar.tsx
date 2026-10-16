@@ -12,6 +12,7 @@ import { PITCH_CLASSES, SCALES } from '../../model/theory';
 import type { PitchClass, ScaleName } from '../../model/types';
 import { toast } from '../toast';
 import { tip, useKeymap } from '../../state/keymap';
+import { exportProjectFile } from '../../state/projectFile';
 
 export function Logo() {
   return (
@@ -71,7 +72,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
       <div className="transport">
         <button className="btn icon" title={tip('Back to start', 'stopRewind')} onClick={() => stop(true)}><SkipBack size={16} /></button>
         <button className="btn icon" title="Stop" onClick={() => stop(false)}><Square size={14} fill="currentColor" /></button>
-        <button className={`play ${playing ? 'playing' : ''}`} title={tip('Play / pause', 'playPause')} onClick={() => void togglePlay()}>
+        <button className={`play ${playing ? 'playing' : ''}`} title={tip('Play / pause', 'playPause')} onClick={() => void togglePlay().catch((e) => toast(`Playback failed: ${(e as Error).message}`, 'error'))}>
           {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
         </button>
         <button className={`btn icon ${loop ? 'on' : ''}`} title={tip('Loop', 'toggleLoop')} onClick={() => update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; })}><Repeat size={16} /></button>
@@ -152,6 +153,17 @@ function ExportMenu() {
       setProgress(null);
     }
   };
+  const saveProject = async () => {
+    setOpen(false);
+    setProgress({ pct: 0, stage: 'encode' });
+    try {
+      const p = useDaw.getState().project;
+      const blob = await exportProjectFile(p);
+      downloadBlob(blob, `${p.name.replace(/[^\w\- ]+/g, '').trim() || 'project'}.vibe`);
+      toast(`Exported project with custom samples (${(blob.size / 1048576).toFixed(1)} MB)`);
+    } catch (e) { toast(`Project export failed: ${(e as Error).message}`, 'error'); }
+    finally { setProgress(null); }
+  };
 
   return (
     <div className="menu-wrap" ref={ref}>
@@ -160,6 +172,7 @@ function ExportMenu() {
       </button>
       {open && (
         <div className="menu" role="menu">
+          <button className="menu-item" role="menuitem" onClick={() => void saveProject()}><b>Vibe project (.vibe)</b><span>Portable session with notes, instruments, effects and custom samples</span></button>
           {EXPORT_FORMATS.map((f) => (
             <button key={f.id} className="menu-item" role="menuitem" onClick={() => void run(f.id)}>
               <b>{f.label}</b>

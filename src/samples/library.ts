@@ -28,6 +28,8 @@ export const useLibrary = create<LibraryState>((set) => ({
 
 const buffers = new Map<string, AudioBuffer>();
 const loading = new Map<string, Promise<AudioBuffer | null>>();
+let audioRevision = 0;
+export const getAudioRevision = () => audioRevision;
 const INDEX_KEY = 'vibe:samples:index';
 const blobKey = (id: string) => `vibe:sample:${id}`;
 
@@ -87,7 +89,16 @@ const BUILTINS: Builtin[] = [
   ['b-tex-vinyl', 'Vinyl Crackle', 'texture', ['vinyl', 'lofi', 'dust', 'loop', 'emo'], () => S.vinylCrackle()],
 ];
 
-export async function initLibrary(): Promise<void> {
+let initPromise: Promise<void> | null = null;
+export function initLibrary(): Promise<void> {
+  if (!initPromise) {
+    initPromise = initializeLibrary();
+    void initPromise.catch(() => { initPromise = null; });
+  }
+  return initPromise;
+}
+
+async function initializeLibrary(): Promise<void> {
   const lib = useLibrary.getState();
   const now = Date.now();
   await Promise.all(
@@ -107,6 +118,7 @@ export async function initLibrary(): Promise<void> {
     console.warn('Sample index unavailable', e);
   }
   useLibrary.setState({ ready: true });
+  ++audioRevision;
 }
 
 async function persistIndex() {
@@ -173,14 +185,14 @@ export interface AddSampleInput {
 }
 
 /** Register a new sample from an AudioBuffer (designed, rendered, sliced) or encoded bytes (uploads). */
-export async function addSample(input: AddSampleInput, audio: AudioBuffer | { data: ArrayBuffer; mime: string }): Promise<SampleMeta> {
+export async function addSample(input: AddSampleInput, audio: AudioBuffer | { data: ArrayBuffer; mime: string }, decoded?: AudioBuffer): Promise<SampleMeta> {
   let buffer: AudioBuffer;
   let stored: { data: ArrayBuffer; mime: string };
   if (audio instanceof AudioBuffer) {
     buffer = audio;
     stored = { data: encodeWav(audioBufferToPcm(audio), 16), mime: 'audio/wav' };
   } else {
-    buffer = await decodeAudio(audio.data);
+    buffer = decoded ?? await decodeAudio(audio.data);
     stored = audio;
   }
   const id = `s-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`;
@@ -199,6 +211,7 @@ export async function addSample(input: AddSampleInput, audio: AudioBuffer | { da
   };
   if (!input.skipAnalysis) Object.assign(meta, analyzeForMeta(buffer, meta));
   buffers.set(id, buffer);
+  ++audioRevision;
   useLibrary.getState().upsert(meta);
   try {
     await idbSet(blobKey(id), stored);
@@ -215,7 +228,7 @@ export async function addSample(input: AddSampleInput, audio: AudioBuffer | { da
 }
 
 function analyzeForMeta(buffer: AudioBuffer, meta: SampleMeta): Partial<SampleMeta> {
-  const pcm = audioBufferToPcm(buffer);
+  const pcm = audioBufferToPcm(buffer, 90);
   const out: Partial<SampleMeta> = {};
   try {
     if (meta.kind === 'loop' && !meta.bpm) {
@@ -239,6 +252,7 @@ function analyzeForMeta(buffer: AudioBuffer, meta: SampleMeta): Partial<SampleMe
 export function updateSampleMeta(id: string, patch: Partial<SampleMeta>) {
   const meta = getSampleMeta(id);
   if (!meta) return;
+  if (patch.bpm !== undefined && patch.bpm !== meta.bpm) ++audioRevision;
   useLibrary.getState().upsert({ ...meta, ...patch });
   if (meta.source !== 'builtin') void persistIndex();
 }
@@ -246,6 +260,7 @@ export function updateSampleMeta(id: string, patch: Partial<SampleMeta>) {
 export async function deleteSample(id: string) {
   useLibrary.getState().remove(id);
   buffers.delete(id);
+  ++audioRevision;
   try {
     await del(blobKey(id));
   } catch { /* ignore */ }

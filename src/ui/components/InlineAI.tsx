@@ -36,7 +36,7 @@ export function InlineAI() {
   const kind = found[0] ? (found[0].clip.type === 'audio' ? 'audio' : found[0].track.kind === 'drums' ? 'drums' : 'midi') : 'midi';
   const close = () => useInline.setState({ clipIds: null });
   const submit = (t: string) => {
-    if (!t.trim() || running) return;
+    if (!t.trim()) return;
     close();
     void runAgent(t, { focusClipIds: found.map((f) => f.clip.id), mode: 'agent' });
   };
@@ -59,7 +59,7 @@ export function InlineAI() {
         <div className="suggestions" style={{ marginTop: 8 }}>
           {QUICK[kind].map((q) => <button key={q} className="suggestion" onClick={() => submit(q)}>{q}</button>)}
         </div>
-        <div className="hint">Enter to run · Esc to close · changes show up in lilac until you keep them</div>
+        <div className="hint">{running ? 'Enter to steer the active run' : 'Enter to run'} · Esc to close · changes show up in lilac until you keep them</div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from 'lucide-react';
 import { useSettings, MODELS, type Thinking } from '../../state/settings';
 import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
@@ -9,6 +9,7 @@ import { relativeTime } from '../hooks';
 import { toast } from '../toast';
 import { ACTIONS, bindings, comboFromEvent, useKeymap, type ActionId } from '../../state/keymap';
 import { ACCENTS, THEMES, useTheme, type ThemeId } from '../../state/theme';
+import { importProjectFile } from '../../state/projectFile';
 
 function Modal({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -94,6 +95,23 @@ function AiSettings() {
       <label className="toggle">
         <input type="checkbox" checked={s.autoListen} onChange={(e) => s.set({ autoListen: e.target.checked })} />
         <span>Let the agent listen<small>It bounces audio and sends it to Gemini to audition samples and check the mix.</small></span>
+      </label>
+      <label className="field">
+        <span>AI listening quality</span>
+        <select value={s.listeningQuality} onChange={(e) => s.set({ listeningQuality: e.target.value as typeof s.listeningQuality })}>
+          <option value="full">Full quality · 44.1 kHz</option>
+          <option value="balanced">Balanced · 22.05 kHz</option>
+          <option value="compact">Compact · 16 kHz</option>
+        </select>
+        <small>Full quality preserves the editor's mix. Lower rates reduce upload size. Each review lets you play the exact audio sent.</small>
+      </label>
+      <label className="field">
+        <span>AI listening channels</span>
+        <select value={s.listeningChannels} onChange={(e) => s.set({ listeningChannels: e.target.value as typeof s.listeningChannels })}>
+          <option value="stereo">Stereo · preserve width and panning</option>
+          <option value="mono">Mono · smaller upload</option>
+        </select>
+        <small>Applies to the next mix review, sample audition or reference track.</small>
       </label>
       {firebaseConfigured && (
         <div className="field">
@@ -240,6 +258,8 @@ function PlaybackSettings() {
 }
 
 export function ProjectsModal({ onClose }: { onClose: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
   const projects = usePersist((s) => s.projects);
   const current = useDaw((s) => s.project.id);
   useEffect(() => { void usePersist.getState().refresh(); }, []);
@@ -262,6 +282,14 @@ export function ProjectsModal({ onClose }: { onClose: () => void }) {
         {!projects.length && <div className="dock-empty">No saved projects yet.</div>}
       </div>
       <div className="modal-actions">
+        <input ref={fileRef} type="file" accept=".vibe,application/json" hidden onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (!file) return;
+          setImporting(true);
+          void file.text().then(importProjectFile).then(() => { toast('Project imported'); onClose(); }).catch((e) => toast(`Import failed: ${(e as Error).message}`, 'error')).finally(() => setImporting(false));
+        }} />
+        <button className="btn" disabled={importing} onClick={() => fileRef.current?.click()}>{importing ? 'Importing…' : 'Import .vibe project'}</button>
         <button className="btn" onClick={() => void duplicateProject().then(onClose)}><Copy size={14} /> Duplicate current</button>
         <button className="btn primary" onClick={() => void newProject().then(onClose)}><Plus size={14} /> New project</button>
       </div>

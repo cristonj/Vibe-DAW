@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import type { Effect } from '../model/types';
 import { defaultEffectParams } from '../model/catalog';
+import { reverbImpulse } from './reverb';
 
 // Effect units. Each wraps one or more Tone nodes behind input/output so the
 // channel strip can chain them, and supports live param updates without rebuilds.
@@ -120,16 +121,24 @@ export function createEffect(effect: Effect): EffectUnit {
       };
     }
     case 'reverb': {
-      const r = new Tone.Reverb({ decay: num(p.decay, 2.5), preDelay: num(p.preDelay, 0.02), wet: num(p.wet, 0.3) });
       let lastDecay = num(p.decay, 2.5);
-      return single(r, (q) => {
-        if (q.wet !== undefined) r.wet.value = num(q.wet, 0.3);
-        if (q.preDelay !== undefined) r.preDelay = num(q.preDelay, 0.02);
-        if (q.decay !== undefined && num(q.decay, lastDecay) !== lastDecay) {
-          lastDecay = num(q.decay, lastDecay);
-          r.decay = lastDecay; // regenerates the impulse asynchronously
+      let lastPreDelay = num(p.preDelay, 0.02);
+      const rate = Tone.getContext().sampleRate;
+      const input = new Tone.Gain(1);
+      const convolver = new Tone.Convolver(reverbImpulse(rate, lastDecay, lastPreDelay, effect.id));
+      // Match Tone.Reverb's equal-power dry/wet crossfade.
+      const blend = new Tone.CrossFade(num(p.wet, 0.3));
+      input.connect(blend.a); input.connect(convolver); convolver.connect(blend.b);
+      return { input, output: blend, ready: Promise.resolve(), update: (q) => {
+        if (q.wet !== undefined) blend.fade.value = num(q.wet, 0.3);
+        const decay = num(q.decay, lastDecay), preDelay = num(q.preDelay, lastPreDelay);
+        if (decay !== lastDecay || preDelay !== lastPreDelay) {
+          lastDecay = decay; lastPreDelay = preDelay;
+          const buffer = new Tone.ToneAudioBuffer(reverbImpulse(rate, decay, preDelay, effect.id));
+          convolver.buffer = buffer;
+          buffer.dispose();
         }
-      }, r.ready.then(() => undefined));
+      }, dispose: () => { input.dispose(); convolver.dispose(); blend.dispose(); } };
     }
     case 'delay': {
       const time = String(p.time || '8n.');

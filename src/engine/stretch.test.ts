@@ -7,6 +7,10 @@ const tone = (hz: number, seconds: number) => Float32Array.from({ length: SR * s
 const rms = (x: Float32Array) => Math.sqrt(x.reduce((s, v) => s + v * v, 0) / x.length);
 
 describe('wsola', () => {
+  it('rejects invalid speeds and mismatched channel lengths', () => {
+    for (const speed of [0, -1, NaN, Infinity]) expect(() => wsola([new Float32Array(100)], speed)).toThrow(RangeError);
+    expect(() => wsola([new Float32Array(100), new Float32Array(50)], 1.2)).toThrow(RangeError);
+  });
   it('changes length by the speed factor', () => {
     const out = wsola([tone(220, 2)], 1.25);
     expect(out[0].length).toBe(Math.round((SR * 2) / 1.25));

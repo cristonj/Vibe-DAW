@@ -81,3 +81,7 @@ export async function renderProject(project: Project, opts?: RenderOptions): Pro
 export async function exportAudio(project: Project, format: ExportFormat, onProgress?: (fraction: number, stage: 'render' | 'encode') => void): Promise<Blob> {
   return (await import('./render')).exportAudio(project, format, onProgress);
 }
+
+export async function renderSamplePreview(project: Project, sampleId: string) {
+  return (await import('./samplePreview')).renderSamplePreview(project, sampleId);
+}

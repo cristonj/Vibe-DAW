@@ -24,6 +24,7 @@ interface DawState {
   transaction: string | null;
   lastLabel: string;
   lastTime: number;
+  transactionStart: Project | null;
 
   selection: Selection;
   editorClipId: string | null;
@@ -58,6 +59,7 @@ export const useDaw = create<DawState>((set, get) => ({
   transaction: null,
   lastLabel: '',
   lastTime: 0,
+  transactionStart: null,
 
   selection: { trackId: null, clipIds: [] },
   editorClipId: null,
@@ -69,14 +71,14 @@ export const useDaw = create<DawState>((set, get) => ({
 
   update: (label, recipe, opts) => {
     const s = get();
-    const next = produce(s.project, (d) => {
-      recipe(d);
-      d.updatedAt = Date.now();
-    });
-    if (next === s.project) return;
+    const edited = produce(s.project, recipe);
+    if (edited === s.project) return;
     const now = Date.now();
+    const next = produce(edited, (d) => { d.updatedAt = now; });
     if (s.transaction) {
-      set({ project: next, future: [] });
+      set({ project: next, future: [], past: s.transactionStart
+        ? [...s.past, { project: s.transactionStart, label: s.transaction }].slice(-HISTORY_LIMIT)
+        : s.past, transactionStart: null });
       return;
     }
     const coalesce = opts?.coalesce && s.lastLabel === label && now - s.lastTime < COALESCE_MS;
@@ -95,6 +97,10 @@ export const useDaw = create<DawState>((set, get) => ({
       project: p,
       past: opts?.keepHistory ? [...s.past, { project: s.project, label: opts.label ?? 'Replace project' }].slice(-HISTORY_LIMIT) : [],
       future: [],
+      transaction: null,
+      transactionStart: null,
+      lastLabel: '',
+      lastTime: 0,
       selection: { trackId: null, clipIds: [] },
       editorClipId: opts?.keepHistory ? s.editorClipId : null,
     });
@@ -103,16 +109,13 @@ export const useDaw = create<DawState>((set, get) => ({
   beginTransaction: (label) => {
     const s = get();
     if (s.transaction) return;
-    set({ transaction: label, past: [...s.past, { project: s.project, label }].slice(-HISTORY_LIMIT), future: [], lastLabel: label, lastTime: Date.now() });
+    set({ transaction: label, transactionStart: s.project, lastLabel: '', lastTime: 0 });
   },
 
   endTransaction: () => {
     const s = get();
     if (!s.transaction) return;
-    // Drop the history entry if nothing actually changed.
-    const top = s.past[s.past.length - 1];
-    if (top && top.project === s.project) set({ past: s.past.slice(0, -1) });
-    set({ transaction: null });
+    set({ transaction: null, transactionStart: null, lastLabel: '', lastTime: 0 });
   },
 
   undo: () => {

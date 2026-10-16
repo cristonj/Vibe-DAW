@@ -9,7 +9,10 @@ import { loadInitialProject, startAutosave, usePersist } from './state/persisten
 import { initCloud } from './cloud/cloud';
 import { applyTheme } from './state/theme';
 
-async function boot() {
+let bootPromise: Promise<void> | null = null;
+function boot() { return bootPromise ??= initialize(); }
+
+async function initialize() {
   applyTheme();
   await initLibrary();
   const project = await loadInitialProject();

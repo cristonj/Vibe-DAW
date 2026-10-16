@@ -18,6 +18,8 @@ const hann = (() => {
  * Channels are aligned using a mono mix so the stereo image stays intact.
  */
 export function wsola(channels: Float32Array[], speed: number): Float32Array[] {
+  if (!Number.isFinite(speed) || speed <= 0) throw new RangeError('Stretch speed must be finite and positive.');
+  if (channels.some((c) => c.length !== channels[0].length)) throw new RangeError('Audio channels must have equal lengths.');
   if (!channels.length || Math.abs(speed - 1) < 1e-4) return channels.map((c) => c.slice());
   const inLen = channels[0].length;
   const outLen = Math.max(1, Math.round(inLen / speed));
@@ -67,20 +69,30 @@ export function wsola(channels: Float32Array[], speed: number): Float32Array[] {
   });
 }
 
-const cache = new Map<string, AudioBuffer>();
+const cache = new Map<string, { source: AudioBuffer; buffer: AudioBuffer; bytes: number }>();
+const CACHE_BYTES = 128 * 1024 * 1024;
+let cacheBytes = 0;
 
 /** Cached stretched copy of `buf` playing `speed`× faster at the same pitch. */
 export function stretchedBuffer(key: string, buf: AudioBuffer, speed: number): AudioBuffer {
-  const k = `${key}|${speed.toFixed(5)}`;
-  let hit = cache.get(k);
-  if (!hit) {
+  const k = `${key}|${speed}`;
+  const entry = cache.get(k);
+  if (entry?.source === buf) {
+    cache.delete(k); cache.set(k, entry); // LRU eviction keeps actively used loops warm.
+    return entry.buffer;
+  }
+  if (entry) { cacheBytes -= entry.bytes; cache.delete(k); }
     const chans: Float32Array[] = [];
     for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
     const res = wsola(chans, speed);
-    hit = new AudioBuffer({ length: res[0].length, numberOfChannels: res.length, sampleRate: buf.sampleRate });
-    res.forEach((d, i) => hit!.copyToChannel(d as Float32Array<ArrayBuffer>, i));
-    if (cache.size > 64) cache.delete(cache.keys().next().value!);
-    cache.set(k, hit);
-  }
+    const hit = new AudioBuffer({ length: res[0].length, numberOfChannels: res.length, sampleRate: buf.sampleRate });
+    res.forEach((d, i) => hit.copyToChannel(d as Float32Array<ArrayBuffer>, i));
+    const bytes = hit.length * hit.numberOfChannels * 4;
+    while (cache.size && (cacheBytes + bytes > CACHE_BYTES || cache.size >= 64)) {
+      const oldest = cache.keys().next().value!;
+      cacheBytes -= cache.get(oldest)!.bytes;
+      cache.delete(oldest);
+    }
+    if (bytes <= CACHE_BYTES) { cache.set(k, { source: buf, buffer: hit, bytes }); cacheBytes += bytes; }
   return hit;
 }

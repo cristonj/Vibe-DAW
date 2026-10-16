@@ -182,6 +182,9 @@ export interface SampleMeta {
   rootNote?: number;
   /** What the agent heard when it auditioned this sample. Cached so it doesn't re-listen. */
   aiDescription?: string;
+  /** Listening format used for the cached description. */
+  aiDescriptionAudio?: string;
+  aiDescriptionContext?: string;
   /** Prompt used to generate it, if generated. */
   prompt?: string;
   createdAt: number;

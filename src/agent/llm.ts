@@ -36,6 +36,7 @@ export interface LlmRequest {
   temperature?: number;
   /** Ask for JSON output. */
   json?: boolean;
+  maxOutputTokens?: number;
 }
 
 export interface StreamHandlers {
@@ -107,6 +108,7 @@ async function streamDirect(req: LlmRequest, h: StreamHandlers): Promise<LlmResu
       thinkingConfig: { includeThoughts: true, ...(req.thinking ? { thinkingLevel: req.thinking as never } : {}) },
       temperature: req.temperature,
       responseMimeType: req.json ? 'application/json' : undefined,
+      maxOutputTokens: req.maxOutputTokens,
       abortSignal: req.signal,
     },
   });
@@ -137,6 +139,7 @@ async function streamFirebase(req: LlmRequest, h: StreamHandlers): Promise<LlmRe
       thinkingConfig: { includeThoughts: true, ...(req.thinking ? { thinkingLevel: req.thinking as never } : {}) },
       temperature: req.temperature,
       responseMimeType: req.json ? 'application/json' : undefined,
+      maxOutputTokens: req.maxOutputTokens,
     },
   });
   const result = await model.generateContentStream({ contents: req.contents as never }, { signal: req.signal });

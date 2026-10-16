@@ -13,6 +13,8 @@ export const MODELS = [
 export type ModelId = (typeof MODELS)[number]['id'];
 export type Connection = 'firebase' | 'apikey';
 export type Thinking = 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
+export type ListeningQuality = 'full' | 'balanced' | 'compact';
+export type ListeningChannels = 'stereo' | 'mono';
 
 interface SettingsState {
   model: ModelId;
@@ -23,6 +25,8 @@ interface SettingsState {
   autoListen: boolean;
   /** Live output buffer: 'stable' (bigger, no crackles) or 'low' (snappier). */
   latency: 'stable' | 'low';
+  listeningQuality: ListeningQuality;
+  listeningChannels: ListeningChannels;
   set: (patch: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -46,6 +50,8 @@ export const useSettings = create<SettingsState>((set, get) => ({
   thinking: saved.thinking ?? 'MEDIUM',
   autoListen: saved.autoListen ?? true,
   latency: saved.latency === 'low' ? 'low' : 'stable',
+  listeningQuality: saved.listeningQuality === 'balanced' || saved.listeningQuality === 'compact' ? saved.listeningQuality : 'full',
+  listeningChannels: saved.listeningChannels === 'mono' ? 'mono' : 'stereo',
   set: (patch) => {
     set(patch);
     const { set: _s, ...rest } = { ...get() };

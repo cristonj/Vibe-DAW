@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X, Copy, CopyPlus, ClipboardPaste, Scissors, ChevronDown } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
-import { beatsPerBar, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
+import { beatsPerBar, cloneDeep, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
 import type { AudioClip, Clip, MidiClip, Project, Track } from '../../model/types';
 import { seek, stop, play } from '../../engine/api';
@@ -374,7 +374,7 @@ export function Arrangement() {
           const tr = d.tracks.find((t) => t.clips.some((c) => c.id === clip.id));
           if (src && tr) {
             d.nextId++;
-            const copy = { ...structuredClone(src), id: `c${d.nextId}` };
+            const copy = { ...cloneDeep(src), id: `c${d.nextId}` };
             tr.clips.push(copy);
             currentClipId = copy.id;
             duplicated = true;
@@ -534,7 +534,7 @@ export function Arrangement() {
   );
 }
 
-function TrackHeader({ track, selected }: { track: Track; selected: boolean }) {
+const TrackHeader = memo(function TrackHeader({ track, selected }: { track: Track; selected: boolean }) {
   const { update, select, setBottom } = useDaw.getState();
   const sub = track.kind === 'instrument' ? PRESET_BY_ID[track.instrument?.preset ?? '']?.name ?? track.instrument?.preset : track.kind === 'drums' ? `Drum kit · ${track.drumLanes?.length ?? 0} lanes` : 'Audio';
   const set = (label: string, fn: (t: Track) => void) => update(label, (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) fn(t); });
@@ -552,7 +552,7 @@ function TrackHeader({ track, selected }: { track: Track; selected: boolean }) {
       </div>
     </div>
   );
-}
+});
 
 function AddTrackMenu() {
   const [open, setOpen] = useState(false);

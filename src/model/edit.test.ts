@@ -66,7 +66,9 @@ describe('clip slicing & arrangement', () => {
     const p = produce(projectWithClip(), (d) => clearRange(d, d.tracks[0], 2, 4));
     const clips = [...p.tracks[0].clips].sort((a, b) => a.start - b.start);
     expect(clips.map((c) => [c.start, c.length])).toEqual([[0, 2], [4, 4]]);
-    expect((clips[1] as MidiClip).notes.map((n) => n.start)).toEqual([2]);
+    // The sustained E4 survives on the right of the cut instead of disappearing.
+    expect((clips[1] as MidiClip).notes.map((n) => n.start)).toEqual([0, 2]);
+    expect((clips[1] as MidiClip).notes[0].duration).toBe(1.5);
   });
   it('copies bars to a destination', () => {
     const p = produce(projectWithClip(), (d) => { copyRange(d, null, 0, 8, 8); });
