@@ -226,7 +226,7 @@ export function createEffect(effect: Effect): EffectUnit {
     case 'limiter': {
       // Tone.Limiter's default attack lets transients through; a zero-attack, hard-knee
       // compressor uses the browser's built-in lookahead and actually holds the ceiling.
-      const l = new Tone.Compressor({ threshold: num(p.threshold, -1), ratio: 20, attack: 0, release: 0.06, knee: 0 });
+      const l = new Tone.Compressor({ threshold: num(p.threshold, -1), ratio: 20, attack: 0, release: 0.25, knee: 0 }); // slow release: a fast one distorts bass
       return single(l, (q) => { if (q.threshold !== undefined) l.threshold.value = num(q.threshold, -1); });
     }
     case 'duck': {
