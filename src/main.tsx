@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/global.css';
 import { App } from './ui/App';
 import { initLibrary } from './samples/library';
-import { initEngine } from './engine/engine';
+import { loadEngineOnFirstGesture } from './engine/api';
 import { useDaw } from './state/store';
 import { loadInitialProject, startAutosave, usePersist } from './state/persistence';
 import { initCloud } from './cloud/cloud';
@@ -12,15 +12,16 @@ async function boot() {
   await initLibrary();
   const project = await loadInitialProject();
   useDaw.getState().replaceProject(project);
-  initEngine();
+  loadEngineOnFirstGesture();
   startAutosave();
   void initCloud().then(() => usePersist.getState().refresh());
   if (import.meta.env.DEV) {
     // Dev-only handle for automated smoke tests: drive tools and renders without the LLM.
-    const [tools, render, analysis, engine, agent, graph, Tone, library, llm, settings] = await Promise.all([
-      import('./agent/tools'), import('./engine/render'), import('./samples/analysis'), import('./engine/engine'), import('./agent/agent'), import('./engine/graph'), import('tone'), import('./samples/library'), import('./agent/llm'), import('./state/settings'),
+    // Audio modules (render/engine) go through the lazy facade so dev also stays gesture-clean.
+    const [tools, api, analysis, agent, library, llm, settings] = await Promise.all([
+      import('./agent/tools'), import('./engine/api'), import('./samples/analysis'), import('./agent/agent'), import('./samples/library'), import('./agent/llm'), import('./state/settings'),
     ]);
-    Object.assign(window, { __vibe: { useDaw, tools, render, analysis, engine, agent, graph, Tone, library, llm, settings } });
+    Object.assign(window, { __vibe: { useDaw, tools, render: api, engine: api, analysis, agent, library, llm, settings } });
   }
 }
 

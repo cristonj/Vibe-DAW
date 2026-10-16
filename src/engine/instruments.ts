@@ -217,20 +217,16 @@ function synth(spec: InstrumentSpec): Instrument {
         oscillator: { type: dark ? 'fattriangle' : 'fatsawtooth', count: 3, spread: dark ? 20 : 32 },
         envelope: { attack: 0.6, decay: 1, sustain: 0.85, release: 2.5 },
       });
-      const f = new Tone.Filter({ type: 'lowpass', frequency: 2200, Q: 0.7, rolloff: -24 });
-      const lfo = new Tone.LFO({ frequency: dark ? 0.07 : 0.12, min: 0.75, max: 1.25 }).start();
-      const chorus = new Tone.Chorus({ frequency: 0.4, delayTime: 4, depth: 0.6, wet: 0.35 }).start();
+      // Static cutoff on purpose: an audio-rate LFO on a biquad's frequency forces
+      // per-sample coefficient math and made pads the slowest thing to bounce.
+      // Movement comes from the chorus instead.
+      const f = new Tone.Filter({ type: 'lowpass', frequency: 2200, Q: 0.7, rolloff: -12 });
+      const chorus = new Tone.Chorus({ frequency: dark ? 0.15 : 0.4, delayTime: 4, depth: 0.7, wet: 0.4 }).start();
       out.gain.value = dark ? 0.6 : 0.45;
-      let cutoff = 2200;
-      const mult = new Tone.Multiply(cutoff);
-      lfo.connect(mult);
-      mult.connect(f.frequency);
-      f.frequency.value = 0;
       return poly(v, [f, chorus], out, (p) => {
-        cutoff = p.cutoff;
-        mult.factor.value = cutoff;
+        f.frequency.value = p.cutoff;
         v.set({ envelope: { attack: p.attack, release: p.release } });
-      }, params, [lfo, mult]);
+      }, params);
     }
     case 'strings': {
       const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 5, spread: 22 }, envelope: { attack: 0.25, decay: 0.5, sustain: 0.85, release: 1.2 } });

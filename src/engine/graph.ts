@@ -3,6 +3,7 @@ import type { AudioClip, DrumLane, Effect, MidiClip, Project, Track } from '../m
 import { beatsToSeconds } from '../model/project';
 import { getLoadedBuffer, getSampleMeta, loadBuffer } from '../samples/library';
 import { reverseBuffer } from '../samples/synth';
+import { stretchedBuffer } from './stretch';
 import { createEffect, structuralParams, type EffectUnit } from './effects';
 import { createInstrument, prepareInstrument, type Instrument, type InstrumentAssets } from './instruments';
 
@@ -329,12 +330,15 @@ export class EngineGraph {
   }
 
   /** Rate at which the sample plays to match project tempo/pitch. */
-  private audioRate(clip: AudioClip): { rate: number; detune: number } {
+  private audioRate(clip: AudioClip): { rate: number; stretch: number } {
     const p = this.project!;
     const meta = getSampleMeta(clip.sampleId);
     const tempoRatio = clip.warp !== 'off' && meta?.bpm ? p.bpm / meta.bpm : 1;
-    if (clip.warp === 'stretch') return { rate: tempoRatio, detune: clip.pitch * 100 };
-    return { rate: tempoRatio * Math.pow(2, clip.pitch / 12), detune: 0 };
+    const pitch = Math.pow(2, clip.pitch / 12);
+    // Stretch: time-stretch the sample (WSOLA) so playing it at the pitch ratio lands
+    // exactly on the tempo ratio. Otherwise speed and pitch move together (resample).
+    if (clip.warp === 'stretch') return { rate: pitch, stretch: tempoRatio / pitch };
+    return { rate: tempoRatio * pitch, stretch: 1 };
   }
 
   /** Start an audio clip voice at `time`, `elapsedBeats` into the clip. */
@@ -342,12 +346,17 @@ export class EngineGraph {
     const p = this.project!;
     const raw = getLoadedBuffer(clip.sampleId);
     if (!raw) return;
-    const buf = maybeReversed(raw, clip.reverse);
-    const { rate, detune } = this.audioRate(clip);
+    const { rate, stretch } = this.audioRate(clip);
+    let buf = maybeReversed(raw, clip.reverse);
+    let offsetScale = 1;
+    if (Math.abs(stretch - 1) > 1e-3) {
+      buf = stretchedBuffer(`${clip.sampleId}|${clip.reverse}`, buf, stretch);
+      offsetScale = 1 / stretch; // clip.offset is in original-sample seconds
+    }
     const remainingSec = beatsToSeconds(p, clip.length - elapsedBeats);
     if (remainingSec <= 0.005) return;
     const elapsedSec = beatsToSeconds(p, elapsedBeats);
-    let offset = clip.offset + elapsedSec * rate;
+    let offset = clip.offset * offsetScale + elapsedSec * rate;
     // Loops cycle the whole sample; offset only sets where playback enters it.
     if (clip.loop && buf.duration > 0.01) offset = ((offset % buf.duration) + buf.duration) % buf.duration;
     if (!clip.loop && offset >= buf.duration) return;
@@ -362,20 +371,10 @@ export class EngineGraph {
     gain.gain.setValueAtTime(g, Math.max(time + fadeIn, end - fadeOut));
     gain.gain.linearRampToValueAtTime(0, end);
 
-    let node: Tone.ToneBufferSource | Tone.GrainPlayer;
-    if (clip.warp === 'stretch' && (Math.abs(rate - 1) > 0.001 || detune !== 0)) {
-      const gp = new Tone.GrainPlayer({ context, url: buf, playbackRate: rate, detune, loop: clip.loop, loopStart: 0, loopEnd: buf.duration, grainSize: 0.1, overlap: 0.05 });
-      gp.connect(gain);
-      gp.start(time, offset);
-      gp.stop(end + 0.01);
-      node = gp;
-    } else {
-      const src = new Tone.ToneBufferSource({ context, url: buf, playbackRate: rate, loop: clip.loop, loopStart: 0, loopEnd: buf.duration });
-      src.connect(gain);
-      src.start(time, offset);
-      src.stop(end + 0.01);
-      node = src;
-    }
+    const node = new Tone.ToneBufferSource({ context, url: buf, playbackRate: rate, loop: clip.loop, loopStart: 0, loopEnd: buf.duration });
+    node.connect(gain);
+    node.start(time, offset);
+    node.stop(end + 0.01);
     const voice = {
       stop: (t: number) => {
         try {
@@ -388,8 +387,7 @@ export class EngineGraph {
     };
     s.audioVoices.add(voice);
     const cleanup = () => { s.audioVoices.delete(voice); node.dispose(); gain.dispose(); };
-    if (node instanceof Tone.ToneBufferSource) node.onended = cleanup;
-    else node.onstop = cleanup;
+    node.onended = cleanup;
   }
 
   /** On play/loop, start any audio clip whose start we've already passed. */

@@ -4,7 +4,7 @@ import { useDaw, useTransport } from '../../state/store';
 import { beatsPerBar, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
 import type { AudioClip, Clip, MidiClip, Project, Track } from '../../model/types';
-import { seek } from '../../engine/engine';
+import { seek } from '../../engine/api';
 import { getSampleMeta } from '../../samples/library';
 import { audioClipRate } from '../../model/edit';
 import { usePeaks } from '../hooks';

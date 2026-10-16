@@ -7,9 +7,8 @@ import { getProject, useDaw } from '../state/store';
 import { useSettings } from '../state/settings';
 import { addSample, getSampleMeta, searchSamples } from '../samples/library';
 import { design, DESIGN_PARAM_DOCS, type DesignKind } from '../samples/synth';
-import { renderProject } from '../engine/render';
 import { pcmToAudioBuffer } from '../engine/wav';
-import { play as enginePlay, stop as engineStop } from '../engine/engine';
+import { play as enginePlay, stop as engineStop, renderProject } from '../engine/api';
 import { describeClipNotes, describeProject } from './context';
 import { audition, listen } from './ears';
 import type { ToolDeclaration } from './llm';
@@ -495,7 +494,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
         start_bar: N('Bar to start at (1-based, fractional ok: 1.5 = beat 3)'),
         length_bars: N('Clip length in bars (default: the sample length)'),
         loop: B('Repeat the sample to fill the clip'),
-        warp: S('off: native speed; resample: speed+pitch follow tempo (tight, like vinyl); stretch: tempo only, keeps pitch (granular)', { enum: ['off', 'resample', 'stretch'] }),
+        warp: S('off: native speed; resample: speed+pitch follow tempo (tight, like vinyl); stretch: tempo only, keeps pitch (high-quality time-stretch)', { enum: ['off', 'resample', 'stretch'] }),
         pitch: N('Semitones'),
         gain_db: N('Clip gain dB'),
         offset_seconds: N('Start this far into the sample'),

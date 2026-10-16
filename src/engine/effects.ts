@@ -224,7 +224,9 @@ export function createEffect(effect: Effect): EffectUnit {
       };
     }
     case 'limiter': {
-      const l = new Tone.Limiter(num(p.threshold, -1));
+      // Tone.Limiter's default attack lets transients through; a zero-attack, hard-knee
+      // compressor uses the browser's built-in lookahead and actually holds the ceiling.
+      const l = new Tone.Compressor({ threshold: num(p.threshold, -1), ratio: 20, attack: 0, release: 0.06, knee: 0 });
       return single(l, (q) => { if (q.threshold !== undefined) l.threshold.value = num(q.threshold, -1); });
     }
     case 'duck': {

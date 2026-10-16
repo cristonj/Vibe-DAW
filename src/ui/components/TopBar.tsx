@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
 import { usePersist } from '../../state/persistence';
 import { useAuth, signIn } from '../../cloud/cloud';
 import { firebaseConfigured } from '../../cloud/config';
-import { togglePlay, stop } from '../../engine/engine';
-import { exportWav, downloadBlob } from '../../engine/render';
+import { togglePlay, stop, exportAudio } from '../../engine/api';
+import { EXPORT_FORMATS, downloadBlob, type ExportFormat } from '../../engine/exportFormats';
 import { formatPosition } from '../../model/project';
 import { PITCH_CLASSES, SCALES } from '../../model/theory';
 import type { PitchClass, ScaleName } from '../../model/types';
@@ -41,7 +41,6 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
   const user = useAuth((s) => s.user);
   const syncing = useAuth((s) => s.syncing);
   const [bpmDraft, setBpmDraft] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
 
   const commitBpm = () => {
     if (bpmDraft === null) return;
@@ -50,19 +49,6 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
     setBpmDraft(null);
   };
 
-  const doExport = async () => {
-    setExporting(true);
-    try {
-      const p = useDaw.getState().project;
-      const blob = await exportWav(p);
-      downloadBlob(blob, `${p.name.replace(/[^\w\- ]+/g, '').trim() || 'beat'}.wav`);
-      toast('Exported WAV');
-    } catch (e) {
-      toast(`Export failed: ${(e as Error).message}`, 'error');
-    } finally {
-      setExporting(false);
-    }
-  };
 
   return (
     <header className="topbar">
@@ -117,7 +103,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
       </div>
 
       <div className="top-right">
-        <button className="btn" onClick={() => void doExport()} disabled={exporting} title="Bounce the song to a WAV file"><Download size={15} /> {exporting ? 'Bouncing…' : 'Export'}</button>
+        <ExportMenu />
         {firebaseConfigured && (user ? (
           <span className="avatar" title={`${user.name ?? user.email} — synced to the cloud`}>
             {user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : (user.name ?? '?')[0]}
@@ -130,5 +116,51 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
         <button className="btn icon" title="Toggle agent (Ctrl+L)" onClick={props.toggleAgent} aria-pressed={props.agentOpen}><PanelRight size={16} /></button>
       </div>
     </header>
+  );
+}
+
+function ExportMenu() {
+  const [open, setOpen] = useState(false);
+  const [progress, setProgress] = useState<{ pct: number; stage: 'render' | 'encode' } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [open]);
+
+  const run = async (format: ExportFormat) => {
+    setOpen(false);
+    setProgress({ pct: 0, stage: 'render' });
+    try {
+      const p = useDaw.getState().project;
+      const blob = await exportAudio(p, format, (f, stage) => setProgress({ pct: Math.round(f * 100), stage }));
+      const ext = EXPORT_FORMATS.find((x) => x.id === format)!.ext;
+      downloadBlob(blob, `${p.name.replace(/[^\w\- ]+/g, '').trim() || 'beat'}.${ext}`);
+      toast(`Exported ${ext.toUpperCase()} (${(blob.size / 1048576).toFixed(1)} MB)`);
+    } catch (e) {
+      toast(`Export failed: ${(e as Error).message}`, 'error');
+    } finally {
+      setProgress(null);
+    }
+  };
+
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button className="btn" onClick={() => setOpen((o) => !o)} disabled={!!progress} aria-haspopup="menu" aria-expanded={open} title="Bounce the song to an audio file">
+        <Download size={15} /> {progress ? `${progress.stage === 'render' ? 'Bouncing' : 'Encoding'} ${progress.pct}%` : 'Export'}
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          {EXPORT_FORMATS.map((f) => (
+            <button key={f.id} className="menu-item" role="menuitem" onClick={() => void run(f.id)}>
+              <b>{f.label}</b>
+              <span>{f.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

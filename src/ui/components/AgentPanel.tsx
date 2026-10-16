@@ -7,7 +7,7 @@ import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } f
 import { analyzeReference } from '../../agent/ears';
 import { useSettings, MODELS, aiAvailable } from '../../state/settings';
 import { useDaw } from '../../state/store';
-import { previewSample } from '../../engine/engine';
+import { previewSample } from '../../engine/api';
 import { Markdown } from '../Markdown';
 import { toast } from '../toast';
 
