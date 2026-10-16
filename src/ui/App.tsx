@@ -8,7 +8,7 @@ import { InlineAI, openInlineAI } from './components/InlineAI';
 import { SettingsModal, ProjectsModal } from './components/Modals';
 import { useToasts } from './toast';
 import { useDaw } from '../state/store';
-import { togglePlay, stop } from '../engine/engine';
+import { togglePlay, stop } from '../engine/api';
 import { isTypingTarget } from './hooks';
 
 function Toasts() {

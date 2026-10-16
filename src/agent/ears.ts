@@ -1,7 +1,7 @@
 import type { Project } from '../model/types';
 import { barToBeat, beatsPerBar, beatsToSeconds, projectLength } from '../model/project';
 import { formatKey } from '../model/theory';
-import { renderProject } from '../engine/render';
+import { renderProject } from '../engine/api';
 import { arrayBufferToBase64, audioBufferToPcm, encodeWav, slicePcm, toMono, type PcmData } from '../engine/wav';
 import { describeStats, mixStats, estimatePitch, estimateTempo, estimateKey } from '../samples/analysis';
 import { decodeAudio, getSampleMeta, loadBuffer, updateSampleMeta } from '../samples/library';

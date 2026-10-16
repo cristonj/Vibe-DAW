@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@google/genai": "^2.30.0",
     "firebase": "^13.0.0",
     "idb-keyval": "^6.3.0",

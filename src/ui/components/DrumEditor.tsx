@@ -3,7 +3,7 @@ import { Play, Sparkles } from 'lucide-react';
 import { useDaw } from '../../state/store';
 import type { MidiClip, Project, Track } from '../../model/types';
 import { beatsPerBar, uid } from '../../model/project';
-import { previewNote } from '../../engine/engine';
+import { previewNote } from '../../engine/api';
 import { openInlineAI } from './InlineAI';
 
 const RES: Array<[string, number]> = [['1/16', 4], ['1/32', 8], ['1/8T', 3], ['1/16T', 6], ['1/8', 2]];

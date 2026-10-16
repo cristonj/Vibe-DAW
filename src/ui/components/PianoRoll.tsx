@@ -5,7 +5,7 @@ import type { MidiClip, Note, Project, Track } from '../../model/types';
 import { beatsPerBar, uid } from '../../model/project';
 import { isInKey, midiToNote } from '../../model/theory';
 import { transformNotes } from '../../model/edit';
-import { previewNote } from '../../engine/engine';
+import { previewNote } from '../../engine/api';
 import { openInlineAI } from './InlineAI';
 
 const ROW = 14;

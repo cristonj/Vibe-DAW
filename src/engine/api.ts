@@ -1,0 +1,83 @@
+import { useTransport } from '../state/store';
+import type { Project } from '../model/types';
+import type { RenderOptions } from './render';
+import type { ExportFormat } from './exportFormats';
+import type { PcmData } from './wav';
+import { contextLock } from './lock';
+
+// Everything outside src/engine talks to audio through this file. It never imports
+// Tone directly: Tone creates an AudioContext the moment it's imported, and browsers
+// warn (and keep it suspended) unless that happens after a click or key press.
+// So the engine loads on the first user gesture, or on demand.
+
+type EngineModule = typeof import('./engine');
+let engine: EngineModule | null = null;
+let loading: Promise<EngineModule> | null = null;
+
+export function loadEngine(): Promise<EngineModule> {
+  // initEngine captures Tone's global context, so it must not run while an offline
+  // bounce has swapped that context out.
+  loading ??= import('./engine').then((m) => contextLock.run(() => {
+    m.initEngine();
+    engine = m;
+    return m;
+  }));
+  return loading;
+}
+
+/** Load the engine on the first real user interaction. */
+export function loadEngineOnFirstGesture() {
+  const go = () => {
+    window.removeEventListener('pointerdown', go, true);
+    window.removeEventListener('keydown', go, true);
+    void loadEngine();
+  };
+  window.addEventListener('pointerdown', go, true);
+  window.addEventListener('keydown', go, true);
+}
+
+export async function play(fromBeat?: number) {
+  await (await loadEngine()).play(fromBeat);
+}
+
+export function stop(rewind = false) {
+  if (engine) engine.stop(rewind);
+  else if (rewind) useTransport.getState().setPosition(0);
+}
+
+export async function togglePlay() {
+  await (await loadEngine()).togglePlay();
+}
+
+export function seek(beat: number) {
+  if (engine) engine.seek(beat);
+  else useTransport.getState().setPosition(Math.max(0, beat));
+}
+
+export function previewNote(trackId: string, midi: number, velocity = 0.8) {
+  void loadEngine().then((m) => m.previewNote(trackId, midi, velocity));
+}
+
+export async function previewSample(sampleId: string) {
+  await (await loadEngine()).previewSample(sampleId);
+}
+
+export function stopPreview() {
+  engine?.stopPreview();
+}
+
+export function getMasterLevels(): number[] {
+  return engine?.getMasterLevels() ?? [-Infinity, -Infinity];
+}
+
+export function getTrackLevel(trackId: string): number {
+  return engine?.getTrackLevel(trackId) ?? -Infinity;
+}
+
+export async function renderProject(project: Project, opts?: RenderOptions): Promise<PcmData> {
+  return (await import('./render')).renderProject(project, opts);
+}
+
+export async function exportAudio(project: Project, format: ExportFormat, onProgress?: (fraction: number, stage: 'render' | 'encode') => void): Promise<Blob> {
+  return (await import('./render')).exportAudio(project, format, onProgress);
+}

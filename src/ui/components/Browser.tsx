@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Play, Square, Upload, Plus } from 'lucide-react';
 import { useLibrary, addSample, searchSamples } from '../../samples/library';
-import { previewSample, stopPreview } from '../../engine/engine';
+import { previewSample, stopPreview } from '../../engine/api';
 import { PRESETS } from '../../model/catalog';
 import { useDaw } from '../../state/store';
 import { createTrack } from '../../model/project';

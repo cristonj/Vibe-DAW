@@ -5,7 +5,7 @@ import { EFFECTS, EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, de
 import type { Effect, EffectType, Project, Track } from '../../model/types';
 import { mintId } from '../../model/project';
 import { useLibrary } from '../../samples/library';
-import { previewNote } from '../../engine/engine';
+import { previewNote } from '../../engine/api';
 
 export function ParamSlider({ label, value, min, max, step, onChange, format }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; format?: (v: number) => string }) {
   const s = step ?? (max - min > 200 ? 1 : max - min > 20 ? 0.1 : 0.01);
