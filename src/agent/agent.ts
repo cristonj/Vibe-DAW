@@ -11,6 +11,7 @@ import { runTool, toolDeclarations, type AgentMode, type PlanStep } from './tool
 import { diffProjects } from './diff';
 import { findClip } from '../model/project';
 import { compactHistory, CONTEXT_BUDGET, historySize, summarizeHistory, withProjectState } from './history';
+import { arrayBufferToBase64 } from '../engine/wav';
 
 // The agent loop: stream a turn, run whatever tools the model calls, feed results
 // back, repeat until it answers in plain text. All edits land in one undo step and
@@ -19,7 +20,7 @@ import { compactHistory, CONTEXT_BUDGET, historySize, summarizeHistory, withProj
 const MAX_TURNS = 48;
 
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; checkpoint: Project; focus?: string; steering?: 'queued' | 'applied' | 'cancelled' }
+  | { kind: 'user'; id: string; text: string; checkpoint: Project; focus?: string; steering?: 'queued' | 'applied' | 'cancelled'; voice?: { url: string; seconds: number } }
   | { kind: 'assistant'; id: string; text: string; thinking: string; streaming: boolean }
   | { kind: 'tool'; id: string; name: string; args: Record<string, unknown>; status: 'running' | 'done' | 'error'; summary: string; heard?: string; sampleIds?: string[]; clipIds?: string[] }
   | { kind: 'plan'; id: string; steps: PlanStep[] }
@@ -34,7 +35,7 @@ interface AgentState {
   status: string;
   abort: AbortController | null;
   tokens: { input: number; output: number };
-  steering: Array<{ id: string; text: string; opts: RunOptions }>;
+  steering: Array<{ id: string; text: string; opts: RunOptions; voiceTag?: string }>;
   context: { chars: number; compactions: number };
   setMode: (m: AgentMode) => void;
   clear: () => void;
@@ -79,6 +80,33 @@ export interface RunOptions {
   /** Extra context, e.g. a reference-track breakdown. */
   attachments?: string[];
   mode?: AgentMode;
+  /** A spoken message (16 kHz mono WAV) the model hears directly. */
+  voice?: { wav: ArrayBuffer; seconds: number; url: string };
+}
+
+// Voice messages ride beside the history instead of inside it: history is size-budgeted
+// and strips audio when compacted. Each request of the run re-attaches the clip to the
+// message that carries its tag; when the run ends the tag becomes a short note.
+const runVoices = new Map<string, Part>();
+const VOICE_TAG = /<voice_message id="([^"]+)">[\s\S]*?<\/voice_message>/g;
+
+function registerVoice(voice: NonNullable<RunOptions['voice']>): string {
+  const id = `v${nid()}`;
+  runVoices.set(id, { inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(voice.wav) } });
+  return `<voice_message id="${id}">The user spoke this message (${Math.round(voice.seconds)} s recording attached just before this text). Listen to it: it is their request, in their own words and tone.</voice_message>`;
+}
+
+function withVoices(history: Content[]): Content[] {
+  if (!runVoices.size) return history;
+  return history.map((c) => {
+    const audio = c.parts.flatMap((p) => [...(p.text?.matchAll(VOICE_TAG) ?? [])].map((m) => runVoices.get(m[1])).filter((a): a is Part => !!a));
+    return audio.length ? { ...c, parts: [...audio, ...c.parts] } : c;
+  });
+}
+
+function retireVoices(history: Content[]): Content[] {
+  runVoices.clear();
+  return history.map((c) => ({ ...c, parts: c.parts.map((p) => (p.text && !p.thoughtSignature && p.text.includes('<voice_message') ? { ...p, text: p.text.replace(VOICE_TAG, '<voice_message>(Earlier voice message from the user; the audio is no longer attached. Your replies above reflect what they asked.)</voice_message>') } : p)) }));
 }
 
 function focusContext(p: Project, clipIds: string[]): { text: string; label: string } {
@@ -100,20 +128,22 @@ function focusContext(p: Project, clipIds: string[]): { text: string; label: str
 /** Follow-ups stay in this run and its undo transaction. */
 export function steerAgent(text: string, opts: RunOptions = {}): boolean {
   const s = useAgent.getState();
-  if (!s.running || s.abort?.signal.aborted || !text.trim()) return false;
+  if (!s.running || s.abort?.signal.aborted || (!text.trim() && !opts.voice)) return false;
   const id = nid();
   const p = getProject();
   const focus = opts.focusClipIds?.length ? focusContext(p, opts.focusClipIds) : null;
+  const voiceTag = opts.voice ? registerVoice(opts.voice) : undefined;
+  const voice = opts.voice ? { url: opts.voice.url, seconds: opts.voice.seconds } : undefined;
   useAgent.setState((state) => ({
-    items: [...state.items, { kind: 'user', id, text: text.trim(), checkpoint: p, focus: focus?.label, steering: 'queued' }],
-    steering: [...state.steering, { id, text: text.trim(), opts }],
+    items: [...state.items, { kind: 'user', id, text: text.trim(), checkpoint: p, focus: focus?.label, steering: 'queued', voice }],
+    steering: [...state.steering, { id, text: text.trim(), opts, voiceTag }],
   }));
   return true;
 }
 
 export async function runAgent(text: string, opts: RunOptions = {}) {
   const st = useAgent.getState();
-  if (!text.trim()) return;
+  if (!text.trim() && !opts.voice) return;
   if (st.running) { steerAgent(text, opts); return; }
   const avail = aiAvailable();
   if (!avail.ok) {
@@ -125,14 +155,17 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   const abort = new AbortController();
   const checkpoint = getProject();
   const focus = opts.focusClipIds?.length ? focusContext(checkpoint, opts.focusClipIds) : null;
-  push({ kind: 'user', id: nid(), text: text.trim(), checkpoint, focus: focus?.label });
-  useAgent.setState({ running: true, abort, status: 'Thinking…' });
+  push({ kind: 'user', id: nid(), text: text.trim(), checkpoint, focus: focus?.label, voice: opts.voice ? { url: opts.voice.url, seconds: opts.voice.seconds } : undefined });
+  useAgent.setState({ running: true, abort, status: opts.voice ? 'Listening…' : 'Thinking…' });
   const daw = useDaw.getState();
-  if (mode === 'agent') daw.beginTransaction(`Agent: ${text.trim().slice(0, 48)}`);
+  if (mode === 'agent') daw.beginTransaction(`Agent: ${(text.trim() || 'voice message').slice(0, 48)}`);
+  runVoices.clear();
+  const voiceTag = opts.voice ? registerVoice(opts.voice) : '';
 
   const userParts: Part[] = [{
     text: [
       text.trim(),
+      voiceTag,
       ...(opts.attachments ?? []),
       focus?.text ?? '',
       `<project_state>\n${describeProject(checkpoint)}\n</project_state>`,
@@ -145,7 +178,8 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   let planId: string | null = null;
   let plan: PlanStep[] = [];
   let malformedRetried = false;
-  let goal = text;
+  const baseGoal = text.trim() ? text : 'The user asked by voice (see the voice message in the conversation).';
+  let goal = baseGoal;
   let requestedSummary: string | undefined;
   const active = () => useAgent.getState().abort === abort && getProject().id === checkpoint.id;
   const checkActive = () => { if (!active() || abort.signal.aborted) throw new DOMException('Aborted', 'AbortError'); };
@@ -153,14 +187,15 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
     const queued = useAgent.getState().steering;
     if (!queued.length) return;
     const parts: Part[] = queued.map((q) => ({ text: [
-      `Latest steering from the user: ${q.text}`,
+      q.text ? `Latest steering from the user: ${q.text}` : 'Latest steering from the user, by voice:',
+      q.voiceTag ?? '',
       ...(q.opts.attachments ?? []),
       q.opts.focusClipIds?.length ? focusContext(getProject(), q.opts.focusClipIds).text : '',
     ].filter(Boolean).join('\n') }));
     const last = history[history.length - 1];
     if (last?.role === 'user') history = [...history.slice(0, -1), { ...last, parts: [...last.parts, ...parts] }];
     else history = [...history, { role: 'user', parts }];
-    goal = `${text}\nSteering:\n${(goal.slice(text.length) + '\n' + queued.map((q) => q.text).join('\n')).slice(-8000)}`;
+    goal = `${baseGoal}\nSteering:\n${(goal.slice(baseGoal.length) + '\n' + queued.map((q) => q.text || '(voice message)').join('\n')).slice(-8000)}`;
     const ids = new Set(queued.map((q) => q.id));
     useAgent.setState((s) => ({ steering: [], items: s.items.map((i) => i.kind === 'user' && ids.has(i.id) ? { ...i, steering: 'applied' } : i) }));
   };
@@ -179,7 +214,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
       const res = await streamGenerate(
         // Keep the live checklist outside compacted history so progress is never
         // lost when old tool exchanges are summarized.
-        { system: system + `\n\n<checklist_state>\n${plan.length ? plan.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join('\n') : 'No checklist yet for this run.'}\n</checklist_state>`, contents: history, tools, thinking: settings.thinking, signal: abort.signal },
+        { system: system + `\n\n<checklist_state>\n${plan.length ? plan.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join('\n') : 'No checklist yet for this run.'}\n</checklist_state>`, contents: withVoices(history), tools, thinking: settings.thinking, signal: abort.signal },
         {
           onText: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, text: it.text + d } : it)); },
           onThought: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, thinking: it.thinking + d } : it)); },
@@ -252,6 +287,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   } finally {
     if (active()) {
     // Also bound persisted conversation memory when this run finishes or stops.
+    history = retireVoices(history);
     try { history = compactHistory(history).history; } catch { history = [{ role: 'user', parts: [{ text: `<context_summary>\n${summarizeHistory(history)}\n</context_summary>` }] }]; }
     useAgent.setState((s) => ({
       running: false,

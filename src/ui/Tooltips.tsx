@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { uiZoom } from './hooks';
 
 // App-wide tooltips. Any element with a `title` gets a styled tooltip after a short
 // hover (the native one is suppressed), so every control explains itself the same way.
@@ -18,6 +19,8 @@ export function Tooltips() {
       setTip(null);
     };
     const over = (e: PointerEvent) => {
+      // Touch has no hover; a tap would just flash the tooltip.
+      if (e.pointerType === 'touch') return;
       const el = (e.target as Element | null)?.closest?.('[title],[data-tip]') as HTMLElement | null;
       if (el === current) return;
       hide();
@@ -50,9 +53,11 @@ export function Tooltips() {
   }, []);
 
   if (!tip) return null;
-  const left = Math.max(12, Math.min(window.innerWidth - 12, tip.x));
+  // Measured in screen pixels; the tooltip lives inside the zoomed app, so convert back.
+  const z = uiZoom();
+  const left = Math.max(12, Math.min(window.innerWidth - 12, tip.x)) / z;
   return (
-    <div className="tooltip" role="tooltip" style={{ left, top: tip.y, transform: `translate(-50%, ${tip.above ? '-100%' : '0'})` }}>
+    <div className="tooltip" role="tooltip" style={{ left, top: tip.y / z, transform: `translate(-50%, ${tip.above ? '-100%' : '0'})` }}>
       {tip.text}
       {tip.key && <kbd>{tip.key}</kbd>}
     </div>

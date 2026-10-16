@@ -1,5 +1,5 @@
 import { useDaw, useTransport } from '../state/store';
-import { beatsPerBar, cloneDeep, createMidiClip, createTrack } from '../model/project';
+import { beatsPerBar, cloneDeep, createAudioClip, createMidiClip, createTrack, secondsToBeats } from '../model/project';
 import type { TrackKind } from '../model/types';
 import { sliceClip } from '../model/edit';
 import { getSampleMeta } from '../samples/library';
@@ -122,4 +122,29 @@ export function splitAtPlayhead() {
       }
     }
   });
+}
+
+/**
+ * Put a library sample on the timeline at `beat`: on `trackId` if it is an audio track,
+ * else on a new audio track. Shared by drag-and-drop and the browser's add button, which
+ * is how touch screens place sounds.
+ */
+export function placeSample(sampleId: string, trackId: string | null, beat: number): string | null {
+  const meta = getSampleMeta(sampleId);
+  if (!meta) return null;
+  const daw = useDaw.getState();
+  let clipId = '';
+  let placedOn = '';
+  daw.update(`Place ${meta.name}`, (d) => {
+    let t = trackId ? d.tracks.find((x) => x.id === trackId && x.kind === 'audio') : undefined;
+    if (!t) { t = createTrack(d, 'audio', { name: meta.name.slice(0, 24) }); d.tracks.push(t); }
+    const len = meta.bpm ? (meta.duration * meta.bpm) / 60 : secondsToBeats(d, meta.duration);
+    const c = createAudioClip(d, sampleId, Math.max(0, beat), len, meta.name);
+    if (meta.bpm && Math.abs(meta.bpm - d.bpm) > 0.01) c.warp = meta.category === 'loop' || meta.category === 'guitar' || meta.category === 'keys' ? 'stretch' : 'resample';
+    t.clips.push(c);
+    clipId = c.id;
+    placedOn = t.id;
+  });
+  daw.select({ clipIds: [clipId], trackId: placedOn });
+  return clipId;
 }

@@ -1,19 +1,21 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X, Copy, CopyPlus, ClipboardPaste, Scissors, ChevronDown } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
-import { beatsPerBar, cloneDeep, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
+import { beatsPerBar, cloneDeep, createMidiClip, createTrack, projectLength } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
 import type { AudioClip, Clip, MidiClip, Project, Track } from '../../model/types';
 import { seek, stop, play } from '../../engine/api';
 import { getSampleMeta } from '../../samples/library';
 import { audioClipRate, repeatNotes } from '../../model/edit';
-import { usePeaks } from '../hooks';
+import { PHONE, uiZoom, usePeaks, useMediaQuery } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
-import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, splitAtPlayhead } from '../actions';
+import { toast } from '../toast';
+import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, placeSample, splitAtPlayhead } from '../actions';
 
 const HEADER_W = 200;
+const HEADER_W_PHONE = 124;
 const TRACK_H = 68;
 
 const SNAPS: Array<[string, number]> = [['Bar', 0], ['1/4', 1], ['1/8', 0.5], ['1/16', 0.25], ['Off', -1]];
@@ -118,12 +120,12 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
 
   const beatAt = (e: RPointerEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    return Math.max(0, (e.clientX - rect.left) / zoom);
+    return Math.max(0, (e.clientX - rect.left) / uiZoom() / zoom);
   };
 
   return (
     <div className="ruler">
-      <div className="corner" style={{ ['--header-w' as string]: `${HEADER_W}px` }}>
+      <div className="corner">
         <span className="chip">{project.tracks.length} tracks</span>
       </div>
       <div
@@ -182,25 +184,27 @@ function scrub(e: RPointerEvent, toBeat: (ev: PointerEvent | RPointerEvent) => n
   const onUp = (ev: PointerEvent) => {
     el.removeEventListener('pointermove', onMove);
     el.removeEventListener('pointerup', onUp);
+    el.removeEventListener('pointercancel', onUp);
     const b = at(ev);
     if (wasPlaying) void play(b);
     else seek(b);
   };
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
 }
 
-function Playhead({ zoom, scroller }: { zoom: number; scroller: React.RefObject<HTMLDivElement | null> }) {
+function Playhead({ zoom, headerW, scroller }: { zoom: number; headerW: number; scroller: React.RefObject<HTMLDivElement | null> }) {
   const pos = useTransport((s) => s.position);
   const playing = useTransport((s) => s.playing);
   const follow = useDaw((s) => s.followPlayhead);
-  const x = HEADER_W + pos * zoom;
+  const x = headerW + pos * zoom;
   useEffect(() => {
     const el = scroller.current;
     if (!el || !playing || !follow) return;
     const visibleRight = el.scrollLeft + el.clientWidth;
-    if (x > visibleRight - 60 || x < el.scrollLeft + HEADER_W) el.scrollLeft = Math.max(0, x - HEADER_W - 80);
-  }, [x, playing, follow, scroller]);
+    if (x > visibleRight - 60 || x < el.scrollLeft + headerW) el.scrollLeft = Math.max(0, x - headerW - 80);
+  }, [x, playing, follow, scroller, headerW]);
   const bpb = beatsPerBar(useDaw.getState().project);
   return (
     <div className="playhead" style={{ left: x }}>
@@ -209,7 +213,7 @@ function Playhead({ zoom, scroller }: { zoom: number; scroller: React.RefObject<
         title="Drag to move the playhead"
         onPointerDown={(e) => {
           const timeline = (e.currentTarget.closest('.timeline') as HTMLElement).getBoundingClientRect();
-          scrub(e, (ev) => (ev.clientX - timeline.left - HEADER_W) / useDaw.getState().zoom, bpb);
+          scrub(e, (ev) => ((ev.clientX - timeline.left) / uiZoom() - headerW) / useDaw.getState().zoom, bpb);
         }}
       />
     </div>
@@ -280,7 +284,7 @@ function EmptyHero() {
   };
   if (dismissed || aiAvailable().ok) return null;
   return (
-    <div className="empty-arrange" style={{ ['--header-w' as string]: `${HEADER_W}px` }}>
+    <div className="empty-arrange">
       <div className="hero-card">
         <button className="btn icon hero-close" onClick={close} aria-label="Close" title="Close"><X size={16} /></button>
         <KeySetup />
@@ -300,6 +304,11 @@ export function Arrangement() {
   const follow = useDaw((s) => s.followPlayhead);
   const { update, select, openEditor, setZoom, setSnap, setFollow } = useDaw.getState();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerW = useMediaQuery(PHONE) ? HEADER_W_PHONE : HEADER_W;
+  const headerRef = useRef(headerW);
+  headerRef.current = headerW;
+  // Cancels an in-progress touch drag (and undoes it) when a pinch starts.
+  const abortTouchDrag = useRef<(() => void) | null>(null);
   const [dropTrack, setDropTrack] = useState<string | null>(null);
   const bpb = beatsPerBar(project);
   const totalBeats = projectLength(project) + bpb * 16;
@@ -310,39 +319,112 @@ export function Arrangement() {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const mouseBeat = (el.scrollLeft + e.clientX - rect.left - HEADER_W) / useDaw.getState().zoom;
-      const nz = Math.max(4, Math.min(200, useDaw.getState().zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    // Zoom around a screen x so the beat under it stays put.
+    const zoomAround = (clientX: number, nextZoom: number) => {
+      const hw = headerRef.current;
+      const x = (clientX - el.getBoundingClientRect().left) / uiZoom() - hw;
+      const anchorBeat = (el.scrollLeft + x) / useDaw.getState().zoom;
+      const nz = Math.max(4, Math.min(200, nextZoom));
       useDaw.getState().setZoom(nz);
-      requestAnimationFrame(() => { el.scrollLeft = mouseBeat * nz - (e.clientX - rect.left - HEADER_W); });
+      requestAnimationFrame(() => { el.scrollLeft = anchorBeat * nz - x; });
     };
+    // Scrolling the timeline sideways yourself during playback stops it following the playhead,
+    // so the view doesn't yank back. Only deliberate user gestures count, never our own scrolling.
+    const unfollow = () => {
+      const d = useDaw.getState();
+      if (!d.followPlayhead || !useTransport.getState().playing) return;
+      d.setFollow(false);
+      toast('Stopped following the playhead. Turn Follow back on in the toolbar.');
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.target !== el) return;
+      // A press on the scroller itself near its bottom edge is the horizontal scrollbar
+      // (classic scrollbars sit below clientHeight; overlay ones float over the last few pixels).
+      const y = (e.clientY - el.getBoundingClientRect().top) / uiZoom();
+      if (el.scrollWidth > el.clientWidth && y > el.clientHeight - 14) unfollow();
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) {
+        if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) unfollow();
+        return;
+      }
+      e.preventDefault();
+      zoomAround(e.clientX, useDaw.getState().zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+    };
+    // Two-finger pinch zooms the timeline horizontally on touch screens.
+    let pinch: { dist: number; zoom: number } | null = null;
+    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY) || 1;
+    let swipe: { x: number; y: number } | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      // One finger on empty timeline or an unselected clip pans; selected clips, the ruler and the playhead drag instead.
+      const t = e.target as Element;
+      swipe = e.touches.length === 1 && !t.closest('.clip.selected, .ruler .marks, .playhead-grip, .track-head') ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+      if (e.touches.length !== 2) return;
+      abortTouchDrag.current?.();
+      pinch = { dist: spread(e.touches), zoom: useDaw.getState().zoom };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (swipe && e.touches.length === 1) {
+        const dx = Math.abs(e.touches[0].clientX - swipe.x), dy = Math.abs(e.touches[0].clientY - swipe.y);
+        if (dx > 12 && dx > dy) { swipe = null; unfollow(); }
+      }
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      zoomAround((e.touches[0].clientX + e.touches[1].clientX) / 2, pinch.zoom * (spread(e.touches) / pinch.dist));
+    };
+    const onTouchEnd = (e: TouchEvent) => { if (e.touches.length < 2) pinch = null; };
+    el.addEventListener('pointerdown', onPointerDown);
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
   }, []);
 
   const startDrag = (e: RPointerEvent, clip: Clip, track: Track, mode: 'move' | 'resize') => {
     if (e.button !== 0) return;
     e.stopPropagation();
+    // Another finger landing during a touch drag starts a pinch, not a second drag.
+    if (e.pointerType === 'touch' && abortTouchDrag.current) { abortTouchDrag.current(); return; }
     // Shift/Ctrl-click toggles selection, except on the resize handle where Shift means fine snapping.
     const additive = mode === 'move' && (e.shiftKey || e.metaKey || e.ctrlKey);
     const ids = additive
       ? (selection.clipIds.includes(clip.id) ? selection.clipIds.filter((x) => x !== clip.id) : [...selection.clipIds, clip.id])
       : selection.clipIds.includes(clip.id) ? selection.clipIds : [clip.id];
+    const wasSelected = selection.clipIds.includes(clip.id);
     select({ clipIds: ids, trackId: track.id });
     if (additive) return;
     const el = e.currentTarget as HTMLElement;
+    const touch = e.pointerType === 'touch';
+    // Touch has no double-click: a tap opens the clip in the editor.
+    const openOnTap = (ev: PointerEvent) => { if (ev.type === 'pointerup' && mode === 'move') openEditor(clip.id); };
+    if (touch && !wasSelected) {
+      // An unselected clip never drags on touch, so a swipe that starts on it just scrolls.
+      const done = (ev: PointerEvent) => { el.removeEventListener('pointerup', done); el.removeEventListener('pointercancel', done); openOnTap(ev); };
+      el.addEventListener('pointerup', done);
+      el.addEventListener('pointercancel', done);
+      return;
+    }
     el.setPointerCapture(e.pointerId);
+    const snapshot = cloneDeep(clip);
     const sx = e.clientX, sy = e.clientY;
+    const uz = uiZoom();
     const origStart = clip.start, origLen = clip.length;
     const tIdx = project.tracks.findIndex((t) => t.id === track.id);
     let duplicated = false;
     let moved = false;
     let currentClipId = clip.id;
     const onMove = (ev: PointerEvent) => {
-      const dxBeats = (ev.clientX - sx) / zoom;
+      if (ev.pointerId !== e.pointerId) return;
+      const dxBeats = (ev.clientX - sx) / uz / zoom;
       if (!moved && Math.abs(ev.clientX - sx) < 3 && Math.abs(ev.clientY - sy) < 3) return;
       moved = true;
       const s = useDaw.getState().snap;
@@ -366,7 +448,7 @@ export function Arrangement() {
         return;
       }
       const newStart = Math.max(0, snapBeat(origStart + dxBeats, s, bpb));
-      const dRows = Math.round((ev.clientY - sy) / TRACK_H);
+      const dRows = Math.round((ev.clientY - sy) / uz / TRACK_H);
       update('Move clip', (d) => {
         if (ev.altKey && !duplicated) {
           // Alt-drag leaves a copy behind.
@@ -393,19 +475,38 @@ export function Arrangement() {
         }
       }, { coalesce: true });
     };
-    const onUp = () => {
+    const detach = () => {
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
-      if (duplicated) select({ clipIds: [currentClipId] });
+      el.removeEventListener('pointercancel', onUp);
+      if (abortTouchDrag.current === abort) abortTouchDrag.current = null;
     };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      detach();
+      if (duplicated) select({ clipIds: [currentClipId] });
+      if (touch && !moved) openOnTap(ev);
+    };
+    // A second finger means a pinch: drop the drag and put the clip back where it was.
+    const abort = () => {
+      detach();
+      if (!moved || duplicated) return;
+      update(mode === 'resize' ? 'Resize clip' : 'Move clip', (d) => {
+        for (const t of d.tracks) t.clips = t.clips.filter((c) => c.id !== snapshot.id);
+        d.tracks.find((t) => t.id === track.id)?.clips.push(cloneDeep(snapshot));
+      }, { coalesce: true });
+    };
+    if (touch) abortTouchDrag.current = abort;
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
+    // A touch that turns into a scroll is cancelled by the browser.
+    el.addEventListener('pointercancel', onUp);
   };
 
   const laneDoubleClick = (e: React.MouseEvent, track: Track) => {
     if (track.kind === 'audio') return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const beat = Math.floor((e.clientX - rect.left) / zoom / bpb) * bpb;
+    const beat = Math.floor((e.clientX - rect.left) / uiZoom() / zoom / bpb) * bpb;
     let id = '';
     update('New clip', (d) => {
       const t = d.tracks.find((x) => x.id === track.id)!;
@@ -427,18 +528,9 @@ export function Arrangement() {
       return;
     }
     if (!sampleId) return;
-    const meta = getSampleMeta(sampleId);
-    if (!meta) return;
     const lane = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const beat = Math.max(0, snapBeat((e.clientX - lane.left) / zoom, snap <= 0 ? bpb : snap, bpb));
-    update(`Place ${meta.name}`, (d) => {
-      let t = track && track.kind === 'audio' ? d.tracks.find((x) => x.id === track.id) : undefined;
-      if (!t) { t = createTrack(d, 'audio', { name: meta.name.slice(0, 24) }); d.tracks.push(t); }
-      const len = meta.bpm ? (meta.duration * meta.bpm) / 60 : secondsToBeats(d, meta.duration);
-      const c = createAudioClip(d, sampleId, track ? beat : 0, len, meta.name);
-      if (meta.bpm && Math.abs(meta.bpm - d.bpm) > 0.01) c.warp = meta.category === 'loop' || meta.category === 'guitar' || meta.category === 'keys' ? 'stretch' : 'resample';
-      t.clips.push(c);
-    });
+    const beat = Math.max(0, snapBeat((e.clientX - lane.left) / uiZoom() / zoom, snap <= 0 ? bpb : snap, bpb));
+    placeSample(sampleId, track?.id ?? null, track ? beat : 0);
   };
 
   const laneBg = (i: number) => ({
@@ -451,34 +543,34 @@ export function Arrangement() {
   const addTrack = addTrackAction;
 
   return (
-    <section className="arrange" style={{ ['--header-w' as string]: `${HEADER_W}px`, ['--track-h' as string]: `${TRACK_H}px` }} aria-label="Arrangement">
+    <section className="arrange" style={{ ['--header-w' as string]: `${headerW}px`, ['--track-h' as string]: `${TRACK_H}px` }} aria-label="Arrangement">
       <div className="arrange-tools">
         <AddTrackMenu />
         <div className="tool-divider" />
-        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')}><Plus size={14} /> New clip</button>
+        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')} aria-label="New clip"><Plus size={14} /> <span className="btn-label">New clip</span></button>
         <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title={tip('Copy selected clips', 'copy')}><Copy size={14} /></button>
         <button className="btn icon" onClick={() => pasteClips()} title={tip('Paste clips at the playhead', 'paste')}><ClipboardPaste size={14} /></button>
         <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title={tip('Duplicate selected clips', 'duplicate')}><CopyPlus size={14} /></button>
         <button className="btn icon" onClick={() => splitAtPlayhead()} title={tip('Split clips at the playhead', 'split')}><Scissors size={14} /></button>
         <button className="btn icon danger" onClick={() => deleteSelectedClips()} disabled={!selection.clipIds.length} title={tip('Delete selected clips', 'delete')}><Trash size={14} /></button>
         <div className="tool-divider" />
-        <label title="Clips snap to this grid when you move or resize them">Snap
+        <label title="Clips snap to this grid when you move or resize them"><span className="btn-label minor">Snap</span>
           <select value={snap} onChange={(e) => setSnap(Number(e.target.value))} aria-label="Snap">
             {SNAPS.map(([l, v]) => <option key={l} value={v}>{l}</option>)}
           </select>
         </label>
-        <label title="Scroll the timeline to keep the playhead in view"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow playhead</label>
+        <label title="Scroll the timeline to keep the playhead in view"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} aria-label="Follow playhead" /> <span className="btn-label minor">Follow playhead</span></label>
         <button className="btn icon" title={tip('Zoom out', 'zoomOut')} onClick={() => setZoom(zoom / 1.3)}><ZoomOut size={15} /></button>
         <button className="btn icon" title={tip('Zoom in', 'zoomIn')} onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
         <div style={{ flex: 1 }} />
         {hasPending && (
           <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed and remove the purple outlines">
-            <Check size={14} /> Keep AI changes
+            <Check size={14} /> Keep<span className="btn-label minor"> AI changes</span>
           </button>
         )}
       </div>
       <div className="scroller" ref={scrollRef} onPointerDown={(e) => { if (e.target === e.currentTarget) select({ clipIds: [] }); }}>
-        <div className="timeline" style={{ width: HEADER_W + width }}>
+        <div className="timeline" style={{ width: headerW + width }}>
           <Ruler project={project} zoom={zoom} width={width} />
           {project.tracks.map((t, i) => (
             <div className="track-row" key={t.id}>
@@ -493,7 +585,10 @@ export function Arrangement() {
                 onDrop={(e) => onLaneDrop(e, t)}
               >
                 {!t.clips.length && (
-                  <div className="lane-hint">{t.kind === 'audio' ? 'Drag a sound from the left panel onto this lane' : 'Double-click here (or use New clip) to draw a pattern'}</div>
+                  <div className="lane-hint">
+                    <span className="hide-touch">{t.kind === 'audio' ? 'Drag a sound from the left panel onto this lane' : 'Double-click here (or use New clip) to draw a pattern'}</span>
+                    <span className="only-touch">{t.kind === 'audio' ? 'Tap + next to a sound in the browser to add it' : 'Tap New clip to draw a pattern'}</span>
+                  </div>
                 )}
                 {t.clips.map((c) => (
                   <ClipView
@@ -512,8 +607,8 @@ export function Arrangement() {
           ))}
           <div className="add-track-row">
             <div className="track-head">
-              <button className="btn" onClick={() => addTrack('drums')} title="Add drum track"><Drum size={14} /> Drums</button>
-              <button className="btn" onClick={() => addTrack('instrument')} title="Add instrument track"><Piano size={14} /> Synth</button>
+              <button className="btn" onClick={() => addTrack('drums')} title="Add drum track" aria-label="Add drum track"><Drum size={14} /> <span className="btn-label">Drums</span></button>
+              <button className="btn" onClick={() => addTrack('instrument')} title="Add instrument track" aria-label="Add instrument track"><Piano size={14} /> <span className="btn-label">Synth</span></button>
               <button className="btn icon" onClick={() => addTrack('audio')} title="Add audio track"><AudioLines size={14} /></button>
             </div>
             <div
@@ -523,10 +618,10 @@ export function Arrangement() {
               onDragLeave={() => setDropTrack(null)}
               onDrop={(e) => onLaneDrop(e, null)}
             >
-              <Plus size={13} />&nbsp;Drop a sound or instrument here for a new track
+              <Plus size={13} />&nbsp;<span className="hide-touch">Drop a sound or instrument here for a new track</span><span className="only-touch">Add a track</span>
             </div>
           </div>
-          <Playhead zoom={zoom} scroller={scrollRef} />
+          <Playhead zoom={zoom} headerW={headerW} scroller={scrollRef} />
         </div>
         {empty && <EmptyHero />}
       </div>
@@ -556,6 +651,7 @@ const TrackHeader = memo(function TrackHeader({ track, selected }: { track: Trac
 
 function AddTrackMenu() {
   const [open, setOpen] = useState(false);
+  const [at, setAt] = useState({ left: 0, top: 0 });
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -566,9 +662,19 @@ function AddTrackMenu() {
   const pick = (kind: 'drums' | 'instrument' | 'audio') => { addTrackAction(kind); setOpen(false); };
   return (
     <div className="menu-wrap" ref={ref}>
-      <button className="btn solid" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} title="Add a drum, instrument, or audio track"><Plus size={14} /> Add track <ChevronDown size={13} /></button>
+      <button
+        className="btn solid"
+        onClick={(e) => {
+          // Fixed position, so the menu isn't clipped when the toolbar scrolls sideways on small screens.
+          const r = e.currentTarget.getBoundingClientRect();
+          const z = uiZoom();
+          setAt({ left: Math.max(8, Math.min(r.left / z, window.innerWidth / z - 248)), top: r.bottom / z + 6 });
+          setOpen((o) => !o);
+        }}
+        aria-haspopup="menu" aria-expanded={open} aria-label="Add track" title="Add a drum, instrument, or audio track"
+      ><Plus size={14} /> <span className="btn-label">Add track</span> <ChevronDown size={13} /></button>
       {open && (
-        <div className="menu left" role="menu">
+        <div className="menu fixed" role="menu" style={at}>
           <button className="menu-item" role="menuitem" onClick={() => pick('drums')}><b><Drum size={13} /> Drums</b><span>Step-sequenced drum kit</span></button>
           <button className="menu-item" role="menuitem" onClick={() => pick('instrument')}><b><Piano size={13} /> Instrument</b><span>Piano, guitar, 808, synths (change it in Sound &amp; FX)</span></button>
           <button className="menu-item" role="menuitem" onClick={() => pick('audio')}><b><AudioLines size={13} /> Audio</b><span>For samples and loops you drag in</span></button>

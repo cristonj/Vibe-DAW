@@ -1,12 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
-import { Play, Square, Upload, Plus } from 'lucide-react';
+import { Play, Square, Upload, Plus, X } from 'lucide-react';
 import { useLibrary, addSample, searchSamples } from '../../samples/library';
 import { previewSample, stopPreview } from '../../engine/api';
 import { PRESETS } from '../../model/catalog';
-import { useDaw } from '../../state/store';
-import { createTrack } from '../../model/project';
+import { useDaw, useTransport } from '../../state/store';
+import { beatsPerBar, createTrack } from '../../model/project';
 import type { SampleMeta } from '../../model/types';
 import { toast } from '../toast';
+import { placeSample } from '../actions';
 
 const CATS: Array<[label: string, value: string | undefined, filter?: (m: SampleMeta) => boolean]> = [
   ['All', undefined],
@@ -42,6 +43,14 @@ export async function importAudioFiles(files: FileList | File[]) {
   }
 }
 
+/** Add a sample without drag-and-drop (touch screens): onto the selected audio track at the playhead's bar, else a new track. */
+function addSampleToTimeline(m: SampleMeta) {
+  const daw = useDaw.getState();
+  const bpb = beatsPerBar(daw.project);
+  const beat = Math.floor(useTransport.getState().position / bpb) * bpb;
+  if (placeSample(m.id, daw.selection.trackId, beat)) toast(`Added ${m.name} to the timeline`);
+}
+
 function SampleRow({ m, playing, onPlay }: { m: SampleMeta; playing: boolean; onPlay: () => void }) {
   const bits = [m.bpm ? `${m.bpm} bpm` : '', m.key ?? '', `${m.duration.toFixed(1)}s`].filter(Boolean).join(' · ');
   return (
@@ -59,12 +68,13 @@ function SampleRow({ m, playing, onPlay }: { m: SampleMeta; playing: boolean; on
       </button>
       <span className="name">{m.name}</span>
       <span className="meta">{bits}</span>
+      <button className="add-mini" onClick={() => addSampleToTimeline(m)} aria-label={`Add ${m.name} to the timeline`} title="Add to the selected audio track at the playhead, or a new track"><Plus size={13} /></button>
       {m.aiDescription && <span className="heard">{m.aiDescription}</span>}
     </div>
   );
 }
 
-export function Browser({ open }: { open: boolean }) {
+export function Browser({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<'sounds' | 'instruments'>('sounds');
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState(0);
@@ -92,6 +102,7 @@ export function Browser({ open }: { open: boolean }) {
 
   const addInstrument = (preset: string) => {
     update('Add track', (d) => { d.tracks.push(createTrack(d, 'instrument', { preset })); });
+    toast(`Added ${PRESETS.find((p) => p.id === preset)?.name ?? 'instrument'} track`);
   };
 
   const families = useMemo(() => {
@@ -105,6 +116,7 @@ export function Browser({ open }: { open: boolean }) {
       <div className="tabs" role="tablist">
         <button className={`tab ${tab === 'sounds' ? 'active' : ''}`} onClick={() => setTab('sounds')} role="tab">Sounds</button>
         <button className={`tab ${tab === 'instruments' ? 'active' : ''}`} onClick={() => setTab('instruments')} role="tab">Instruments</button>
+        <button className="btn icon drawer-close" onClick={onClose} aria-label="Close browser"><X size={16} /></button>
       </div>
       {tab === 'sounds' ? (
         <>

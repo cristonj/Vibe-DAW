@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { Sparkles, Pencil, MousePointer2 } from 'lucide-react';
+import { Sparkles, Pencil, MousePointer2, Trash } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
 import type { MidiClip, Note, Project, Track } from '../../model/types';
 import { beatsPerBar, uid } from '../../model/project';
@@ -9,6 +9,7 @@ import { previewNote } from '../../engine/api';
 import { copyNotes, getCopiedNotes } from '../clipboard';
 import { matches, tip } from '../../state/keymap';
 import { openInlineAI } from './InlineAI';
+import { uiZoom, useMediaQuery } from '../hooks';
 
 const ROW = 14;
 const LOW = 21; // A0
@@ -54,9 +55,10 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
 
   const posFrom = (e: { clientX: number; clientY: number }) => {
     const rect = gridRef.current!.getBoundingClientRect();
-    const beat = (e.clientX - rect.left) / ppb;
-    const pitch = HIGH - Math.floor((e.clientY - rect.top) / ROW);
-    return { beat, pitch: Math.max(LOW, Math.min(HIGH, pitch)), x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const z = uiZoom();
+    const x = (e.clientX - rect.left) / z, y = (e.clientY - rect.top) / z;
+    const pitch = HIGH - Math.floor(y / ROW);
+    return { beat: x / ppb, pitch: Math.max(LOW, Math.min(HIGH, pitch)), x, y };
   };
 
   const startMarquee = (e: RPointerEvent, additive: boolean) => {
@@ -77,9 +79,11 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
       setMarquee(null);
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
     };
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
   };
 
   const onGridDown = (e: RPointerEvent) => {
@@ -93,6 +97,22 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
     const { beat, pitch } = posFrom(e);
     const start = Math.max(0, floorSnap(beat));
     if (start >= clip.length) return;
+    if (e.pointerType === 'touch') {
+      // Touch: a swipe scrolls the roll, so add the note on a clean tap (at the last length used).
+      const el = e.currentTarget as HTMLElement;
+      const done = (ev: PointerEvent) => {
+        el.removeEventListener('pointerup', done);
+        el.removeEventListener('pointercancel', done);
+        if (ev.type !== 'pointerup') return;
+        const id = uid();
+        editNotes('Add note', (ns) => { ns.push({ id, pitch, start, duration: Math.min(lastLen, clip.length - start), velocity: 0.8 }); }, false);
+        setSelected([id]);
+        previewNote(track.id, pitch, 0.8);
+      };
+      el.addEventListener('pointerup', done);
+      el.addEventListener('pointercancel', done);
+      return;
+    }
     const id = uid();
     const note: Note = { id, pitch, start, duration: Math.min(lastLen, clip.length - start), velocity: 0.8 };
     editNotes('Add note', (ns) => { ns.push(note); }, false);
@@ -106,9 +126,10 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
       editNotes('Add note', (ns) => { const n = ns.find((x) => x.id === id); if (n) n.duration = len; });
       setLastLen(len);
     };
-    const onUp = () => { el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', onUp); };
+    const onUp = () => { el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', onUp); el.removeEventListener('pointercancel', onUp); };
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
   };
 
   const onNoteDown = (e: RPointerEvent, n: Note, mode: 'move' | 'resize') => {
@@ -162,9 +183,11 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
     const onUp = () => {
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
     };
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
   };
 
   const deleteNotes = (ids: string[]) => {
@@ -257,6 +280,7 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
         <div className="group">
           <button className="btn icon" onClick={() => setPpb((z) => Math.max(16, z / 1.25))} aria-label="Zoom out" title="Zoom out">−</button>
           <button className="btn icon" onClick={() => setPpb((z) => Math.min(400, z * 1.25))} aria-label="Zoom in" title="Zoom in">+</button>
+          <button className="btn icon danger" onClick={() => deleteNotes(selected)} disabled={!sel} aria-label="Delete selected notes" title={tip('Delete selected notes', 'delete')}><Trash size={14} /></button>
         </div>
         <div style={{ flex: 1 }} />
         <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])} title="Ask the agent to change this clip (Ctrl+K)"><Sparkles size={14} /> Edit with AI</button>
@@ -316,8 +340,11 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
         </div>
       </div>
       <div className="editor-hint">
-        {tool === 'draw' ? 'Click to add a note · drag to set its length' : 'Drag to box-select'} · drag a note to move (Alt = copy) · drag its right edge to resize · right-click to delete ·
-        Ctrl+C / X / V copy, cut, paste · ←→ nudge · ↑↓ transpose · Q quantize
+        <span className="hide-touch">
+          {tool === 'draw' ? 'Click to add a note · drag to set its length' : 'Drag to box-select'} · drag a note to move (Alt = copy) · drag its right edge to resize · right-click to delete ·
+          Ctrl+C / X / V copy, cut, paste · ←→ nudge · ↑↓ transpose · Q quantize
+        </span>
+        <span className="only-touch">{tool === 'draw' ? 'Tap to add a note' : 'Drag to box-select'} · drag a note to move · drag its right edge to resize · swipe empty space to scroll</span>
         {sel > 0 && <b> · {sel} selected</b>}
       </div>
     </div>
@@ -331,11 +358,12 @@ function RollPlayhead({ clipStart, clipLength, ppb }: { clipStart: number; clipL
 }
 
 function VelocityLane({ clip, ppb, width, color, selected, onEdit }: { clip: MidiClip; ppb: number; width: number; color: string; selected: string[]; onEdit: (label: string, fn: (ns: Note[]) => void) => void }) {
-  const H = 56;
+  const H = useMediaQuery('(max-height: 500px)') ? 32 : 56;
   const set = (e: RPointerEvent | PointerEvent, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
-    const beat = (e.clientX - rect.left) / ppb;
-    const v = Math.max(0.05, Math.min(1, 1 - (e.clientY - rect.top) / H));
+    const z = uiZoom();
+    const beat = (e.clientX - rect.left) / z / ppb;
+    const v = Math.max(0.05, Math.min(1, 1 - (e.clientY - rect.top) / z / H));
     const target = clip.notes.reduce<Note | null>((best, n) => (Math.abs(n.start - beat) < 0.2 && (!best || Math.abs(n.start - beat) < Math.abs(best.start - beat)) ? n : best), null);
     if (!target) return;
     const ids = selected.includes(target.id) ? selected : [target.id];
@@ -344,15 +372,16 @@ function VelocityLane({ clip, ppb, width, color, selected, onEdit }: { clip: Mid
   return (
     <div
       className="velocity"
-      style={{ width, position: 'sticky', bottom: 0 }}
+      style={{ width, height: H, position: 'sticky', bottom: 0 }}
       onPointerDown={(e) => {
         const el = e.currentTarget as HTMLElement;
         el.setPointerCapture(e.pointerId);
         set(e, el);
         const mv = (ev: PointerEvent) => set(ev, el);
-        const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); };
+        const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
         el.addEventListener('pointermove', mv);
         el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
       }}
       title="Velocity: drag a bar up or down (affects all selected notes)"
     >

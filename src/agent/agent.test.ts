@@ -106,3 +106,44 @@ describe('live checklist', () => {
     expect(useAgent.getState().items.find((i) => i.id === cards[0].id)).toMatchObject({ steps: updated });
   });
 });
+
+describe('voice messages', () => {
+  const voice = { wav: new Uint8Array([82, 73, 70, 70, 1, 2, 3, 4]).buffer, seconds: 3.2, url: 'blob:voice' };
+  const audioParts = (req: LlmRequest) => req.contents.flatMap((c) => c.parts).filter((p) => p.inlineData);
+
+  it('sends the recording to the model on every turn of the run, but keeps it out of saved history', async () => {
+    mocks.stream.mockResolvedValueOnce(calls()).mockResolvedValueOnce(answer());
+    mocks.tool.mockResolvedValue({ result: { ok: true }, summary: 'Edited' });
+    await runAgent('', { voice });
+    expect(mocks.stream).toHaveBeenCalledTimes(2);
+    for (const [req] of mocks.stream.mock.calls as Array<[LlmRequest]>) {
+      expect(audioParts(req)).toEqual([{ inlineData: { mimeType: 'audio/wav', data: 'UklGRgECAwQ=' } }]);
+      // The clip sits right before the message that refers to it.
+      const msg = req.contents.find((c) => c.parts.some((p) => p.inlineData))!;
+      expect(msg.parts[1].text).toContain('<voice_message id=');
+    }
+    const s = useAgent.getState();
+    expect(s.items.find((i) => i.kind === 'user')).toMatchObject({ text: '', voice: { url: 'blob:voice', seconds: 3.2 } });
+    expect(JSON.stringify(s.history)).not.toContain('inlineData');
+    expect(JSON.stringify(s.history)).toContain('Earlier voice message');
+  });
+
+  it('does not resend an earlier run’s recording', async () => {
+    mocks.stream.mockResolvedValue(answer());
+    await runAgent('', { voice });
+    await runAgent('Now make it faster');
+    expect(audioParts(mocks.stream.mock.calls[1][0] as LlmRequest)).toHaveLength(0);
+  });
+
+  it('delivers spoken steering to the active run', async () => {
+    const first = deferred<LlmResult>();
+    mocks.stream.mockReturnValueOnce(first.promise).mockResolvedValueOnce(answer());
+    const run = runAgent('Make a beat');
+    expect(steerAgent('', { voice })).toBe(true);
+    first.resolve(answer());
+    await run;
+    const second = mocks.stream.mock.calls[1][0] as LlmRequest;
+    expect(audioParts(second)).toHaveLength(1);
+    expect(JSON.stringify(second.contents)).toContain('Latest steering from the user, by voice');
+  });
+});

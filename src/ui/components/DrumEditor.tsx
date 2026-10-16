@@ -46,7 +46,7 @@ export function DrumEditor({ clip, track, project }: { clip: MidiClip; track: Tr
             {RES.map(([l, v]) => <option key={l} value={v}>{l}</option>)}
           </select>
         </label>
-        <span style={{ color: 'var(--faint)', fontSize: 12, marginLeft: 8 }}>Click to toggle · Shift = accent · Alt = ghost</span>
+        <span className="hide-touch" style={{ color: 'var(--faint)', fontSize: 12, marginLeft: 8 }}>Click to toggle · Shift = accent · Alt = ghost</span>
         <div style={{ flex: 1 }} />
         <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}><Sparkles size={14} /> Edit with AI</button>
       </div>
