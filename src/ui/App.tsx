@@ -10,7 +10,6 @@ import { useToasts } from './toast';
 import { useDaw } from '../state/store';
 import { togglePlay, stop } from '../engine/engine';
 import { isTypingTarget } from './hooks';
-import { aiAvailable } from '../state/settings';
 
 function Toasts() {
   const toasts = useToasts((s) => s.toasts);
@@ -22,11 +21,18 @@ function Toasts() {
 }
 
 export function App() {
-  const [settings, setSettings] = useState(() => !aiAvailable().ok);
+  const [settings, setSettings] = useState(false);
   const [projects, setProjects] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(true);
   const [agentOpen, setAgentOpen] = useState(true);
   const [focusAgent, setFocusAgent] = useState(0);
+
+  useEffect(() => {
+    // The agent asks for a key the first time someone tries it, not on page load.
+    const open = () => setSettings(true);
+    window.addEventListener('vibe:open-settings', open);
+    return () => window.removeEventListener('vibe:open-settings', open);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

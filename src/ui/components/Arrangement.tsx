@@ -203,7 +203,7 @@ function EmptyHero() {
         <div className="suggestions">
           {STARTERS.map((s) => <button key={s} className="suggestion" onClick={() => go(s)} disabled={running}>{s}</button>)}
         </div>
-        <div className="hero-foot">Prefer to start by hand? Add a track below or drag a sound from the browser.</div>
+        <div className="hero-foot">Uses your own free Gemini API key — it stays in your browser. Prefer to start by hand? Add a track below or drag a sound from the browser.</div>
       </div>
     </div>
   );

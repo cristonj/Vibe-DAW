@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Trash, Plus, Copy, Cloud, LogOut } from 'lucide-react';
 import { useSettings, MODELS, type Thinking } from '../../state/settings';
-import { firebaseConfigured } from '../../cloud/config';
+import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
 import { useAuth, signIn, signOut } from '../../cloud/cloud';
 import { usePersist, openProject, newProject, deleteProject, duplicateProject, syncNow } from '../../state/persistence';
 import { useDaw } from '../../state/store';
@@ -32,23 +32,28 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const save = () => { s.set({ apiKey: key.trim() }); onClose(); };
   return (
     <Modal title="Settings" sub="How the agent connects to Gemini and how much freedom it has." onClose={onClose}>
-      <div className="field">
-        <span>Connection</span>
-        <div className="radio-cards">
-          <button className={`radio-card ${s.connection === 'firebase' ? 'on' : ''}`} disabled={!firebaseConfigured} onClick={() => s.set({ connection: 'firebase' })}>
-            <b>Vibe cloud</b>
-            <span>{firebaseConfigured ? 'Gemini through Firebase AI Logic. No key needed.' : 'Not configured in this build.'}</span>
-          </button>
-          <button className={`radio-card ${s.connection === 'apikey' ? 'on' : ''}`} onClick={() => s.set({ connection: 'apikey' })}>
-            <b>Your Gemini key</b>
-            <span>Calls Google directly from this browser.</span>
-          </button>
+      {hostedAiEnabled && (
+        <div className="field">
+          <span>Connection</span>
+          <div className="radio-cards">
+            <button className={`radio-card ${s.connection === 'firebase' ? 'on' : ''}`} onClick={() => s.set({ connection: 'firebase' })}>
+              <b>Vibe cloud</b>
+              <span>Gemini through Firebase AI Logic. No key needed.</span>
+            </button>
+            <button className={`radio-card ${s.connection === 'apikey' ? 'on' : ''}`} onClick={() => s.set({ connection: 'apikey' })}>
+              <b>Your Gemini key</b>
+              <span>Calls Google directly from this browser.</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
       <label className="field">
         <span>Gemini API key</span>
         <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="AIza…" autoComplete="off" spellCheck={false} />
-        <small>Stored only in this browser. Get one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.</small>
+        <small>
+          Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a> (Google’s free tier covers casual use).
+          The key is saved only in this browser and sent only to Google — Vibe has no server that sees it. Usage counts against your own Google quota.
+        </small>
       </label>
       <label className="field">
         <span>Model</span>

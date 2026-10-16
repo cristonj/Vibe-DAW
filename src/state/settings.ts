@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { firebaseConfigured } from '../cloud/config';
+import { hostedAiEnabled } from '../cloud/config';
 
 // User preferences, persisted to localStorage. The API key never leaves this browser
 // except in requests to Google's Gemini endpoint.
@@ -39,7 +39,7 @@ const saved = load();
 
 export const useSettings = create<SettingsState>((set, get) => ({
   model: MODELS.some((m) => m.id === saved.model) ? (saved.model as ModelId) : 'gemini-3.8-flash',
-  connection: saved.connection ?? (firebaseConfigured ? 'firebase' : 'apikey'),
+  connection: hostedAiEnabled ? saved.connection ?? 'firebase' : 'apikey',
   apiKey: saved.apiKey ?? '',
   thinking: saved.thinking ?? 'MEDIUM',
   autoListen: saved.autoListen ?? true,
@@ -61,7 +61,7 @@ export function effectiveApiKey(): string {
 export function aiAvailable(): { ok: boolean; reason?: string } {
   const s = useSettings.getState();
   if (s.connection === 'firebase') {
-    return firebaseConfigured ? { ok: true } : { ok: false, reason: 'Firebase isn’t configured for this build. Add your Gemini API key in Settings.' };
+    return hostedAiEnabled ? { ok: true } : { ok: false, reason: 'Add your Gemini API key in Settings to use the agent.' };
   }
   return effectiveApiKey() ? { ok: true } : { ok: false, reason: 'Add a Gemini API key in Settings to use the agent.' };
 }

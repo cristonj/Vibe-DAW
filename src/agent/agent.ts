@@ -118,6 +118,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   const avail = aiAvailable();
   if (!avail.ok) {
     push({ kind: 'error', id: nid(), text: avail.reason! });
+    window.dispatchEvent(new Event('vibe:open-settings'));
     return;
   }
   const mode = opts.mode ?? st.mode;
