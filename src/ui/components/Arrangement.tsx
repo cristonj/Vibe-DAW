@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Sparkles, Check } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Sparkles, Check, X } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
 import { beatsPerBar, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
@@ -9,6 +9,7 @@ import { getSampleMeta } from '../../samples/library';
 import { audioClipRate } from '../../model/edit';
 import { usePeaks } from '../hooks';
 import { keepAllPending, runAgent, useAgent } from '../../agent/agent';
+import { aiAvailable, useSettings } from '../../state/settings';
 
 const HEADER_W = 200;
 const TRACK_H = 68;
@@ -187,23 +188,87 @@ const STARTERS = [
   'Rage beat with huge supersaws',
 ];
 
+const HERO_DISMISSED = 'vibe:heroDismissed';
+
+function readDismissed(): boolean {
+  try { return localStorage.getItem(HERO_DISMISSED) === '1'; } catch { return false; }
+}
+
+/** Ask Google whether a key works before saving it, so typos surface right away. */
+async function checkKey(key: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1&key=${encodeURIComponent(key)}`);
+    if (res.ok) return null;
+    if (res.status === 400 || res.status === 403) return 'Google rejected that key. Copy it again from AI Studio.';
+    return `Couldn’t verify the key (HTTP ${res.status}). Try again in a moment.`;
+  } catch {
+    return 'Couldn’t reach Google to verify the key. Check your connection.';
+  }
+}
+
+function KeySetup() {
+  const [key, setKey] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const save = async () => {
+    const k = key.trim();
+    if (!k) return;
+    setChecking(true);
+    setError(null);
+    const problem = await checkKey(k);
+    setChecking(false);
+    if (problem) { setError(problem); return; }
+    useSettings.getState().set({ apiKey: k, connection: 'apikey' });
+  };
+  return (
+    <>
+      <h1>First, connect Gemini.</h1>
+      <p>The agent runs on your own Gemini API key. It’s free to get, takes a minute, and covers casual use on Google’s free tier.</p>
+      <ol className="key-steps">
+        <li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a> and sign in with Google.</li>
+        <li>Click <b>Create API key</b> and copy it.</li>
+        <li>Paste it below.</li>
+      </ol>
+      <form className="hero-input" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+        <input type="password" autoFocus value={key} onChange={(e) => { setKey(e.target.value); setError(null); }} placeholder="AIza…" aria-label="Gemini API key" autoComplete="off" spellCheck={false} />
+        <button className="btn primary" type="submit" disabled={checking || !key.trim()}>{checking ? 'Checking…' : 'Connect'}</button>
+      </form>
+      {error && <div className="err" style={{ marginTop: 10 }}>{error}</div>}
+      <div className="hero-foot">Your key is saved only in this browser and sent only to Google. Vibe has no server that sees it.</div>
+    </>
+  );
+}
+
 function EmptyHero() {
   const [text, setText] = useState('');
+  const [dismissed, setDismissed] = useState(readDismissed);
   const running = useAgent((s) => s.running);
+  useSettings((s) => s.apiKey + s.connection); // re-render when a key is added
+  const needsKey = !aiAvailable().ok;
   const go = (t: string) => { if (t.trim()) void runAgent(t); };
+  const close = () => {
+    setDismissed(true);
+    try { localStorage.setItem(HERO_DISMISSED, '1'); } catch { /* storage disabled */ }
+  };
+  if (dismissed) return null;
   return (
     <div className="empty-arrange" style={{ ['--header-w' as string]: `${HEADER_W}px` }}>
       <div className="hero-card">
-        <h1>Describe the beat in your head.</h1>
-        <p>The agent picks sounds by ear, writes the parts, arranges and mixes them — then you take it from there.</p>
-        <form className="hero-input" onSubmit={(e) => { e.preventDefault(); go(text); }}>
-          <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. sad emo trap beat with an acoustic guitar loop" aria-label="Describe a beat" disabled={running} />
-          <button className="btn primary" type="submit" disabled={running || !text.trim()}><Sparkles size={15} /> Make it</button>
-        </form>
-        <div className="suggestions">
-          {STARTERS.map((s) => <button key={s} className="suggestion" onClick={() => go(s)} disabled={running}>{s}</button>)}
-        </div>
-        <div className="hero-foot">Uses your own free Gemini API key — it stays in your browser. Prefer to start by hand? Add a track below or drag a sound from the browser.</div>
+        <button className="btn icon hero-close" onClick={close} aria-label="Close" title="Close"><X size={16} /></button>
+        {needsKey ? <KeySetup /> : (
+          <>
+            <h1>Describe the beat in your head.</h1>
+            <p>The agent picks sounds by ear, writes the parts, arranges and mixes them — then you take it from there.</p>
+            <form className="hero-input" onSubmit={(e) => { e.preventDefault(); go(text); }}>
+              <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. sad emo trap beat with an acoustic guitar loop" aria-label="Describe a beat" disabled={running} />
+              <button className="btn primary" type="submit" disabled={running || !text.trim()}><Sparkles size={15} /> Make it</button>
+            </form>
+            <div className="suggestions">
+              {STARTERS.map((st) => <button key={st} className="suggestion" onClick={() => go(st)} disabled={running}>{st}</button>)}
+            </div>
+            <div className="hero-foot">Prefer to start by hand? Close this, add a track below, or drag a sound from the browser.</div>
+          </>
+        )}
       </div>
     </div>
   );
