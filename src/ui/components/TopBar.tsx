@@ -1,0 +1,134 @@
+import { useState } from 'react';
+import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud } from 'lucide-react';
+import { useDaw, useTransport } from '../../state/store';
+import { usePersist } from '../../state/persistence';
+import { useAuth, signIn } from '../../cloud/cloud';
+import { firebaseConfigured } from '../../cloud/config';
+import { togglePlay, stop } from '../../engine/engine';
+import { exportWav, downloadBlob } from '../../engine/render';
+import { formatPosition } from '../../model/project';
+import { PITCH_CLASSES, SCALES } from '../../model/theory';
+import type { PitchClass, ScaleName } from '../../model/types';
+import { toast } from '../toast';
+
+export function Logo() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
+      <rect width="32" height="32" rx="8" fill="#262b40" />
+      <path d="M6 20c3 0 3-8 6-8s3 12 6 12 3-16 6-16 2 6 2 6" fill="none" stroke="#b69cff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Position() {
+  const pos = useTransport((s) => s.position);
+  const ts = useDaw((s) => s.project.timeSignature);
+  return <div className="pos" title="Bar . beat . sixteenth">{formatPosition({ timeSignature: ts }, pos)}</div>;
+}
+
+export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () => void; browserOpen: boolean; agentOpen: boolean; toggleBrowser: () => void; toggleAgent: () => void }) {
+  const name = useDaw((s) => s.project.name);
+  const bpm = useDaw((s) => s.project.bpm);
+  const key = useDaw((s) => s.project.key);
+  const ts = useDaw((s) => s.project.timeSignature);
+  const loop = useDaw((s) => s.project.loop.enabled);
+  const canUndo = useDaw((s) => s.past.length > 0);
+  const canRedo = useDaw((s) => s.future.length > 0);
+  const update = useDaw((s) => s.update);
+  const playing = useTransport((s) => s.playing);
+  const metronome = useTransport((s) => s.metronome);
+  const saveState = usePersist((s) => s.saveState);
+  const user = useAuth((s) => s.user);
+  const syncing = useAuth((s) => s.syncing);
+  const [bpmDraft, setBpmDraft] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const commitBpm = () => {
+    if (bpmDraft === null) return;
+    const v = Number(bpmDraft);
+    if (isFinite(v) && v >= 40 && v <= 220) update('Tempo', (d) => { d.bpm = Math.round(v * 100) / 100; });
+    setBpmDraft(null);
+  };
+
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const p = useDaw.getState().project;
+      const blob = await exportWav(p);
+      downloadBlob(blob, `${p.name.replace(/[^\w\- ]+/g, '').trim() || 'beat'}.wav`);
+      toast('Exported WAV');
+    } catch (e) {
+      toast(`Export failed: ${(e as Error).message}`, 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <header className="topbar">
+      <button className="btn icon" title="Toggle browser" onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
+      <div className="brand"><Logo /> Vibe</div>
+      <input
+        className="project-name"
+        value={name}
+        aria-label="Project name"
+        onChange={(e) => update('Rename project', (d) => { d.name = e.target.value; }, { coalesce: true })}
+      />
+      <span className="save-state">{saveState === 'saved' ? (user ? (syncing ? 'Syncing…' : 'Saved') : 'Saved locally') : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Edited'}</span>
+      <button className="btn icon" title="Projects" onClick={props.onOpenProjects}><FolderOpen size={16} /></button>
+      <button className="btn icon" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={() => useDaw.getState().undo()}><Undo2 size={16} /></button>
+      <button className="btn icon" title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => useDaw.getState().redo()}><Redo2 size={16} /></button>
+
+      <div className="transport">
+        <button className="btn icon" title="Back to start (Home)" onClick={() => stop(true)}><SkipBack size={16} /></button>
+        <button className={`play ${playing ? 'playing' : ''}`} title="Play / pause (Space)" onClick={() => void togglePlay()}>
+          {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+        </button>
+        <button className={`btn icon ${loop ? 'on' : ''}`} title="Loop (L)" onClick={() => update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; })}><Repeat size={16} /></button>
+        <button className={`btn icon ${metronome ? 'on' : ''}`} title="Metronome" onClick={() => useTransport.getState().setMetronome(!metronome)}><Metronome size={16} /></button>
+      </div>
+
+      <div className="lcd">
+        <Position />
+        <div title="Tempo">
+          <input
+            aria-label="Tempo"
+            value={bpmDraft ?? String(bpm)}
+            onChange={(e) => setBpmDraft(e.target.value)}
+            onBlur={commitBpm}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setBpmDraft(null); }}
+          />
+          <span className="unit">BPM</span>
+        </div>
+        <div title="Key">
+          <select aria-label="Key root" value={key.root} onChange={(e) => update('Key', (d) => { d.key.root = e.target.value as PitchClass; })}>
+            {PITCH_CLASSES.map((pc) => <option key={pc} value={pc}>{pc}</option>)}
+          </select>
+          &nbsp;
+          <select aria-label="Scale" value={key.scale} onChange={(e) => update('Scale', (d) => { d.key.scale = e.target.value as ScaleName; })}>
+            {Object.keys(SCALES).map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+          </select>
+        </div>
+        <div className="sig" title="Time signature">
+          <select aria-label="Time signature" value={ts.join('/')} onChange={(e) => update('Time signature', (d) => { d.timeSignature = e.target.value.split('/').map(Number) as [number, number]; })}>
+            {['4/4', '3/4', '6/8', '5/4', '7/8'].map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="top-right">
+        <button className="btn" onClick={() => void doExport()} disabled={exporting} title="Bounce the song to a WAV file"><Download size={15} /> {exporting ? 'Bouncing…' : 'Export'}</button>
+        {firebaseConfigured && (user ? (
+          <span className="avatar" title={`${user.name ?? user.email} — synced to the cloud`}>
+            {user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : (user.name ?? '?')[0]}
+          </span>
+        ) : (
+          <button className="btn" onClick={() => signIn().catch((e) => toast(e.message, 'error'))} title="Sign in to sync projects and samples"><LogIn size={15} /> Sign in</button>
+        ))}
+        {user && <Cloud size={14} color="var(--faint)" aria-label="Cloud sync on" />}
+        <button className="btn icon" title="Settings" onClick={props.onOpenSettings}><Settings size={16} /></button>
+        <button className="btn icon" title="Toggle agent (Ctrl+L)" onClick={props.toggleAgent} aria-pressed={props.agentOpen}><PanelRight size={16} /></button>
+      </div>
+    </header>
+  );
+}
