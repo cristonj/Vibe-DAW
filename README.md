@@ -24,7 +24,9 @@ cp .env.example .env.local   # optional: set VITE_GEMINI_API_KEY for local dev
 npm run dev                  # http://localhost:5173
 ```
 
-No key in the env? Open **Settings** in the app and paste a Gemini API key from [AI Studio](https://aistudio.google.com/apikey). It's stored only in your browser.
+No key in the env? The first time you message the agent it asks for a Gemini API key from [AI Studio](https://aistudio.google.com/apikey) (free tier available). The key is stored only in your browser and sent only to Google.
+
+By default every build is **bring-your-own-key**, so a public deployment costs the host nothing for AI. Set `VITE_HOSTED_AI=true` to instead route Gemini through Firebase AI Logic on the host's project.
 
 Everything works offline except AI features and the streamed multisampled instruments (piano, guitars, strings, flute…), which download on first use. Projects autosave to IndexedDB.
 
@@ -46,7 +48,7 @@ Pick the model and thinking level in Settings or from the composer.
 
 ## Production setup (Firebase + Netlify)
 
-In production the browser never holds a Gemini key: chat and listening go through **Firebase AI Logic**, and **App Check** keeps other sites from spending your quota.
+Firebase provides sign-in and cloud sync. If you opt into hosted AI (`VITE_HOSTED_AI=true`), chat and listening go through **Firebase AI Logic** on your project, and **App Check** keeps other sites from spending your quota.
 
 ### 1. Firebase project
 

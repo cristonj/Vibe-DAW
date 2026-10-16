@@ -13,4 +13,12 @@ export const firebaseConfig = {
 
 export const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
 
+/**
+ * Hosted AI (Gemini via Firebase AI Logic, billed to the project owner) is opt-in.
+ * Public builds leave it off so every user brings their own Gemini key.
+ */
+
+
 export const firebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+
+export const hostedAiEnabled = firebaseConfigured && import.meta.env.VITE_HOSTED_AI === 'true';
