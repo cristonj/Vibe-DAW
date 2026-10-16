@@ -108,8 +108,8 @@ button.onclick = async () => {
       write(`Checking ${preset}…`);
       const p = fixture(preset);
       const expected = await reference(p);
-      const direct = await renderProject(p, { endBeat: 8, tail: 1, stems: false });
-      const stems = await renderProject(p, { endBeat: 8, tail: 1 });
+      const direct = await renderProject(p, { endBeat: 8, tail: 1, stems: false, sampleRate: 44100 });
+      const stems = await renderProject(p, { endBeat: 8, tail: 1, sampleRate: 44100 });
       const e1 = error(expected, direct), e2 = error(expected, stems);
       const stats = mixStats(direct);
       write(`Pitch export: ${pitches(direct)}; reference: ${pitches(expected)}`);
@@ -128,7 +128,7 @@ button.onclick = async () => {
     const p = fixture('epiano');
     p.tracks[0].effects = [{ id: 'delay', type: 'delay', enabled: true, params: { time: '8n', feedback: 0.4, wet: 0.5, pingPong: 0 } }];
     const a = await reference(p);
-    const b = await renderProject(p, { endBeat: 8, tail: 1 });
+    const b = await renderProject(p, { endBeat: 8, tail: 1, sampleRate: 44100 });
     write(`${Math.abs(mixStats(a).rmsDb - mixStats(b).rmsDb) < 0.5 ? 'PASS' : 'FAIL'} delay effect level parity; phase-sensitive waveform error: ${error(a, b).toFixed(6)}`);
     p.tracks[0].effects = [{ id: 'r', type: 'reverb', enabled: true, params: { decay: 2.5, preDelay: 0.02, wet: 0.4 } }];
     const r1 = await renderProject(p, { endBeat: 8, tail: 3 });

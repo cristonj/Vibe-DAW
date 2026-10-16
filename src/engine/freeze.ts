@@ -22,6 +22,15 @@ let sampleRate = 48000;
 let generation = 0;
 let queued = new Map<string, string>();
 
+/**
+ * The realtime context's sample rate. Offline renders default to it: a bounce at any
+ * other rate resamples samples and frozen tracks differently from playback, which
+ * audibly changes the top end of drums and synths.
+ */
+export function playbackSampleRate(): number {
+  return sampleRate;
+}
+
 export function configureFreeze(rate: number, changed: () => void) {
   if (sampleRate !== rate) { cache.clear(); failed.clear(); queued.clear(); generation++; }
   sampleRate = rate;

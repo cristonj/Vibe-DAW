@@ -65,7 +65,6 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
     endBeat,
     onlyTracks: req.trackIds?.length ? req.trackIds : null,
     tail: 0,
-    sampleRate: 44100,
   });
   req.signal?.throwIfAborted();
   const audio = prepareListeningAudio(pcm, listeningQuality, listeningChannels);

@@ -4,10 +4,10 @@ import { beatsToSeconds, projectLength } from '../model/project';
 import { EngineGraph, preloadProject } from './graph';
 import type { InstrumentAssets } from './instruments';
 import { contextLock } from './lock';
-import { encodeWav, type PcmData } from './wav';
+import { encodeWav, resample, type PcmData } from './wav';
 import type { ExportFormat } from './exportFormats';
 import { activeSpan, audibleTracks, effectTail, trackTail } from './renderPlan';
-import { frozenFor, type Frozen } from './freeze';
+import { frozenFor, playbackSampleRate, type Frozen } from './freeze';
 
 // Offline bounce. Used for exports and — more importantly — for the agent's ears:
 // it renders exactly what the user would hear and hands it to Gemini.
@@ -27,6 +27,7 @@ export interface RenderOptions {
   onlyTracks?: string[] | null;
   /** Extra seconds after the end for reverb/release tails. */
   tail?: number;
+  /** Defaults to the playback context's rate, so the bounce matches what plays. */
   sampleRate?: number;
   /** 0..1 as rendering advances. */
   onProgress?: (fraction: number) => void;
@@ -40,6 +41,10 @@ export interface RenderOptions {
 
 const WINDOW_SEC = 1;
 const AHEAD_SEC = 0.25;
+// Compressors and limiters in the realtime graph have been idling on silence before
+// playback starts. Offline they would start cold and clamp the first hits differently,
+// so every pass renders this much silence first and drops it.
+const PREROLL_SEC = 0.5;
 
 interface OfflineInternals {
   _currentTime: number;
@@ -68,8 +73,10 @@ interface PassSpec {
  */
 async function renderPass(spec: PassSpec): Promise<Float32Array[]> {
   const { project: p, sampleRate } = spec;
-  const duration = beatsToSeconds(p, spec.endBeat - spec.startBeat) + spec.tail;
-  const frames = Math.max(128, Math.ceil(duration * sampleRate));
+  const prerollFrames = Math.round(PREROLL_SEC * sampleRate / 128) * 128;
+  const preroll = prerollFrames / sampleRate;
+  const frames = prerollFrames + Math.max(128, Math.ceil((beatsToSeconds(p, spec.endBeat - spec.startBeat) + spec.tail) * sampleRate));
+  const duration = frames / sampleRate;
   const nativeCtx = new OfflineAudioContext(2, frames, sampleRate);
   let failure: unknown = null;
   let offline: Tone.OfflineContext | undefined;
@@ -93,10 +100,10 @@ async function renderPass(spec: PassSpec): Promise<Float32Array[]> {
         const src = new Tone.ToneBufferSource({ url: buf, context: ctx });
         inputSource = src;
         src.connect(g.masterInput);
-        src.start(0);
+        src.start(preroll);
       } else {
-        ctx.transport.start(0, beatsToSeconds(p, spec.startBeat));
-        ctx.transport.stop(beatsToSeconds(p, spec.endBeat - spec.startBeat) + spec.tail);
+        ctx.transport.start(preroll, beatsToSeconds(p, spec.startBeat));
+        ctx.transport.stop(duration);
       }
       const clock = ctx as unknown as OfflineInternals;
       const block = 128 / sampleRate;
@@ -120,7 +127,7 @@ async function renderPass(spec: PassSpec): Promise<Float32Array[]> {
           } catch (e) {
             failure = e;
           }
-          try { spec.onProgress?.(at / duration); }
+          try { spec.onProgress?.(Math.max(0, at - preroll) / (duration - preroll)); }
           catch (e) { failure ??= e; }
           finally { void nativeCtx.resume().catch((e) => { failure ??= e; }); }
         }, () => { /* suspend time already passed */ });
@@ -137,7 +144,7 @@ async function renderPass(spec: PassSpec): Promise<Float32Array[]> {
     const rendered = await nativeCtx.startRendering();
     if (failure) throw failure;
     spec.onProgress?.(1);
-    return [rendered.getChannelData(0), rendered.getChannelData(1)];
+    return [rendered.getChannelData(0).subarray(prerollFrames), rendered.getChannelData(1).subarray(prerollFrames)];
   } finally { graph.dispose(); inputSource?.dispose(); offline?.dispose(); }
 }
 
@@ -153,7 +160,7 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
   const end = Math.max(start + 0.25, opts.endBeat ?? projectLength(project));
   const audible = audibleTracks(project.tracks, opts.onlyTracks);
   const tail = opts.tail ?? Math.max(1.5, ...audible.map((t) => trackTail(t, project.bpm))) + (opts.master === false ? 0 : effectTail(project.master.effects, project.bpm));
-  const sampleRate = opts.sampleRate ?? 44100;
+  const sampleRate = opts.sampleRate ?? Math.min(96000, playbackSampleRate());
   if (![start, end, tail, sampleRate, project.bpm].every(Number.isFinite) || project.bpm <= 0 || tail < 0 || sampleRate < 8000 || sampleRate > 96000 || !Number.isInteger(sampleRate)) throw new RangeError('Invalid render timing or sample rate.');
   // Render a loop-free copy: bounces always run straight through.
   const p: Project = { ...project, loop: { ...project.loop, enabled: false }, tracks: project.tracks.map((t) => ({ ...t, clips: t.clips.filter((c) => c.start < end).map((c) => c.start + c.length > end ? { ...c, length: end - c.start } : c) })) };
@@ -225,8 +232,16 @@ function encodeMp3(pcm: PcmData, kbps: number, onProgress?: (f: number) => void)
 /** Bounce and encode. Progress covers rendering (first 80%) then encoding. */
 export async function exportAudio(project: Project, format: ExportFormat, onProgress?: (fraction: number, stage: 'render' | 'encode') => void): Promise<Blob> {
   const renderShare = format === 'mp3' ? 0.8 : 0.95;
-  const pcm = await renderProject(project, { onProgress: (f) => onProgress?.(f * renderShare, 'render') });
-  if (format === 'mp3') return encodeMp3(pcm, 320, (f) => onProgress?.(renderShare + f * (1 - renderShare), 'encode'));
+  let pcm = await renderProject(project, { onProgress: (f) => onProgress?.(f * renderShare, 'render') });
+  if (format === 'mp3') {
+    // MP3 tops out at 48 kHz; high-rate devices get a band-limited downsample.
+    if (pcm.sampleRate > 48000) {
+      const { sampleRate: from, channels } = pcm;
+      const to = from % 44100 === 0 ? 44100 : 48000;
+      pcm = { sampleRate: to, channels: channels.map((c) => resample(c, from, to)) };
+    }
+    return encodeMp3(pcm, 320, (f) => onProgress?.(renderShare + f * (1 - renderShare), 'encode'));
+  }
   const blob = new Blob([encodeWav(pcm, format === 'wav24' ? 24 : 16)], { type: 'audio/wav' });
   onProgress?.(1, 'encode');
   return blob;

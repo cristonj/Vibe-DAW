@@ -47,7 +47,7 @@ export async function renderSamplePreview(project: Project, sampleId: string, ma
   }
   const maxBeats = secondsToBeats(project, maxSeconds);
   const stop = Math.min(end, start + maxBeats);
-  const pcm = await renderProject(preview, { startBeat: start, endBeat: stop, onlyTracks: [selected.id], tail: Math.min(0.5, Math.max(0, maxSeconds - (stop - start) * 60 / project.bpm)), sampleRate: 44100 });
+  const pcm = await renderProject(preview, { startBeat: start, endBeat: stop, onlyTracks: [selected.id], tail: Math.min(0.5, Math.max(0, maxSeconds - (stop - start) * 60 / project.bpm)) });
   const context = inProject ? `As played on ${selected.name}: original pitch, velocity, gain, panning, clip settings, track FX and master bus.` : 'Library preview at native pitch, -4 dB, through the project master bus.';
   // Persist only a small fingerprint with the description, never an audio payload.
   const duckSources = new Set(selected.effects.filter((e) => e.type === 'duck' && e.enabled).map((e) => String(e.params.source)));

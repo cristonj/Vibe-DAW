@@ -164,6 +164,13 @@ describe('background freezing', () => {
     expect(freeze.frozenFor(p, p.tracks[0])?.buffer.sampleRate).toBe(44100);
   });
 
+  it('reports the playback rate that exports should render at', () => {
+    freeze.configureFreeze(44100, changed);
+    expect(freeze.playbackSampleRate()).toBe(44100);
+    freeze.configureFreeze(48000, changed);
+    expect(freeze.playbackSampleRate()).toBe(48000);
+  });
+
   it('isolates failures and retries only after the failed sound changes', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const p = fixture([8, 4]);
