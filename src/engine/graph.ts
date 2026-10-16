@@ -4,6 +4,7 @@ import { beatsToSeconds } from '../model/project';
 import { getLoadedBuffer, getSampleMeta, loadBuffer } from '../samples/library';
 import { reverseBuffer } from '../samples/synth';
 import { stretchedBuffer } from './stretch';
+import { frozenFor, type Frozen } from './freeze';
 import { createEffect, structuralParams, type EffectUnit } from './effects';
 import { createInstrument, prepareInstrument, type Instrument, type InstrumentAssets } from './instruments';
 
@@ -29,6 +30,8 @@ interface Strip {
   audioVoices: Set<{ stop(time: number): void }>;
   /** Silent placeholder that only fires sidechain-duck triggers (offline stems). */
   ghost: boolean;
+  /** Live only: pre-rendered audio of this track, played instead of its instrument + FX. */
+  frozen: Frozen | null;
 }
 
 export interface GraphOptions {
@@ -192,7 +195,7 @@ export class EngineGraph {
         channel.connect(this.masterIn);
         const meter = this.opts.live ? new Tone.Meter({ smoothing: 0.75 }) : null;
         if (meter) channel.connect(meter);
-        s = { id: track.id, track, instKey: '', instrument: null, input, fx: [], channel, meter, events: [], scheduledClips: null, scheduledLanes: undefined, chokes: new Map(), audioVoices: new Set(), ghost };
+        s = { id: track.id, track, instKey: '', instrument: null, input, fx: [], channel, meter, events: [], scheduledClips: null, scheduledLanes: undefined, chokes: new Map(), audioVoices: new Set(), ghost, frozen: null };
         this.strips.set(track.id, s);
       }
       s.ghost = ghost;
@@ -218,12 +221,22 @@ export class EngineGraph {
         s.instrument?.setParams(track.instrument.params);
       }
       s.fx = await this.syncFx(s.fx, track.effects, s.input, s.channel);
+      // Frozen tracks bypass their live instrument + FX (the frozen audio already has them).
+      const frozen = this.opts.live ? frozenFor(p, track) : null;
+      const tail: Tone.ToneAudioNode = s.fx.length ? s.fx[s.fx.length - 1].unit.output : s.input;
+      if (frozen) { try { tail.disconnect(s.channel); } catch { /* not connected */ } }
+      else tail.connect(s.channel);
+      const frozenChanged = frozen !== s.frozen;
+      s.frozen = frozen;
       s.channel.volume.rampTo(track.volumeDb, 0.02);
       s.channel.pan.rampTo(track.pan, 0.02);
       s.channel.mute = !audibleOf(track);
-      const needsSchedule = globalChanged || s.scheduledClips !== track.clips || s.scheduledLanes !== track.drumLanes || prev === null;
+      const needsSchedule = frozenChanged || globalChanged || s.scheduledClips !== track.clips || s.scheduledLanes !== track.drumLanes || prev === null;
       s.track = track;
-      if (needsSchedule) await this.scheduleTrack(s);
+      if (needsSchedule) {
+        await this.scheduleTrack(s);
+        if (frozenChanged && this.transport.state === 'started') this.rechase(s);
+      }
     }
     this.syncMetronome();
   }
@@ -304,6 +317,16 @@ export class EngineGraph {
     s.scheduledLanes = s.track.drumLanes;
     const p = this.project!;
     const track = s.track;
+    if (s.frozen) {
+      const f = s.frozen;
+      s.events.push(this.once((time) => this.startFrozenVoice(s, time, 0), this.ticks(f.startBeat)));
+      // Keep sending sidechain triggers to live tracks that duck from this one.
+      const wasGhost = s.ghost;
+      s.ghost = true;
+      for (const clip of track.clips) if (!clip.muted && clip.type === 'midi') this.scheduleMidi(s, clip, p);
+      s.ghost = wasGhost;
+      return;
+    }
     for (const clip of track.clips) {
       if (clip.muted) continue;
       if (clip.type === 'midi') this.scheduleMidi(s, clip, p);
@@ -451,12 +474,51 @@ export class EngineGraph {
     node.onended = cleanup;
   }
 
+  private startFrozenVoice(s: Strip, time: number, elapsedBeats: number) {
+    const f = s.frozen;
+    if (!f) return;
+    const offset = beatsToSeconds(this.project!, elapsedBeats);
+    if (offset >= f.buffer.duration - 0.01) return;
+    const context = this.context;
+    const gain = new Tone.Gain({ gain: 1, context }).connect(s.channel);
+    const node = new Tone.ToneBufferSource({ context, url: f.buffer });
+    node.connect(gain);
+    node.start(time, offset);
+    const voice = {
+      stop: (t: number) => {
+        try {
+          gain.gain.cancelScheduledValues(t);
+          gain.gain.setValueAtTime(gain.gain.getValueAtTime(t), t);
+          gain.gain.linearRampToValueAtTime(0, t + 0.01);
+          node.stop(t + 0.015);
+        } catch { /* stopped */ }
+      },
+    };
+    s.audioVoices.add(voice);
+    node.onended = () => { s.audioVoices.delete(voice); if (!context.isOffline) { node.dispose(); gain.dispose(); } };
+  }
+
+  /** A track switched between live and frozen mid-playback: pick it up at the playhead. */
+  private rechase(s: Strip) {
+    const now = this.context.now() + 0.05;
+    for (const v of s.audioVoices) v.stop(now);
+    s.audioVoices.clear();
+    s.instrument?.releaseAll(now);
+    const pos = (this.transport.getSecondsAtTime(now) * this.project!.bpm) / 60;
+    if (s.frozen && pos > s.frozen.startBeat) this.startFrozenVoice(s, now, pos - s.frozen.startBeat);
+    if (!s.frozen) for (const c of s.track.clips) if (c.type === 'audio' && !c.muted && c.start < pos && c.start + c.length > pos) this.startAudioVoice(s, c, now, pos - c.start);
+  }
+
   /** On play/loop, start any audio clip whose start we've already passed. */
   private chaseAudio(time: number, offsetSec: number) {
     const p = this.project;
     if (!p) return;
     const pos = (offsetSec * p.bpm) / 60;
     for (const s of this.strips.values()) {
+      if (s.frozen) {
+        if (pos > s.frozen.startBeat + 1e-4) this.startFrozenVoice(s, time, pos - s.frozen.startBeat);
+        continue;
+      }
       for (const c of s.track.clips) {
         if (c.type !== 'audio' || c.muted) continue;
         if (c.start < pos - 1e-4 && c.start + c.length > pos + 1e-3) this.startAudioVoice(s, c, time, pos - c.start);

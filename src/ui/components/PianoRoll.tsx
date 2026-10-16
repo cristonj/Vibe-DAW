@@ -7,6 +7,7 @@ import { isInKey, midiToNote } from '../../model/theory';
 import { transformNotes } from '../../model/edit';
 import { previewNote } from '../../engine/api';
 import { copyNotes, getCopiedNotes } from '../clipboard';
+import { matches, tip } from '../../state/keymap';
 import { openInlineAI } from './InlineAI';
 
 const ROW = 14;
@@ -193,12 +194,12 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
     const handled = () => { e.preventDefault(); e.stopPropagation(); };
-    if (e.key === 'Delete' || e.key === 'Backspace') { handled(); deleteNotes(selected); }
+    if (matches(e, 'delete')) { handled(); deleteNotes(selected); }
     else if (mod && k === 'a') { handled(); setSelected(clip.notes.map((n) => n.id)); }
-    else if (mod && k === 'c') { handled(); copyNotes(selectedNotes()); }
-    else if (mod && k === 'x') { handled(); copyNotes(selectedNotes()); deleteNotes(selected); }
-    else if (mod && k === 'v') { handled(); paste(); }
-    else if (mod && k === 'd') {
+    else if (matches(e, 'copy')) { handled(); copyNotes(selectedNotes()); }
+    else if (matches(e, 'cut')) { handled(); copyNotes(selectedNotes()); deleteNotes(selected); }
+    else if (matches(e, 'paste')) { handled(); paste(); }
+    else if (matches(e, 'duplicate')) {
       handled();
       const sel = selectedNotes();
       if (!sel.length) return;
@@ -216,14 +217,14 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
       handled();
       const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? bpb : step);
       editNotes('Nudge notes', (ns) => { for (const x of ns) if (selected.includes(x.id)) x.start = Math.max(0, Math.min(clip.length - 0.01, x.start + d)); });
-    } else if (!mod && k === 'q') {
+    } else if (matches(e, 'quantize')) {
       handled();
       const ids = selected.length ? selected : clip.notes.map((n) => n.id);
       editNotes('Quantize', (ns) => {
         for (const x of ns) if (ids.includes(x.id)) { x.start = Math.round(x.start / step) * step; x.duration = Math.max(step / 2, Math.round(x.duration / step) * step || step); }
       }, false);
-    } else if (!mod && k === 'b') { handled(); setTool('draw'); }
-    else if (!mod && k === 'v') { handled(); setTool('select'); }
+    } else if (matches(e, 'drawTool')) { handled(); setTool('draw'); }
+    else if (matches(e, 'selectTool')) { handled(); setTool('select'); }
   };
 
   const rows = useMemo(() => Array.from({ length: ROWS }, (_, i) => HIGH - i), []);
@@ -244,8 +245,8 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
           </select>
         </label>
         <div className="group seg tools" role="radiogroup" aria-label="Tool">
-          <button className={tool === 'draw' ? 'on' : ''} onClick={() => setTool('draw')} role="radio" aria-checked={tool === 'draw'} title="Draw: click to add notes, drag to set length (B)"><Pencil size={13} /> Draw</button>
-          <button className={tool === 'select' ? 'on' : ''} onClick={() => setTool('select')} role="radio" aria-checked={tool === 'select'} title="Select: drag a box to select notes (V)"><MousePointer2 size={13} /> Select</button>
+          <button className={tool === 'draw' ? 'on' : ''} onClick={() => setTool('draw')} role="radio" aria-checked={tool === 'draw'} title={tip('Draw: click to add notes, drag to set length', 'drawTool')}><Pencil size={13} /> Draw</button>
+          <button className={tool === 'select' ? 'on' : ''} onClick={() => setTool('select')} role="radio" aria-checked={tool === 'select'} title={tip('Select: drag a box to select notes', 'selectTool')}><MousePointer2 size={13} /> Select</button>
         </div>
         <div className="group">
           <button className="btn" onClick={() => { const ids = selected.length ? selected : clip.notes.map((n) => n.id); editNotes('Quantize', (ns) => { for (const x of ns) if (ids.includes(x.id)) { x.start = Math.round(x.start / step) * step; x.duration = Math.max(step / 2, Math.round(x.duration / step) * step || step); } }, false); }} title={`Snap ${sel ? 'selected' : 'all'} notes to the grid (Q)`}>Quantize</button>

@@ -10,6 +10,7 @@ import { audioClipRate, repeatNotes } from '../../model/edit';
 import { usePeaks } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
 import { aiAvailable, useSettings } from '../../state/settings';
+import { tip, useKeymap } from '../../state/keymap';
 import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, splitAtPlayhead } from '../actions';
 
 const HEADER_W = 200;
@@ -291,6 +292,7 @@ function EmptyHero() {
 // ---------------------------------------------------------------- main
 
 export function Arrangement() {
+  useKeymap((k) => k.overrides);
   const project = useDaw((s) => s.project);
   const zoom = useDaw((s) => s.zoom);
   const snap = useDaw((s) => s.snap);
@@ -453,12 +455,12 @@ export function Arrangement() {
       <div className="arrange-tools">
         <AddTrackMenu />
         <div className="tool-divider" />
-        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title="New empty pattern on the selected track, at the playhead"><Plus size={14} /> New clip</button>
-        <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title="Copy selected clips (Ctrl+C)"><Copy size={14} /></button>
-        <button className="btn icon" onClick={() => pasteClips()} title="Paste clips at the playhead (Ctrl+V)"><ClipboardPaste size={14} /></button>
-        <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title="Duplicate selected clips (Ctrl+D)"><CopyPlus size={14} /></button>
-        <button className="btn icon" onClick={() => splitAtPlayhead()} title="Split clips at the playhead (Ctrl+E)"><Scissors size={14} /></button>
-        <button className="btn icon danger" onClick={() => deleteSelectedClips()} disabled={!selection.clipIds.length} title="Delete selected clips (Delete)"><Trash size={14} /></button>
+        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')}><Plus size={14} /> New clip</button>
+        <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title={tip('Copy selected clips', 'copy')}><Copy size={14} /></button>
+        <button className="btn icon" onClick={() => pasteClips()} title={tip('Paste clips at the playhead', 'paste')}><ClipboardPaste size={14} /></button>
+        <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title={tip('Duplicate selected clips', 'duplicate')}><CopyPlus size={14} /></button>
+        <button className="btn icon" onClick={() => splitAtPlayhead()} title={tip('Split clips at the playhead', 'split')}><Scissors size={14} /></button>
+        <button className="btn icon danger" onClick={() => deleteSelectedClips()} disabled={!selection.clipIds.length} title={tip('Delete selected clips', 'delete')}><Trash size={14} /></button>
         <div className="tool-divider" />
         <label title="Clips snap to this grid when you move or resize them">Snap
           <select value={snap} onChange={(e) => setSnap(Number(e.target.value))} aria-label="Snap">
@@ -466,8 +468,8 @@ export function Arrangement() {
           </select>
         </label>
         <label title="Scroll the timeline to keep the playhead in view"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow playhead</label>
-        <button className="btn icon" title="Zoom out (Ctrl+scroll)" onClick={() => setZoom(zoom / 1.3)}><ZoomOut size={15} /></button>
-        <button className="btn icon" title="Zoom in (Ctrl+scroll)" onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
+        <button className="btn icon" title={tip('Zoom out', 'zoomOut')} onClick={() => setZoom(zoom / 1.3)}><ZoomOut size={15} /></button>
+        <button className="btn icon" title={tip('Zoom in', 'zoomIn')} onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
         <div style={{ flex: 1 }} />
         {hasPending && (
           <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed and remove the purple outlines">

@@ -1,18 +1,6 @@
 import { useEffect } from 'react';
+import { ACTIONS, bindings, useKeymap, type ActionId } from '../../state/keymap';
 
-const SHORTCUTS: Array<[string, string]> = [
-  ['Space', 'Play / pause'],
-  ['Home', 'Stop and go back to the start'],
-  ['L', 'Loop on/off (Shift-drag the ruler to set the loop)'],
-  ['Ctrl+Z', 'Undo'],
-  ['Ctrl+Shift+Z', 'Redo'],
-  ['Ctrl+D', 'Duplicate selected clips or notes'],
-  ['Delete', 'Delete selected clips or notes'],
-  ['Ctrl+K', 'Ask the agent to edit the selected clips'],
-  ['Ctrl+L', 'Jump to the agent chat'],
-  ['Ctrl+scroll', 'Zoom the timeline'],
-  ['Alt+drag', 'Copy a clip'],
-];
 
 const HOW_TO: Array<[string, string]> = [
   ['Make a beat with AI', 'Type what you want in the Producer panel on the right, e.g. “sad trap beat with guitar”. Everything it adds is outlined in purple until you click Keep.'],
@@ -26,6 +14,7 @@ const HOW_TO: Array<[string, string]> = [
 ];
 
 export function HelpModal({ onClose }: { onClose: () => void }) {
+  useKeymap((k) => k.overrides);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', k);
@@ -41,10 +30,11 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
             <div key={t}><b>{t}</b><span>{d}</span></div>
           ))}
         </div>
-        <h3>Keyboard shortcuts</h3>
+        <h3>Keyboard shortcuts <span style={{ fontWeight: 400, color: 'var(--faint)', fontSize: 12 }}>· change them in Settings → Keyboard</span></h3>
         <table className="shortcuts">
           <tbody>
-            {SHORTCUTS.map(([k, d]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{d}</td></tr>)}
+            {(Object.keys(ACTIONS) as ActionId[]).map((id) => <tr key={id}><td>{bindings(id).map((k) => <kbd key={k} style={{ marginRight: 4 }}>{k}</kbd>)}</td><td>{ACTIONS[id].label}</td></tr>)}
+            <tr><td><kbd>Alt</kbd>+drag</td><td>Copy a clip or notes</td></tr>
           </tbody>
         </table>
         <div className="modal-actions"><button className="btn primary" onClick={onClose}>Got it</button></div>

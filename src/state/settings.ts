@@ -21,6 +21,8 @@ interface SettingsState {
   thinking: Thinking;
   /** Let the agent bounce and listen to its own work without asking. */
   autoListen: boolean;
+  /** Live output buffer: 'stable' (bigger, no crackles) or 'low' (snappier). */
+  latency: 'stable' | 'low';
   set: (patch: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -43,6 +45,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   apiKey: saved.apiKey ?? '',
   thinking: saved.thinking ?? 'MEDIUM',
   autoListen: saved.autoListen ?? true,
+  latency: saved.latency === 'low' ? 'low' : 'stable',
   set: (patch) => {
     set(patch);
     const { set: _s, ...rest } = { ...get() };
