@@ -23,12 +23,12 @@ function Strip({ track, selected }: { track: Track; selected: boolean }) {
   return (
     <div className={`strip ${selected ? 'selected' : ''}`} style={{ ['--c' as string]: track.color }} onPointerDown={() => select({ trackId: track.id })}>
       <div className="sname" title={track.name}>{track.name}</div>
-      <button className="fx-count btn" style={{ height: 20, padding: '0 6px' }} onClick={() => { select({ trackId: track.id }); setBottom('track'); }}>
-        {track.effects.length ? `${track.effects.length} fx` : 'no fx'}
+      <button className="fx-count btn" style={{ height: 20, padding: '0 6px' }} title="Open this track's instrument and effects" onClick={() => { select({ trackId: track.id }); setBottom('track'); }}>
+        {track.effects.length ? `FX · ${track.effects.length}` : '+ FX'}
       </button>
-      <input className="pan" type="range" min={-1} max={1} step={0.01} value={track.pan} onChange={(e) => set('Pan', (t) => { t.pan = Number(e.target.value); }, true)} onDoubleClick={() => set('Pan', (t) => { t.pan = 0; })} aria-label={`${track.name} pan`} title={`Pan ${Math.round(track.pan * 100)}`} />
+      <input className="pan" type="range" min={-1} max={1} step={0.01} value={track.pan} onChange={(e) => set('Pan', (t) => { t.pan = Number(e.target.value); }, true)} onDoubleClick={() => set('Pan', (t) => { t.pan = 0; })} aria-label={`${track.name} pan`} title={`Pan ${track.pan === 0 ? 'center' : `${Math.round(Math.abs(track.pan) * 100)}% ${track.pan < 0 ? 'left' : 'right'}`} · double-click to center`} />
       <div className="fader-wrap">
-        <input className="fader" type="range" min={-60} max={6} step={0.5} value={track.volumeDb} onChange={(e) => set('Volume', (t) => { t.volumeDb = Number(e.target.value); }, true)} onDoubleClick={() => set('Volume', (t) => { t.volumeDb = 0; })} aria-label={`${track.name} volume`} />
+        <input className="fader" type="range" min={-60} max={6} step={0.5} value={track.volumeDb} onChange={(e) => set('Volume', (t) => { t.volumeDb = Number(e.target.value); }, true)} onDoubleClick={() => set('Volume', (t) => { t.volumeDb = 0; })} aria-label={`${track.name} volume`} title="Volume · double-click to reset to 0 dB" />
         <Meter read={() => getTrackLevel(track.id)} />
       </div>
       <span className="db">{track.volumeDb > 0 ? '+' : ''}{track.volumeDb.toFixed(1)} dB</span>

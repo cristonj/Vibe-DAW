@@ -27,6 +27,8 @@ interface Strip {
   scheduledLanes: DrumLane[] | undefined;
   chokes: Map<number, { src: Tone.ToneBufferSource; gain: Tone.Gain }>;
   audioVoices: Set<{ stop(time: number): void }>;
+  /** Silent placeholder that only fires sidechain-duck triggers (offline stems). */
+  ghost: boolean;
 }
 
 export interface GraphOptions {
@@ -34,6 +36,8 @@ export interface GraphOptions {
   live: boolean;
   /** If set, only these tracks are audible. */
   onlyTracks?: string[] | null;
+  /** Offline stems: skip the master bus (it's applied once, after stems are summed). */
+  bypassMaster?: boolean;
 }
 
 const reversedCache = new WeakMap<AudioBuffer, AudioBuffer>();
@@ -109,14 +113,18 @@ export class EngineGraph {
     this.masterChannel = new Tone.Channel({ volume: 0, channelCount: 2 });
     this.masterMeter = opts.live ? new Tone.Meter({ smoothing: 0.8, channelCount: 2 }) : null;
     this.analyser = opts.live ? new Tone.Analyser('fft', 256) : null;
-    this.masterIn.connect(this.masterChannel);
     // Final safety: transparent below -2 dBFS, soft-saturates above, never exceeds 0 dBFS.
     this.safety = new Tone.WaveShaper(safetyCurve(), 4096);
     this.safety.oversample = '2x';
     this.safetyPre = new Tone.Gain(0.5);
-    this.masterChannel.connect(this.safetyPre);
-    this.safetyPre.connect(this.safety);
-    this.safety.connect(Tone.getDestination());
+    if (opts.bypassMaster) {
+      this.masterIn.connect(Tone.getDestination());
+    } else {
+      this.masterIn.connect(this.masterChannel);
+      this.masterChannel.connect(this.safetyPre);
+      this.safetyPre.connect(this.safety);
+      this.safety.connect(Tone.getDestination());
+    }
     if (this.masterMeter) this.masterChannel.connect(this.masterMeter);
     if (this.analyser) this.masterChannel.connect(this.analyser);
 
@@ -129,6 +137,11 @@ export class EngineGraph {
     on('loopEnd', ((time: number) => this.stopVoices(time)) as never);
     on('stop', ((time: number) => this.stopVoices(time, true)) as never);
     on('pause', ((time: number) => this.stopVoices(time, true)) as never);
+  }
+
+  /** Where a pre-mixed signal can enter the master bus (used by the stem renderer). */
+  get masterInput(): Tone.ToneAudioNode {
+    return this.masterIn;
   }
 
   // ---------------------------------------------------------------- sync
@@ -146,8 +159,10 @@ export class EngineGraph {
       t.loopStart = `${Math.round(p.loop.start * t.PPQ)}i`;
       t.loopEnd = `${Math.round(p.loop.end * t.PPQ)}i`;
     }
-    this.masterChannel.volume.value = p.master.volumeDb;
-    this.masterFx = await this.syncFx(this.masterFx, p.master.effects, this.masterIn, this.masterChannel);
+    if (!this.opts.bypassMaster) {
+      this.masterChannel.volume.value = p.master.volumeDb;
+      this.masterFx = await this.syncFx(this.masterFx, p.master.effects, this.masterIn, this.masterChannel);
+    }
 
     const gk = `${p.bpm}|${p.swing}|${p.timeSignature.join('/')}|${this.duckSignature(p)}`;
     const globalChanged = gk !== this.globalKey;
@@ -157,7 +172,18 @@ export class EngineGraph {
     for (const [id, s] of this.strips) if (!live.has(id)) this.disposeStrip(s);
 
     const anySolo = p.tracks.some((x) => x.solo);
+    const audibleOf = (track: Track) => (this.opts.onlyTracks ? this.opts.onlyTracks.includes(track.id) : !track.mute && (!anySolo || track.solo));
+    // Offline renders don't build silent tracks at all — except ones that trigger a
+    // sidechain duck on an audible track; those become ghosts that only send triggers.
+    const duckSources = new Set<string>();
+    for (const t of p.tracks) if (audibleOf(t)) for (const e of t.effects) if (e.type === 'duck' && e.enabled) duckSources.add(String(e.params.source));
     for (const track of p.tracks) {
+      const ghost = !this.opts.live && !audibleOf(track);
+      if (ghost && !duckSources.has(track.id)) {
+        const stale = this.strips.get(track.id);
+        if (stale) this.disposeStrip(stale);
+        continue;
+      }
       let s = this.strips.get(track.id);
       if (!s) {
         const input = new Tone.Gain(1);
@@ -166,8 +192,15 @@ export class EngineGraph {
         channel.connect(this.masterIn);
         const meter = this.opts.live ? new Tone.Meter({ smoothing: 0.75 }) : null;
         if (meter) channel.connect(meter);
-        s = { id: track.id, track, instKey: '', instrument: null, input, fx: [], channel, meter, events: [], scheduledClips: null, scheduledLanes: undefined, chokes: new Map(), audioVoices: new Set() };
+        s = { id: track.id, track, instKey: '', instrument: null, input, fx: [], channel, meter, events: [], scheduledClips: null, scheduledLanes: undefined, chokes: new Map(), audioVoices: new Set(), ghost };
         this.strips.set(track.id, s);
+      }
+      s.ghost = ghost;
+      if (ghost) {
+        s.channel.mute = true;
+        s.track = track;
+        await this.scheduleTrack(s);
+        continue;
       }
       const key = instKey(track);
       if (key !== s.instKey) {
@@ -187,8 +220,7 @@ export class EngineGraph {
       s.fx = await this.syncFx(s.fx, track.effects, s.input, s.channel);
       s.channel.volume.rampTo(track.volumeDb, 0.02);
       s.channel.pan.rampTo(track.pan, 0.02);
-      const audible = this.opts.onlyTracks ? this.opts.onlyTracks.includes(track.id) : !track.mute && (!anySolo || track.solo);
-      s.channel.mute = !audible;
+      s.channel.mute = !audibleOf(track);
       const needsSchedule = globalChanged || s.scheduledClips !== track.clips || s.scheduledLanes !== track.drumLanes || prev === null;
       s.track = track;
       if (needsSchedule) await this.scheduleTrack(s);
@@ -262,7 +294,7 @@ export class EngineGraph {
     for (const clip of track.clips) {
       if (clip.muted) continue;
       if (clip.type === 'midi') this.scheduleMidi(s, clip, p);
-      else await this.scheduleAudio(s, clip);
+      else if (!s.ghost) await this.scheduleAudio(s, clip);
     }
   }
 
@@ -281,6 +313,10 @@ export class EngineGraph {
       const durBeats = Math.min(n.duration, clip.length - n.start);
       const durSec = beatsToSeconds(p, Math.max(0.01, durBeats));
       const trackId = s.track.id;
+      if (s.ghost) {
+        s.events.push(this.transport.schedule((time) => { for (const d of this.duckTargets(trackId)) d.duck!(time); }, this.ticks(beat)));
+        continue;
+      }
       if (isDrums) {
         const lane = laneByNote.get(n.pitch);
         if (!lane) continue;

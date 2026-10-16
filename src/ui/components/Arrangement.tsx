@@ -1,15 +1,16 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X, Copy, CopyPlus, ClipboardPaste, Scissors, ChevronDown } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
 import { beatsPerBar, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
 import type { AudioClip, Clip, MidiClip, Project, Track } from '../../model/types';
 import { seek } from '../../engine/api';
 import { getSampleMeta } from '../../samples/library';
-import { audioClipRate } from '../../model/edit';
+import { audioClipRate, repeatNotes } from '../../model/edit';
 import { usePeaks } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
 import { aiAvailable, useSettings } from '../../state/settings';
+import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, splitAtPlayhead } from '../actions';
 
 const HEADER_W = 200;
 const TRACK_H = 68;
@@ -95,7 +96,7 @@ function ClipView({ clip, track, project, zoom, selected, onPointerDown, onDoubl
       style={{ left: clip.start * zoom, width: Math.max(4, w), ['--c' as string]: track.color }}
       onPointerDown={(e) => onPointerDown(e, 'move')}
       onDoubleClick={onDoubleClick}
-      title={`${clip.name}${clip.aiPending ? ' — made by the agent (not reviewed yet)' : ''}`}
+      title={`${clip.name}${clip.aiPending ? ' — made by the agent (not reviewed yet)' : ''} · drag to move, drag the right edge to resize (Shift = fine), double-click to edit`}
     >
       <div className="cname">{clip.name}</div>
       {clip.type === 'midi' ? <MidiBody clip={clip} track={track} /> : <AudioBody clip={clip} project={project} widthPx={w} />}
@@ -287,7 +288,8 @@ export function Arrangement() {
   const startDrag = (e: RPointerEvent, clip: Clip, track: Track, mode: 'move' | 'resize') => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+    // Shift/Ctrl-click toggles selection, except on the resize handle where Shift means fine snapping.
+    const additive = mode === 'move' && (e.shiftKey || e.metaKey || e.ctrlKey);
     const ids = additive
       ? (selection.clipIds.includes(clip.id) ? selection.clipIds.filter((x) => x !== clip.id) : [...selection.clipIds, clip.id])
       : selection.clipIds.includes(clip.id) ? selection.clipIds : [clip.id];
@@ -307,10 +309,21 @@ export function Arrangement() {
       moved = true;
       const s = useDaw.getState().snap;
       if (mode === 'resize') {
-        const end = snapBeat(origStart + origLen + dxBeats, s, bpb);
-        const len = Math.max(s > 0 ? s : 0.25, end - origStart);
+        // Patterns resize in whole bars (Shift = fine grid) and repeat their content
+        // when extended, like a looped clip. Audio clips follow the grid.
+        const fine = s > 0 ? s : 0.25;
+        let len: number;
+        if (clip.type === 'midi' && !ev.shiftKey) len = Math.max(bpb, Math.round((origLen + dxBeats) / bpb) * bpb);
+        else len = Math.max(fine, snapBeat(origStart + origLen + dxBeats, s, bpb) - origStart);
         update('Resize clip', (d) => {
-          for (const t of d.tracks) for (const c of t.clips) if (c.id === clip.id) c.length = len;
+          for (const t of d.tracks) for (const c of t.clips) {
+            if (c.id !== clip.id) continue;
+            c.length = len;
+            if (c.type === 'midi' && clip.type === 'midi') {
+              const base = clip.notes.filter((n) => n.start < origLen - 1e-6);
+              c.notes = len > origLen + 1e-6 ? repeatNotes(base, origLen, len) : clip.notes.filter((n) => n.start < len - 1e-6).map((n) => ({ ...n }));
+            }
+          }
         }, { coalesce: true });
         return;
       }
@@ -397,24 +410,31 @@ export function Arrangement() {
     backgroundSize: `${bpb * zoom}px 100%, ${zoom}px 100%`,
   });
 
-  const addTrack = (kind: 'instrument' | 'drums' | 'audio') => {
-    update('Add track', (d) => { d.tracks.push(createTrack(d, kind, kind === 'instrument' ? { preset: 'piano' } : {})); });
-  };
+  const addTrack = addTrackAction;
 
   return (
     <section className="arrange" style={{ ['--header-w' as string]: `${HEADER_W}px`, ['--track-h' as string]: `${TRACK_H}px` }} aria-label="Arrangement">
       <div className="arrange-tools">
-        <button className="btn icon" title="Zoom out" onClick={() => setZoom(zoom / 1.3)}><ZoomOut size={15} /></button>
-        <button className="btn icon" title="Zoom in" onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
-        <label>Snap
+        <AddTrackMenu />
+        <div className="tool-divider" />
+        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title="New empty pattern on the selected track, at the playhead"><Plus size={14} /> New clip</button>
+        <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title="Copy selected clips (Ctrl+C)"><Copy size={14} /></button>
+        <button className="btn icon" onClick={() => pasteClips()} title="Paste clips at the playhead (Ctrl+V)"><ClipboardPaste size={14} /></button>
+        <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title="Duplicate selected clips (Ctrl+D)"><CopyPlus size={14} /></button>
+        <button className="btn icon" onClick={() => splitAtPlayhead()} title="Split clips at the playhead (Ctrl+E)"><Scissors size={14} /></button>
+        <button className="btn icon danger" onClick={() => deleteSelectedClips()} disabled={!selection.clipIds.length} title="Delete selected clips (Delete)"><Trash size={14} /></button>
+        <div className="tool-divider" />
+        <label title="Clips snap to this grid when you move or resize them">Snap
           <select value={snap} onChange={(e) => setSnap(Number(e.target.value))} aria-label="Snap">
             {SNAPS.map(([l, v]) => <option key={l} value={v}>{l}</option>)}
           </select>
         </label>
-        <label><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow</label>
+        <label title="Scroll the timeline to keep the playhead in view"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow playhead</label>
+        <button className="btn icon" title="Zoom out (Ctrl+scroll)" onClick={() => setZoom(zoom / 1.3)}><ZoomOut size={15} /></button>
+        <button className="btn icon" title="Zoom in (Ctrl+scroll)" onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
         <div style={{ flex: 1 }} />
         {hasPending && (
-          <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed">
+          <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed and remove the purple outlines">
             <Check size={14} /> Keep AI changes
           </button>
         )}
@@ -434,6 +454,9 @@ export function Arrangement() {
                 onDragLeave={() => setDropTrack(null)}
                 onDrop={(e) => onLaneDrop(e, t)}
               >
+                {!t.clips.length && (
+                  <div className="lane-hint">{t.kind === 'audio' ? 'Drag a sound from the left panel onto this lane' : 'Double-click here (or use New clip) to draw a pattern'}</div>
+                )}
                 {t.clips.map((c) => (
                   <ClipView
                     key={c.id}
@@ -482,13 +505,37 @@ function TrackHeader({ track, selected }: { track: Track; selected: boolean }) {
       <div className="swatch" style={{ background: track.color }} />
       <input className="tname" value={track.name} aria-label="Track name" onChange={(e) => update('Rename track', (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) t.name = e.target.value; }, { coalesce: true })} />
       <div className="tbtns">
-        <button className={`ms m ${track.mute ? 'on' : ''}`} title="Mute" onClick={() => set('Mute', (t) => { t.mute = !t.mute; })}>M</button>
-        <button className={`ms s ${track.solo ? 'on' : ''}`} title="Solo" onClick={() => set('Solo', (t) => { t.solo = !t.solo; })}>S</button>
+        <button className={`ms m ${track.mute ? 'on' : ''}`} title="Mute this track" onClick={() => set('Mute', (t) => { t.mute = !t.mute; })}>M</button>
+        <button className={`ms s ${track.solo ? 'on' : ''}`} title="Solo: hear only this track" onClick={() => set('Solo', (t) => { t.solo = !t.solo; })}>S</button>
       </div>
       <div className="tsub" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>
-        <button className="btn icon danger" style={{ width: 18, height: 18, marginLeft: 'auto' }} title="Delete track" onClick={(e) => { e.stopPropagation(); update(`Delete ${track.name}`, (d) => { d.tracks = d.tracks.filter((x) => x.id !== track.id); }); }}><Trash size={12} /></button>
+        <button className="btn icon danger" style={{ width: 18, height: 18, marginLeft: 'auto' }} title="Delete this track" onClick={(e) => { e.stopPropagation(); update(`Delete ${track.name}`, (d) => { d.tracks = d.tracks.filter((x) => x.id !== track.id); }); }}><Trash size={12} /></button>
       </div>
+    </div>
+  );
+}
+
+function AddTrackMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [open]);
+  const pick = (kind: 'drums' | 'instrument' | 'audio') => { addTrackAction(kind); setOpen(false); };
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button className="btn solid" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} title="Add a drum, instrument, or audio track"><Plus size={14} /> Add track <ChevronDown size={13} /></button>
+      {open && (
+        <div className="menu left" role="menu">
+          <button className="menu-item" role="menuitem" onClick={() => pick('drums')}><b><Drum size={13} /> Drums</b><span>Step-sequenced drum kit</span></button>
+          <button className="menu-item" role="menuitem" onClick={() => pick('instrument')}><b><Piano size={13} /> Instrument</b><span>Piano, guitar, 808, synths (change it in Sound &amp; FX)</span></button>
+          <button className="menu-item" role="menuitem" onClick={() => pick('audio')}><b><AudioLines size={13} /> Audio</b><span>For samples and loops you drag in</span></button>
+        </div>
+      )}
     </div>
   );
 }
