@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Sparkles, Check, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
 import { beatsPerBar, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
@@ -8,7 +8,7 @@ import { seek } from '../../engine/engine';
 import { getSampleMeta } from '../../samples/library';
 import { audioClipRate } from '../../model/edit';
 import { usePeaks } from '../hooks';
-import { keepAllPending, runAgent, useAgent } from '../../agent/agent';
+import { keepAllPending } from '../../agent/agent';
 import { aiAvailable, useSettings } from '../../state/settings';
 
 const HEADER_W = 200;
@@ -180,13 +180,6 @@ function Playhead({ zoom, scroller }: { zoom: number; scroller: React.RefObject<
 
 // ---------------------------------------------------------------- empty state
 
-const STARTERS = [
-  'Make a Lil Peep type beat',
-  'Dark UK drill beat, 142 BPM',
-  'Lo-fi study beat with dusty drums',
-  'Bouncy pluggnb beat with bells',
-  'Rage beat with huge supersaws',
-];
 
 const HERO_DISMISSED = 'vibe:heroDismissed';
 
@@ -239,36 +232,20 @@ function KeySetup() {
   );
 }
 
+/** Shown only until the user connects a Gemini key; after that the empty arrangement stays clear. */
 function EmptyHero() {
-  const [text, setText] = useState('');
   const [dismissed, setDismissed] = useState(readDismissed);
-  const running = useAgent((s) => s.running);
   useSettings((s) => s.apiKey + s.connection); // re-render when a key is added
-  const needsKey = !aiAvailable().ok;
-  const go = (t: string) => { if (t.trim()) void runAgent(t); };
   const close = () => {
     setDismissed(true);
     try { localStorage.setItem(HERO_DISMISSED, '1'); } catch { /* storage disabled */ }
   };
-  if (dismissed) return null;
+  if (dismissed || aiAvailable().ok) return null;
   return (
     <div className="empty-arrange" style={{ ['--header-w' as string]: `${HEADER_W}px` }}>
       <div className="hero-card">
         <button className="btn icon hero-close" onClick={close} aria-label="Close" title="Close"><X size={16} /></button>
-        {needsKey ? <KeySetup /> : (
-          <>
-            <h1>Describe the beat in your head.</h1>
-            <p>The agent picks sounds by ear, writes the parts, arranges and mixes them — then you take it from there.</p>
-            <form className="hero-input" onSubmit={(e) => { e.preventDefault(); go(text); }}>
-              <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. sad emo trap beat with an acoustic guitar loop" aria-label="Describe a beat" disabled={running} />
-              <button className="btn primary" type="submit" disabled={running || !text.trim()}><Sparkles size={15} /> Make it</button>
-            </form>
-            <div className="suggestions">
-              {STARTERS.map((st) => <button key={st} className="suggestion" onClick={() => go(st)} disabled={running}>{st}</button>)}
-            </div>
-            <div className="hero-foot">Prefer to start by hand? Close this, add a track below, or drag a sound from the browser.</div>
-          </>
-        )}
+        <KeySetup />
       </div>
     </div>
   );
