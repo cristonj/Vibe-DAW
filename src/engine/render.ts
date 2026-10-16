@@ -94,6 +94,9 @@ async function renderPass(spec: PassSpec): Promise<Float32Array[]> {
     try {
       g = new EngineGraph({ live: false, onlyTracks: spec.onlyTracks, bypassMaster: spec.bypassMaster, frozenTracks: spec.frozenTracks });
       await g.sync(p, spec.assets);
+      // Phase modulation for the song position now, while timing is exact; the
+      // transport's start event (or, in the master pass, nothing) re-aligns in place.
+      g.alignLfos(preroll, beatsToSeconds(p, spec.startBeat));
       if (spec.input) {
         const buf = new AudioBuffer({ length: spec.input[0].length, numberOfChannels: spec.input.length, sampleRate });
         spec.input.forEach((d, i) => buf.copyToChannel(d as Float32Array<ArrayBuffer>, i));

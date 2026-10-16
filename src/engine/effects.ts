@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import type { Effect } from '../model/types';
 import { defaultEffectParams } from '../model/catalog';
 import { reverbImpulse } from './reverb';
+import { lfoClock, type LfoClock } from './lfo';
 
 // Effect units. Each wraps one or more Tone nodes behind input/output so the
 // channel strip can chain them, and supports live param updates without rebuilds.
@@ -12,6 +13,8 @@ export interface EffectUnit {
   update(params: Record<string, number | string>): void;
   /** Sidechain duck units get triggered by the scheduler. */
   duck?(time: number): void;
+  /** Modulation effects: LFOs (and lo-fi hiss) the engine keeps in phase with the song. */
+  lfo?: LfoClock;
   ready: Promise<void>;
   dispose(): void;
 }
@@ -50,6 +53,30 @@ function crushCurve(bits: number): Float32Array {
     c[i] = Math.round(x * (steps / 2)) / (steps / 2);
   }
   return c;
+}
+
+// Seeded pink noise (Paul Kellet's filter), so lo-fi hiss is the same on every play
+// and in every bounce instead of Tone.Noise's random buffer and start offset.
+const pinkCache = new Map<number, AudioBuffer>();
+function pinkNoise(rate: number): AudioBuffer {
+  let buffer = pinkCache.get(rate);
+  if (buffer) return buffer;
+  buffer = new AudioBuffer({ length: Math.round(rate * 5), numberOfChannels: 2, sampleRate: rate });
+  let seed = 0x5eed;
+  const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 0x80000000 - 1; };
+  for (let c = 0; c < 2; c++) {
+    const d = buffer.getChannelData(c);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < d.length; i++) {
+      const w = rnd();
+      b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+      b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+      d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
+      b6 = w * 0.115926;
+    }
+  }
+  pinkCache.set(rate, buffer);
+  return buffer;
 }
 
 /** Wraps a dry/wet blend around an arbitrary insert. */
@@ -147,7 +174,8 @@ export function createEffect(effect: Effect): EffectUnit {
         ? new Tone.PingPongDelay({ delayTime: time, feedback: num(p.feedback, 0.35), wet: num(p.wet, 0.25), maxDelay: 4 })
         : new Tone.FeedbackDelay({ delayTime: time, feedback: num(p.feedback, 0.35), wet: num(p.wet, 0.25), maxDelay: 4 });
       return single(d, (q) => {
-        if (q.time !== undefined) d.delayTime.value = Tone.Time(String(q.time)).toSeconds();
+        // Converted with this node's own transport: the global context may be an offline one.
+        if (q.time !== undefined) d.delayTime.value = d.toSeconds(String(q.time));
         if (q.feedback !== undefined) d.feedback.value = num(q.feedback, 0.35);
         if (q.wet !== undefined) d.wet.value = num(q.wet, 0.25);
       });
@@ -192,27 +220,27 @@ export function createEffect(effect: Effect): EffectUnit {
     }
     case 'chorus': {
       const c = new Tone.Chorus({ frequency: num(p.frequency, 1.5), delayTime: num(p.delayTime, 3.5), depth: num(p.depth, 0.6), wet: num(p.wet, 0.5), spread: 180 }).start();
-      return single(c, (q) => {
+      return { ...single(c, (q) => {
         if (q.frequency !== undefined) c.frequency.value = num(q.frequency, 1.5);
         if (q.depth !== undefined) c.depth = num(q.depth, 0.6);
         if (q.delayTime !== undefined) c.delayTime = num(q.delayTime, 3.5);
         if (q.wet !== undefined) c.wet.value = num(q.wet, 0.5);
-      });
+      }), lfo: lfoClock(c) };
     }
     case 'phaser': {
       const ph = new Tone.Phaser({ frequency: num(p.frequency, 0.5), octaves: num(p.octaves, 3), baseFrequency: 350, wet: num(p.wet, 0.5) });
-      return single(ph, (q) => {
+      return { ...single(ph, (q) => {
         if (q.frequency !== undefined) ph.frequency.value = num(q.frequency, 0.5);
         if (q.octaves !== undefined) ph.octaves = num(q.octaves, 3);
         if (q.wet !== undefined) ph.wet.value = num(q.wet, 0.5);
-      });
+      }), lfo: lfoClock(ph) };
     }
     case 'tremolo': {
       const t = new Tone.Tremolo({ frequency: num(p.frequency, 4), depth: num(p.depth, 0.5) }).start();
-      return single(t, (q) => {
+      return { ...single(t, (q) => {
         if (q.frequency !== undefined) t.frequency.value = num(q.frequency, 4);
         if (q.depth !== undefined) t.depth.value = num(q.depth, 0.5);
-      });
+      }), lfo: lfoClock(t) };
     }
     case 'widener': {
       // Ours: 0 = mono, 0.5 = unchanged, 1 = extra wide. Tone's 1 is pure side (phase-cancels in mono), so cap it.
@@ -227,7 +255,7 @@ export function createEffect(effect: Effect): EffectUnit {
       const lp = new Tone.Filter({ type: 'lowpass', frequency: 2500 + num(p.tone, 0.45) * 9000, rolloff: -24 });
       const hp = new Tone.Filter({ type: 'highpass', frequency: 110, rolloff: -12 });
       const sat = new Tone.WaveShaper(tanhCurve(0.25), 2048);
-      const noise = new Tone.Noise('pink').start();
+      const noise = new Tone.Player({ url: pinkNoise(Tone.getContext().sampleRate), loop: true }).start();
       const noiseHp = new Tone.Filter({ type: 'highpass', frequency: 1800 });
       // Vinyl noise follows the music: an envelope follower on the input drives the
       // noise level, so there's no hiss/static when the track is silent or stopped.
@@ -241,8 +269,19 @@ export function createEffect(effect: Effect): EffectUnit {
       input.chain(wow, flutter, sat, hp, lp, chainOut);
       noise.chain(noiseHp, noiseGain, chainOut);
       const wd = wetDry({ input, output: chainOut }, num(p.wet, 1));
+      const wobble = lfoClock(wow, flutter);
       return {
         input: wd.input, output: wd.output, ready: Promise.resolve(),
+        lfo: {
+          align: (time, songSeconds) => {
+            wobble.align(time, songSeconds);
+            // Restart the hiss where it would be at this song position (see lfoClock).
+            const at = Math.max(time, noise.context.currentTime);
+            const length = noise.buffer.duration;
+            noise.stop(at);
+            noise.start(at, (((songSeconds + at - time) % length) + length) % length);
+          },
+        },
         update: (q) => {
           if (q.wow !== undefined) { wow.depth.value = num(q.wow, 0.35) * 0.25; flutter.depth.value = num(q.wow, 0.35) * 0.04; }
           if (q.tone !== undefined) lp.frequency.value = 2500 + num(q.tone, 0.45) * 9000;
