@@ -172,7 +172,7 @@ export interface AddSampleInput {
   skipAnalysis?: boolean;
 }
 
-/** Register a new sample from an AudioBuffer (designed, rendered, sliced) or encoded bytes (uploads, Lyria). */
+/** Register a new sample from an AudioBuffer (designed, rendered, sliced) or encoded bytes (uploads). */
 export async function addSample(input: AddSampleInput, audio: AudioBuffer | { data: ArrayBuffer; mime: string }): Promise<SampleMeta> {
   let buffer: AudioBuffer;
   let stored: { data: ArrayBuffer; mime: string };

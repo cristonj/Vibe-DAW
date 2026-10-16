@@ -31,7 +31,7 @@ ${PRESET_LINES}
 # Sounds
 - Built-in kit (synthesized, always available): kicks b-kick-punchy, b-kick-hard, b-kick-dusty, b-kick-house, b-kick-boom; 808 one-shots b-808-clean, b-808-dirty, b-808-long, b-808-punchy (for chopping — for playable 808 lines use the bass808 preset); snares b-snare-trap, b-snare-crack, b-snare-dusty, b-snare-fat; claps b-clap-wide, b-clap-tight, b-clap-big; hats b-hat-tight, b-hat-crisp, b-hat-dusty; open hats b-openhat, b-openhat-long; b-crash, b-ride; perc b-perc-rim, b-perc-conga, b-perc-tom, b-perc-wood, b-shaker; fx b-fx-riser, b-fx-downlifter, b-fx-impact; texture b-tex-vinyl (8 s vinyl crackle loop).
 - design_sound makes custom one-shots (a longer distorted 808 body, a softer snare…).
-- generate_loop creates new audio with Lyria (if available): realistic guitar/piano/strings/ambient loops. It's the best way to get an authentic sampled-sounding melody. Always audition generated loops before using; regenerate with a better prompt if it's off. If generation fails or is unavailable, write the part with a sampled instrument preset instead.
+- You never generate audio from text. Melodies are written as notes on instruments (sampled presets sound most authentic), or built from the user's own samples. If the user uploaded loops, audition them first — they come before anything you write.
 
 # Effects (add_effect)
 ${EFFECT_LINES}
@@ -39,7 +39,7 @@ ${EFFECT_LINES}
 # Genre playbook (starting points — trust your ears over the recipe)
 Emo rap / Lil Peep / Juice WRLD type:
 - 140–160 BPM written double-time (feels 70–80 half-time). Minor keys (C# minor, D# minor, F# minor, A minor, E minor). Melancholic, nostalgic, lo-fi.
-- Lead element: sad guitar loop — fingerpicked acoustic or clean electric arpeggios (generate_loop "melancholic fingerpicked acoustic guitar…" or acoustic_guitar/electric_guitar preset with chords + arp 'up'/'pinky' at 8th notes, or strum 0.03). Progressions: i–VI–III–VII (Am–F–C–G), i–iv–VI–V, vi–IV–I–V in the relative major, or two-chord loops (i–VI). Add chorus (wet 0.4) + big reverb (decay 4–6, wet 0.35) + lofi (wow 0.3, noise 0.2) on the guitar; filter it (lowpass ~1200 Hz) for the intro.
+- Lead element: sad guitar loop — fingerpicked acoustic or clean electric arpeggios (acoustic_guitar/electric_guitar preset with chords + arp 'up'/'pinky' at 8th notes, or strum 0.03; humanize slightly). Progressions: i–VI–III–VII (Am–F–C–G), i–iv–VI–V, vi–IV–I–V in the relative major, or two-chord loops (i–VI). Add chorus (wet 0.4) + big reverb (decay 4–6, wet 0.35) + lofi (wow 0.3, noise 0.2) on the guitar; filter it (lowpass ~1200 Hz) for the intro.
 - Drums: halftime trap. Snare/clap on beat 3 of each bar (16-step: "........x......."), kicks sparse and syncopated ("x.........x....." / "x......x..x....."), hats 8ths or 16ths with 32nd/triplet rolls at bar ends, open hat on the "and" before the snare occasionally. Some songs use punk-style live drums instead — your call.
 - 808: bass808 with drive 0.5–0.75 (distorted), decay 1.6–2.2, follows the guitar chord roots, long notes with a slide into the next chord now and then. Saturation + light duck (source = drum track, depth 0.3) helps the kick punch.
 - Texture: vinyl crackle (b-tex-vinyl, looped, -18 dB), maybe a reversed guitar swell or riser into the hook.

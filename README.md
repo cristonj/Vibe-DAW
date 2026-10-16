@@ -10,7 +10,7 @@ It's Cursor for music: the agent edits your session the way Cursor edits your co
 
 - **Ears, not just eyes.** Gemini is multimodal, so the agent auditions samples and critiques real offline bounces of your song (rendered by the same engine you hear), paired with measured loudness, spectrum balance, and stereo data.
 - **A DAW API built for a model.** ~30 tools speak producer: step-string drum patterns with trap rolls (`x.x.3.4.`), chord symbols with strum/arpeggio/voice-leading, 1-based bars, `copy_bars`/`clear_bars` arrangement moves, sidechain ducking, sound design, resampling.
-- **Generates what it can't find.** With Lyria, the agent creates new loops (an emo fingerpicked guitar riff, a lo-fi piano), trims them to whole bars at your tempo, auditions them, and uses them.
+- **No generated audio.** Every sound is a real instrument, your own samples, or something synthesized from parameters. The agent composes and produces; it never prints audio from a text prompt.
 - **Review like code.** Agent-made clips are drawn in lilac until you **Keep** them. Each run ends with a change summary and **Undo all**; every message has a checkpoint you can restore.
 - **Ctrl+K inline edits.** Select clips, press Ctrl+K, say "add hi-hat rolls" or "make it sadder" — the agent edits just that.
 - **Reference tracks.** Attach a song; the agent listens and extracts a production recipe (tempo feel, drum placement, 808 behavior, mix character) to work from.
@@ -41,13 +41,12 @@ npm run build
 | `gemini-3.8-flash` (default) | Agent brain and ears. Fast, strong at tool use. |
 | `gemini-4-argon` | Most capable; best musical judgment. Needs a billing-enabled (Blaze) project. |
 | `gemini-3.5-flash-lite` | Cheapest and fastest; good for small edits. |
-| `lyria-3-clip-preview` | Generates 30 s music clips that become loops. |
 
 Pick the model and thinking level in Settings or from the composer.
 
 ## Production setup (Firebase + Netlify)
 
-In production the browser never holds a Gemini key: chat and listening go through **Firebase AI Logic**, Lyria goes through a **Cloud Function**, and **App Check** keeps other sites from spending your quota.
+In production the browser never holds a Gemini key: chat and listening go through **Firebase AI Logic**, and **App Check** keeps other sites from spending your quota.
 
 ### 1. Firebase project
 
@@ -56,18 +55,14 @@ In production the browser never holds a Gemini key: chat and listening go throug
 3. **Firestore** → create a database. **Storage** → create the default bucket.
 4. **AI Logic** → get started with the **Gemini Developer API**. (`gemini-4-argon` needs the Blaze plan.)
 5. **App Check** → register the web app with **reCAPTCHA Enterprise**, copy the site key, and enforce App Check for AI Logic, Firestore, Storage, and Functions once it's working.
-6. Deploy rules and the function (Functions need the Blaze plan):
+6. Deploy the security rules:
 
 ```bash
 npm install -g firebase-tools
 firebase login
 cp .firebaserc.example .firebaserc     # put your project id in it
-firebase functions:secrets:set GEMINI_API_KEY
-cd functions && npm install && cd ..
-firebase deploy --only firestore:rules,storage,functions
+firebase deploy --only firestore:rules,storage
 ```
-
-The `generateMusic` function requires sign-in and App Check, and caps each user at `LYRIA_DAILY_LIMIT` generations per day (default 25; set it in `functions/.env`).
 
 ### 2. Netlify
 
@@ -87,11 +82,10 @@ src/
   samples/    Procedurally synthesized built-in kit, sample library (IndexedDB),
               DSP analysis (tempo, key, pitch, loudness, spectrum)
   agent/      Gemini client (direct key or Firebase AI Logic), agent loop, tools,
-              system prompt, ears (render → Gemini), Lyria loop generation, change diffs
+              system prompt, ears (render → Gemini), change diffs
   cloud/      Firebase: auth, Firestore project sync, Storage sample sync
   ui/         React UI: arrangement, piano roll, drum grid, audio clip editor, mixer,
               track inspector, agent panel, Ctrl+K inline edit
-functions/    Cloud Function for server-side Lyria generation
 ```
 
 How a run works: the user's message plus a compact text snapshot of the session goes to Gemini with the tool declarations. The model calls tools (often several per turn); each tool validates input and edits the project through the same store the UI uses, inside one undo transaction. `listen` and `audition_samples` render audio offline and make a separate Gemini call that hears it, returning a critique plus measurements. When the model answers in plain text, the run ends and the change summary appears for review. Gemini 3+ thought signatures are passed back untouched.

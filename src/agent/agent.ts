@@ -228,7 +228,6 @@ function statusFor(tool: string): string {
   switch (tool) {
     case 'listen': return 'Listening to the mix…';
     case 'audition_samples': return 'Auditioning samples…';
-    case 'generate_loop': return 'Generating audio with Lyria…';
     case 'design_sound': return 'Designing a sound…';
     case 'bounce_to_sample': return 'Bouncing audio…';
     case 'write_drums': return 'Programming drums…';
