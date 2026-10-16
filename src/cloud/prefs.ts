@@ -68,6 +68,7 @@ export function mergePrefs(local: Record<PrefSection, StampedPref>, remote: Pref
 // ---------------------------------------------------------------- local stamps
 
 const STAMPS = 'vibe:prefsUpdatedAt';
+const OWNER = 'vibe:prefsOwner';
 
 function loadStamps(): Record<PrefSection, number> {
   let raw: Partial<Record<PrefSection, unknown>> = {};
@@ -111,13 +112,32 @@ export function trackLocalPrefChanges() {
   useKeymap.subscribe(check);
 }
 
+/**
+ * Local preferences last synced with a different account belong to that person: forget
+ * their stamps so this account's cloud copy wins, and never carry their API key over.
+ */
+function adoptAccount(uid: string) {
+  let owner: string | null = null;
+  try { owner = localStorage.getItem(OWNER); } catch { /* storage off */ }
+  if (owner && owner !== uid) {
+    applyingRemote = true;
+    try { useSettings.getState().set({ apiKey: '' }); } finally { applyingRemote = false; }
+    last = readSections();
+    stamps = { ai: 0, appearance: 0, keymap: 0 };
+    saveStamps();
+  }
+  try { localStorage.setItem(OWNER, uid); } catch { /* storage off */ }
+}
+
 /** Start two-way sync for a signed-in user. Returns a stop function. */
 export async function startPrefsSync(uid: string): Promise<() => void> {
   trackLocalPrefChanges();
   const app = await getFirebaseApp();
   if (!app) return () => {};
-  const { doc, getFirestore, onSnapshot, setDoc } = await import('firebase/firestore');
-  const ref = doc(getFirestore(app), 'users', uid, 'prefs', 'main');
+  const { doc, getFirestore, onSnapshot, runTransaction } = await import('firebase/firestore');
+  const db = getFirestore(app);
+  const ref = doc(db, 'users', uid, 'prefs', 'main');
+  adoptAccount(uid);
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -127,7 +147,19 @@ export async function startPrefsSync(uid: string): Promise<() => void> {
     // the first device to upload seeds the account and other unstamped devices adopt it.
     for (const s of PREF_SECTIONS) if (!stamps[s]) stamps[s] = 1;
     saveStamps();
-    setDoc(ref, localStamped()).catch((e) => console.warn('Preference sync failed', e));
+    const local = localStamped();
+    // Merge per section on the server: a device coming back online with one fresh section
+    // must not overwrite newer sections another device uploaded meanwhile.
+    runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const remote = (snap.exists() ? snap.data() : {}) as PrefsDoc;
+      const out: PrefsDoc = {};
+      for (const s of PREF_SECTIONS) {
+        const r = remote[s];
+        out[s] = r && typeof r.data === 'string' && typeof r.updatedAt === 'number' && r.updatedAt >= local[s].updatedAt ? r : local[s];
+      }
+      tx.set(ref, out);
+    }).catch((e) => console.warn('Preference sync failed', e));
   };
   uploadPending = () => { clearTimeout(timer); timer = setTimeout(upload, 800); };
 

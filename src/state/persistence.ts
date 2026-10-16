@@ -66,6 +66,8 @@ let cloudTimer: ReturnType<typeof setTimeout> | undefined;
 let maxTimer: ReturnType<typeof setTimeout> | undefined;
 let autosaveCleanup: (() => void) | undefined;
 let savedProject: Project | null = null;
+// Project objects known to be identical to the cloud's copy, so loading one isn't uploaded back.
+const cloudCopies = new WeakSet<Project>();
 let saveInFlight: Promise<void> | null = null;
 
 /** Save pending edits before navigation; a completed older save must not mark newer edits saved. */
@@ -104,7 +106,7 @@ export function startAutosave() {
     maxTimer ??= setTimeout(save, 5000);
     clearTimeout(cloudTimer);
     // Skip the echo when the change is the cloud's own copy (opened or synced from another device).
-    if (useAuth.getState().user && cloudUpdatedAt(s.project.id) !== s.project.updatedAt) {
+    if (useAuth.getState().user && !cloudCopies.has(s.project)) {
       const p = s.project;
       cloudTimer = setTimeout(() => { saveProjectToCloud(p).catch((e) => console.warn('Cloud save failed', e)); }, 4000);
     }
@@ -150,6 +152,7 @@ export async function openProject(id: string) {
     }
   }
   if (!p) throw new Error('Project not found');
+  if (cloudUpdatedAt(p.id) === p.updatedAt) cloudCopies.add(p);
   await flushAutosave();
   useAgent.getState().clear();
   useDaw.getState().replaceProject(p);
@@ -199,6 +202,9 @@ export async function syncNow() {
 // missing from the cloud was deleted on another device, so it is removed here too
 // instead of being re-uploaded.
 const SYNCED = (uid: string) => `vibe:synced:${uid}`;
+// Which account each cached project came from, so switching Google accounts in one
+// browser never uploads the first account's projects into the second.
+const OWNERS = 'vibe:projectOwners';
 
 let syncQueue: Promise<void> = Promise.resolve();
 let syncStarted = false;
@@ -230,12 +236,21 @@ export function startCloudSync() {
     stop = () => stops.forEach((f) => f());
   };
   useAuth.subscribe((s) => { void follow(s.user?.uid ?? null); });
+  // A remote update that arrived mid agent run is applied once the run ends.
+  useDaw.subscribe((s, prev) => {
+    if (prev.transaction && !s.transaction && deferredRemote) {
+      const c = deferredRemote;
+      deferredRemote = null;
+      adoptRemoteCurrent(c);
+    }
+  });
   void follow(useAuth.getState().user?.uid ?? null);
 }
 
 async function applyCloudChanges(uid: string, changes: CloudProjectChange[], initial: boolean) {
   if (useAuth.getState().user?.uid !== uid) return;
   const synced = new Set((await idbGet<string[]>(SYNCED(uid)).catch(() => undefined)) ?? []);
+  const owners = (await idbGet<Record<string, string>>(OWNERS).catch(() => undefined)) ?? {};
   const index = (await idbGet<ProjectEntry[]>(INDEX).catch(() => undefined)) ?? [];
   const localById = new Map(index.map((e) => [e.id, e]));
   const current = () => useDaw.getState().project;
@@ -244,14 +259,17 @@ async function applyCloudChanges(uid: string, changes: CloudProjectChange[], ini
     if (c.local) continue;
     const id = c.info.id;
     if (c.type === 'removed') {
-      synced.delete(id);
       // Keep the open project: the next edit puts it back rather than vanishing mid-session.
-      if (id !== current().id && localById.has(id)) await removeLocal(id);
+      // Its id stays in `synced` so an unedited reload doesn't resurrect it.
+      if (id === current().id) continue;
+      synced.delete(id);
+      if (localById.has(id)) await removeLocal(id);
       continue;
     }
     synced.add(id);
+    owners[id] = uid;
     if (id === current().id) {
-      if (c.info.updatedAt > current().updatedAt) await adoptRemoteCurrent(c);
+      if (c.info.updatedAt > current().updatedAt) adoptRemoteCurrent(c);
     } else if (!localById.has(id) || c.info.updatedAt > localById.get(id)!.updatedAt) {
       // Keep a local copy so the project opens offline on this device too.
       const p = c.load();
@@ -265,10 +283,9 @@ async function applyCloudChanges(uid: string, changes: CloudProjectChange[], ini
       if (inCloud.has(e.id)) {
         if (e.updatedAt > (cloudUpdatedAt(e.id) ?? 0)) await uploadLocal(e.id, synced);
       } else if (synced.has(e.id)) {
-        synced.delete(e.id);
-        if (e.id !== current().id) await removeLocal(e.id);
-      } else {
-        await uploadLocal(e.id, synced);
+        if (e.id !== current().id) { synced.delete(e.id); await removeLocal(e.id); }
+      } else if (!owners[e.id] || owners[e.id] === uid) {
+        if (await uploadLocal(e.id, synced)) owners[e.id] = uid;
       }
     }
     // A fresh device starts on a blank project; open the newest one from the account instead.
@@ -279,30 +296,35 @@ async function applyCloudChanges(uid: string, changes: CloudProjectChange[], ini
     }
   }
 
-  await setMany([[SYNCED(uid), [...synced]]]).catch(() => undefined);
+  await setMany([[SYNCED(uid), [...synced]], [OWNERS, owners]]).catch(() => undefined);
   await usePersist.getState().refresh();
 }
 
+let deferredRemote: CloudProjectChange | null = null;
+
 /** Bring another device's newer copy of the open project in, as an undoable step. */
-async function adoptRemoteCurrent(c: CloudProjectChange) {
-  // Never swap the document under an agent run or an edit gesture.
-  if (useDaw.getState().transaction) return;
+function adoptRemoteCurrent(c: CloudProjectChange) {
+  // Never swap the document under an agent run; retry when it ends.
+  if (useDaw.getState().transaction) { deferredRemote = c; return; }
   const p = c.load();
   if (!p) return;
   const cur = useDaw.getState().project;
   if (cur.id !== p.id || p.updatedAt <= cur.updatedAt) return;
+  cloudCopies.add(p);
   useDaw.getState().replaceProject(p, { keepHistory: true, label: 'Changes from another device' });
 }
 
-async function uploadLocal(id: string, synced: Set<string>) {
+async function uploadLocal(id: string, synced: Set<string>): Promise<boolean> {
   const cur = useDaw.getState().project;
   const p = cur.id === id ? cur : await idbGet<Project>(key(id)).catch(() => undefined);
   // Blank projects aren't worth a cloud copy until someone puts something in them.
-  if (!p || p.tracks.length === 0) return;
+  if (!p || p.tracks.length === 0) return false;
   try {
     await saveProjectToCloud(p);
     synced.add(id);
+    return true;
   } catch (e) {
     console.warn(`Could not upload “${p.name}”`, e);
+    return false;
   }
 }

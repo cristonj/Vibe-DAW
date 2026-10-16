@@ -326,16 +326,19 @@ export function stopAgent() {
 
 /** Accept: clear the "unreviewed" highlight on AI-made clips. */
 export function keepChanges(itemId: string) {
-  useDaw.setState((s) => ({
-    project: produce(s.project, (d) => { for (const t of d.tracks) for (const c of t.clips) if (c.aiPending) delete c.aiPending; }),
-  }));
+  useDaw.setState((s) => {
+    const next = produce(s.project, (d) => { for (const t of d.tracks) for (const c of t.clips) if (c.aiPending) delete c.aiPending; });
+    // A new version, so other signed-in devices pick up the acceptance too.
+    return { project: next === s.project ? next : { ...next, updatedAt: Date.now() } };
+  });
   patch(itemId, (it) => (it.kind === 'changes' ? { ...it, state: 'kept' } : it));
 }
 
 /** Reject: restore the project to how it was before that agent run (undoable). */
 export function revertTo(checkpoint: Project, itemId?: string) {
   stopAgent();
-  useDaw.getState().replaceProject(checkpoint, { keepHistory: true, label: 'Revert agent changes' });
+  // Restamp: the restored checkpoint must win over copies of the rejected run on other devices.
+  useDaw.getState().replaceProject({ ...checkpoint, updatedAt: Date.now() }, { keepHistory: true, label: 'Revert agent changes' });
   if (itemId) patch(itemId, (it) => (it.kind === 'changes' ? { ...it, state: 'reverted' } : it));
 }
 
