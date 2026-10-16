@@ -30,6 +30,8 @@ export interface RenderOptions {
   onProgress?: (fraction: number) => void;
   /** Render tracks as parallel stems (default) or the whole mix in one pass. */
   stems?: boolean;
+  /** Skip the master bus (used to freeze single tracks). */
+  master?: boolean;
 }
 
 const WINDOW_SEC = 1;
@@ -217,6 +219,7 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
     }
   });
 
+  if (opts.master === false) return { sampleRate, channels: mix };
   // Master bus once, over the summed stems.
   const out = await renderPass({
     project: { ...p, tracks: [] }, assets, startBeat: start, endBeat: end, tail, sampleRate,

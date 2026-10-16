@@ -73,14 +73,27 @@ export function createEffect(effect: Effect): EffectUnit {
   const p = { ...defaultEffectParams(effect.type), ...effect.params };
   switch (effect.type) {
     case 'eq': {
-      const eq = new Tone.EQ3({ low: num(p.low, 0), mid: num(p.mid, 0), high: num(p.high, 0), lowFrequency: num(p.lowFrequency, 250), highFrequency: num(p.highFrequency, 3500) });
-      return single(eq, (q) => {
-        if (q.low !== undefined) eq.low.value = num(q.low, 0);
-        if (q.mid !== undefined) eq.mid.value = num(q.mid, 0);
-        if (q.high !== undefined) eq.high.value = num(q.high, 0);
-        if (q.lowFrequency !== undefined) eq.lowFrequency.value = num(q.lowFrequency, 250);
-        if (q.highFrequency !== undefined) eq.highFrequency.value = num(q.highFrequency, 3500);
-      });
+      // Three plain biquads (low shelf, mid peak, high shelf): far cheaper than Tone's
+      // crossover-based EQ3, which matters when every track has one.
+      const lowF = () => num(p.lowFrequency, 250);
+      const highF = () => num(p.highFrequency, 3500);
+      const low = new Tone.Filter({ type: 'lowshelf', frequency: lowF(), gain: num(p.low, 0), rolloff: -12 });
+      const mid = new Tone.Filter({ type: 'peaking', frequency: Math.sqrt(lowF() * highF()), Q: 0.7, gain: num(p.mid, 0), rolloff: -12 });
+      const high = new Tone.Filter({ type: 'highshelf', frequency: highF(), gain: num(p.high, 0), rolloff: -12 });
+      low.chain(mid, high);
+      return {
+        input: low, output: high, ready: Promise.resolve(),
+        update: (q) => {
+          Object.assign(p, q);
+          low.gain.value = num(p.low, 0);
+          mid.gain.value = num(p.mid, 0);
+          high.gain.value = num(p.high, 0);
+          low.frequency.value = lowF();
+          high.frequency.value = highF();
+          mid.frequency.value = Math.sqrt(lowF() * highF());
+        },
+        dispose: () => { low.dispose(); mid.dispose(); high.dispose(); },
+      };
     }
     case 'filter': {
       const mode = (['lowpass', 'highpass', 'bandpass'].includes(String(p.mode)) ? p.mode : 'lowpass') as BiquadFilterType;

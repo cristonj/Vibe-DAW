@@ -1,33 +1,120 @@
-import { useMemo } from 'react';
-import { Play, Trash, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Play, Trash, Plus, Power, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { useDaw } from '../../state/store';
-import { EFFECTS, EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams } from '../../model/catalog';
+import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams } from '../../model/catalog';
 import type { Effect, EffectType, Project, Track } from '../../model/types';
 import { mintId } from '../../model/project';
 import { useLibrary } from '../../samples/library';
 import { previewNote } from '../../engine/api';
 
-export function ParamSlider({ label, value, min, max, step, onChange, format }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; format?: (v: number) => string }) {
+/** Unit-aware display for a param label like "Cutoff (Hz)" or "Mix". */
+function formatValue(label: string, v: number): string {
+  if (/\(Hz\)/.test(label)) return v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 1 : 2)} kHz` : `${Math.round(v)} Hz`;
+  if (/\(dB\)/.test(label)) return `${v > 0 ? '+' : ''}${(Math.round(v * 10) / 10).toFixed(1)} dB`;
+  if (/\(s\)/.test(label)) return v < 1 ? `${Math.round(v * 1000)} ms` : `${(Math.round(v * 100) / 100).toFixed(2)} s`;
+  if (/\(ms\)/.test(label)) return `${Math.round(v * 10) / 10} ms`;
+  if (/Mix|Depth|Width|Drive|Feedback|Sustain|Punch|Brightness|Wow|Tone|noise/i.test(label) && v >= 0 && v <= 1) return `${Math.round(v * 100)}%`;
+  return String(Math.round(v * 100) / 100);
+}
+
+/** Slider plus an exact-value box. Double-click the slider to reset to the default. */
+export function ParamSlider({ label, value, min, max, step, onChange, format, defaultValue }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; format?: (v: number) => string; defaultValue?: number }) {
   const s = step ?? (max - min > 200 ? 1 : max - min > 20 ? 0.1 : 0.01);
+  const [draft, setDraft] = useState<string | null>(null);
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  const commit = () => {
+    if (draft === null) return;
+    const v = Number(draft.replace(/[^\d.+-]/g, ''));
+    if (draft.trim() !== '' && isFinite(v)) {
+      // Accept "1.2k" style input for Hz, and percentages for 0..1 params.
+      let n = v;
+      if (/k\s*(hz)?$/i.test(draft.trim()) && /\(Hz\)/.test(label)) n = v * 1000;
+      else if (/%$/.test(draft.trim()) && max <= 1) n = v / 100;
+      onChange(clamp(n));
+    }
+    setDraft(null);
+  };
+  const shown = format ? format(value) : formatValue(label, value);
   return (
     <div className="param">
-      <span title={label}>{label}</span>
-      <input type="range" min={min} max={max} step={s} value={value} onChange={(e) => onChange(Number(e.target.value))} aria-label={label} />
-      <span className="val">{format ? format(value) : Math.round(value * 100) / 100}</span>
+      <span title={label}>{label.replace(/\s*\((Hz|dB|s|ms)\)/, '')}</span>
+      <input
+        type="range" min={min} max={max} step={s} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onDoubleClick={() => defaultValue !== undefined && onChange(defaultValue)}
+        aria-label={label}
+        title={defaultValue !== undefined ? 'Drag to adjust · double-click to reset' : undefined}
+      />
+      <input
+        className="val-input"
+        value={draft ?? shown}
+        onFocus={(e) => { setDraft(String(Math.round(value * 1000) / 1000)); requestAnimationFrame(() => e.target.select()); }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          else if (e.key === 'Escape') { setDraft(null); (e.target as HTMLInputElement).blur(); }
+          else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const n = clamp(value + (e.key === 'ArrowUp' ? 1 : -1) * s * (e.shiftKey ? 10 : 1));
+            onChange(n);
+            setDraft(String(Math.round(n * 1000) / 1000));
+          }
+        }}
+        aria-label={`${label} value`}
+        title="Type an exact value · ↑↓ to nudge (Shift = ×10)"
+      />
     </div>
   );
 }
 
-function EffectCard({ fx, onChange, onRemove, project }: { fx: Effect; onChange: (fn: (e: Effect) => void) => void; onRemove: () => void; project: Project }) {
+/** One-click starting points per effect. */
+const FX_PRESETS: Partial<Record<EffectType, Record<string, Record<string, number | string>>>> = {
+  reverb: { Room: { decay: 0.9, preDelay: 0.01, wet: 0.2 }, Plate: { decay: 1.8, preDelay: 0.02, wet: 0.28 }, Hall: { decay: 3.5, preDelay: 0.03, wet: 0.32 }, Huge: { decay: 8, preDelay: 0.05, wet: 0.45 } },
+  delay: { Slapback: { time: '32n', feedback: 0.1, wet: 0.2, pingPong: 0 }, Eighth: { time: '8n', feedback: 0.3, wet: 0.22, pingPong: 1 }, Dotted: { time: '8n.', feedback: 0.4, wet: 0.25, pingPong: 1 }, Dub: { time: '4n', feedback: 0.65, wet: 0.35, pingPong: 0 } },
+  compressor: { Glue: { threshold: -18, ratio: 2, attack: 0.03, release: 0.25, makeup: 2 }, Punch: { threshold: -20, ratio: 4, attack: 0.02, release: 0.1, makeup: 4 }, Squash: { threshold: -30, ratio: 10, attack: 0.002, release: 0.08, makeup: 8 } },
+  eq: { Flat: { low: 0, mid: 0, high: 0 }, 'Clear mud': { low: -3, mid: -4, high: 1 }, Air: { low: 0, mid: 0, high: 4 }, 'Thin out': { low: -10, mid: 0, high: 2 } },
+  filter: { Muffled: { mode: 'lowpass', frequency: 700, q: 1 }, Telephone: { mode: 'bandpass', frequency: 1500, q: 2 }, 'Clean lows': { mode: 'highpass', frequency: 150, q: 0.7 } },
+  lofi: { Tape: { wow: 0.25, tone: 0.55, noise: 0.05, wet: 1 }, Vinyl: { wow: 0.35, tone: 0.4, noise: 0.35, wet: 1 }, Broken: { wow: 0.9, tone: 0.2, noise: 0.5, wet: 1 } },
+  distortion: { Warm: { amount: 0.2, wet: 0.6 }, Crunch: { amount: 0.5, wet: 1 }, Blown: { amount: 0.9, wet: 1 } },
+  chorus: { Subtle: { frequency: 0.8, depth: 0.3, wet: 0.3 }, Lush: { frequency: 1.5, depth: 0.7, wet: 0.5 }, Wobble: { frequency: 4, depth: 0.9, wet: 0.7 } },
+};
+
+const FX_GROUPS: Array<[string, EffectType[]]> = [
+  ['Tone', ['eq', 'filter']],
+  ['Dynamics', ['compressor', 'limiter', 'duck']],
+  ['Space', ['reverb', 'delay', 'widener']],
+  ['Color', ['saturation', 'distortion', 'bitcrusher', 'lofi']],
+  ['Modulation', ['chorus', 'phaser', 'tremolo']],
+];
+
+function EffectCard({ fx, index, count, onChange, onRemove, onMove, project }: { fx: Effect; index: number; count: number; onChange: (fn: (e: Effect) => void) => void; onRemove: () => void; onMove: (dir: -1 | 1) => void; project: Project }) {
   const info = EFFECT_BY_TYPE[fx.type];
+  const presets = FX_PRESETS[fx.type];
   return (
-    <div className="card" style={{ opacity: fx.enabled ? 1 : 0.55 }}>
+    <div className={`card fx-card ${fx.enabled ? '' : 'bypassed'}`}>
       <div className="card-head">
-        <input type="checkbox" checked={fx.enabled} onChange={(e) => onChange((x) => { x.enabled = e.target.checked; })} aria-label={`Enable ${info.name}`} style={{ accentColor: 'var(--agent)' }} />
-        {info.name}
-        <span className="chip">{fx.id}</span>
+        <button className={`fx-power ${fx.enabled ? 'on' : ''}`} onClick={() => onChange((x) => { x.enabled = !x.enabled; })} title={fx.enabled ? 'Bypass this effect' : 'Turn this effect back on'} aria-pressed={fx.enabled}>
+          <Power size={12} />
+        </button>
+        <span className="fx-name" title={info.description}>{info.name}</span>
         <div className="spacer" />
-        <button className="btn icon danger" onClick={onRemove} aria-label={`Remove ${info.name}`}><Trash size={13} /></button>
+        {presets && (
+          <select
+            className="fx-preset"
+            value=""
+            onChange={(e) => { const pr = presets[e.target.value]; if (pr) onChange((x) => { x.params = { ...x.params, ...pr }; }); }}
+            aria-label={`${info.name} preset`}
+            title="Load a preset"
+          >
+            <option value="">Presets…</option>
+            {Object.keys(presets).map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+        )}
+        <button className="btn icon" disabled={index === 0} onClick={() => onMove(-1)} title="Move earlier in the chain" aria-label="Move up"><ChevronUp size={13} /></button>
+        <button className="btn icon" disabled={index === count - 1} onClick={() => onMove(1)} title="Move later in the chain" aria-label="Move down"><ChevronDown size={13} /></button>
+        <button className="btn icon" onClick={() => onChange((x) => { x.params = { ...defaultEffectParams(x.type), ...(x.type === 'duck' ? { source: x.params.source } : {}) }; })} title="Reset all settings" aria-label="Reset"><RotateCcw size={12} /></button>
+        <button className="btn icon danger" onClick={onRemove} title="Remove this effect" aria-label={`Remove ${info.name}`}><Trash size={13} /></button>
       </div>
       {Object.entries(info.params).map(([k, spec]) => {
         const v = fx.params[k] ?? spec.default;
@@ -54,7 +141,7 @@ function EffectCard({ fx, onChange, onRemove, project }: { fx: Effect; onChange:
             </div>
           );
         }
-        return <ParamSlider key={k} label={spec.label} value={Number(v)} min={spec.min ?? 0} max={spec.max ?? 1} onChange={(nv) => onChange((x) => { x.params[k] = nv; })} />;
+        return <ParamSlider key={k} label={spec.label} value={Number(v)} min={spec.min ?? 0} max={spec.max ?? 1} defaultValue={Number(spec.default)} onChange={(nv) => onChange((x) => { x.params[k] = nv; })} />;
       })}
     </div>
   );
@@ -65,16 +152,25 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
   const list = (d: Project) => (ownerId === 'master' ? d.master.effects : d.tracks.find((t) => t.id === ownerId)!.effects);
   return (
     <>
-      {effects.map((fx) => (
+      {effects.map((fx, i) => (
         <EffectCard
           key={fx.id}
           fx={fx}
+          index={i}
+          count={effects.length}
           project={project}
           onChange={(fn) => update(`Edit ${EFFECT_BY_TYPE[fx.type].name}`, (d) => { const e = list(d).find((x) => x.id === fx.id); if (e) fn(e); }, { coalesce: true })}
           onRemove={() => update('Remove effect', (d) => { const l = list(d); l.splice(l.findIndex((x) => x.id === fx.id), 1); })}
+          onMove={(dir) => update('Reorder effects', (d) => {
+            const l = list(d);
+            const at = l.findIndex((x) => x.id === fx.id);
+            const to = at + dir;
+            if (to < 0 || to >= l.length) return;
+            [l[at], l[to]] = [l[to], l[at]];
+          })}
         />
       ))}
-      <div className="card" style={{ justifyContent: 'center' }}>
+      <div className="card add-fx">
         <div className="card-head"><Plus size={14} /> Add effect</div>
         <select
           value=""
@@ -90,9 +186,14 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
           }}
           aria-label="Add effect"
         >
-          <option value="">Choose…</option>
-          {EFFECTS.map((e) => <option key={e.type} value={e.type}>{e.name} — {e.description}</option>)}
+          <option value="">Choose an effect…</option>
+          {FX_GROUPS.map(([g, types]) => (
+            <optgroup key={g} label={g}>
+              {types.map((t) => <option key={t} value={t}>{EFFECT_BY_TYPE[t].name}</option>)}
+            </optgroup>
+          ))}
         </select>
+        <small style={{ color: 'var(--faint)' }}>Effects run top to bottom. Use the arrows to reorder.</small>
       </div>
     </>
   );
@@ -153,7 +254,7 @@ export function TrackInspector({ track, project }: { track: Track | null; projec
           </select>
           {preset && <small style={{ color: 'var(--faint)' }}>{preset.description}</small>}
           {preset && Object.entries(preset.params).map(([k, spec]) => (
-            <ParamSlider key={k} label={spec.label} value={track.instrument!.params[k] ?? spec.default} min={spec.min} max={spec.max} onChange={(v) => setTrack('Instrument param', (t) => { t.instrument!.params[k] = v; })} />
+            <ParamSlider key={k} label={spec.label} value={track.instrument!.params[k] ?? spec.default} min={spec.min} max={spec.max} defaultValue={spec.default} onChange={(v) => setTrack('Instrument param', (t) => { t.instrument!.params[k] = v; })} />
           ))}
         </div>
       )}

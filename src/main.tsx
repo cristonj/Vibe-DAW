@@ -7,8 +7,10 @@ import { loadEngineOnFirstGesture } from './engine/api';
 import { useDaw } from './state/store';
 import { loadInitialProject, startAutosave, usePersist } from './state/persistence';
 import { initCloud } from './cloud/cloud';
+import { applyTheme } from './state/theme';
 
 async function boot() {
+  applyTheme();
   await initLibrary();
   const project = await loadInitialProject();
   useDaw.getState().replaceProject(project);

@@ -1,7 +1,9 @@
 import * as Tone from 'tone';
 import { useDaw, useTransport, getProject } from '../state/store';
+import { useSettings } from '../state/settings';
 import { EngineGraph, preloadProject } from './graph';
 import { contextLock } from './lock';
+import { configureFreeze, scheduleFreeze } from './freeze';
 import type { Project } from '../model/types';
 import { getLoadedBuffer, loadBuffer } from '../samples/library';
 
@@ -32,9 +34,11 @@ export function initEngine() {
   if (graph) return;
   // A larger output buffer ('playback') trades a few ms of latency for no dropouts
   // with heavy projects; a DAW's transport doesn't need game-level latency.
-  Tone.setContext(new Tone.Context({ latencyHint: 'playback', lookAhead: 0.12 }), true);
+  const low = useSettings.getState().latency === 'low';
+  Tone.setContext(new Tone.Context({ latencyHint: low ? 'interactive' : 'playback', lookAhead: low ? 0.06 : 0.12 }), true);
   transport = Tone.getTransport();
   graph = new EngineGraph({ live: true });
+  configureFreeze(Tone.getContext().sampleRate, () => queueSync(getProject()));
   queueSync(getProject());
   useDaw.subscribe((s, prev) => {
     if (s.project !== prev.project) queueSync(s.project);
@@ -54,6 +58,7 @@ function queueSync(p: Project) {
     try {
       const assets = await preloadProject(next);
       await contextLock.run(() => graph!.sync(next, assets));
+      scheduleFreeze(next);
     } catch (e) {
       console.error('Engine sync failed', e);
     } finally {

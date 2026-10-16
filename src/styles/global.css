@@ -28,6 +28,9 @@
   --roll-white: #20253a;
   --roll-inkey: #252a42;
   --roll-black: #171a27;
+  --lcd-bg: #10131c;
+  --meter-bg: #0d0f17;
+  --tooltip-bg: #0f1119;
   --radius-s: 4px;
   --radius-m: 8px;
   --radius-l: 14px;
@@ -163,7 +166,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   align-items: stretch;
   height: 34px;
   margin: 0 8px;
-  background: #10131c;
+  background: var(--lcd-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
   font-family: var(--font-lcd);
@@ -179,7 +182,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   padding: 0;
   font-family: var(--font-lcd);
   font-size: 12.5px;
-  color: var(--text);
+  color: #ebe9f4;
   border-radius: 0;
 }
 .lcd input { width: 44px; text-align: right; }
@@ -483,7 +486,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .strip .fx-count { font-size: 11px; color: var(--faint); }
 .fader-wrap { flex: 1; display: flex; gap: 6px; align-items: stretch; min-height: 60px; }
 .fader { writing-mode: vertical-lr; direction: rtl; width: 22px; accent-color: var(--text); }
-.meter { width: 8px; background: #0d0f17; border-radius: 3px; position: relative; overflow: hidden; }
+.meter { width: 8px; background: var(--meter-bg); border-radius: 3px; position: relative; overflow: hidden; }
 .meter .fill { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, var(--ok) 0%, var(--ok) 65%, var(--warn) 85%, var(--rec) 100%); background-size: 100% var(--meter-h, 100px); background-position: bottom; }
 .db { font-family: var(--font-lcd); font-size: 10px; color: var(--muted); }
 .pan { width: 74px; accent-color: var(--muted); }
@@ -671,8 +674,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   max-width: 320px;
   padding: 6px 9px;
   border-radius: 6px;
-  background: #0f1119;
-  color: var(--text);
+  background: var(--tooltip-bg);
+  color: #ebe9f4;
   font-size: 12px;
   line-height: 1.35;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
@@ -712,3 +715,39 @@ kbd {
 
 .playhead-grip { position: absolute; top: 0; bottom: 0; left: -5px; width: 11px; pointer-events: auto; cursor: ew-resize; }
 .ruler .marks { cursor: ew-resize; }
+
+/* ---------------------------------------------------------------- settings */
+
+.settings-tabs { padding: 0; margin: 4px 0 14px; border-bottom: 1px solid var(--line-soft); }
+.settings-body { min-height: 320px; }
+.theme-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.theme-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--radius-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); font-size: 12px; text-align: left; }
+.theme-card.on { box-shadow: inset 0 0 0 1.5px var(--agent); }
+.theme-swatch { display: flex; gap: 4px; align-items: flex-end; height: 44px; padding: 6px; border-radius: 6px; }
+.theme-swatch i { flex: 1; height: 100%; border-radius: 3px; }
+.theme-swatch i:nth-child(2) { height: 60%; }
+.theme-swatch i:nth-child(3) { flex: 0 0 10px; height: 30%; }
+.accent-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.accent-dot { width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25); }
+.accent-dot.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--text); }
+.accent-custom { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.accent-custom input { width: 28px; height: 24px; padding: 0; border: 0; background: none; }
+.keymap-group h4 { margin: 12px 0 4px; font-size: 12px; color: var(--faint); font-weight: 600; }
+.keymap-row { display: grid; grid-template-columns: 1fr auto 28px; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
+.key-capture { min-width: 130px; display: flex; gap: 4px; justify-content: flex-end; padding: 3px 6px; border-radius: var(--radius-s); }
+.key-capture:hover { background: var(--hover); }
+.key-capture.recording { box-shadow: inset 0 0 0 1.5px var(--agent); color: var(--agent); }
+.key-capture i { color: var(--faint); font-size: 12px; }
+
+/* ---------------------------------------------------------------- effects */
+
+.param { grid-template-columns: 92px 1fr 70px; }
+.val-input { width: 70px; padding: 2px 6px; text-align: right; font-family: var(--font-lcd); font-size: 10.5px; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 4px; }
+.val-input:hover { border-color: var(--line); }
+.fx-card.bypassed > *:not(.card-head) { opacity: 0.45; }
+.fx-card .card-head { gap: 2px; }
+.fx-name { margin-left: 4px; }
+.fx-power { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--faint); box-shadow: inset 0 0 0 1px var(--line); }
+.fx-power.on { color: #10131c; background: var(--agent); box-shadow: none; }
+.fx-preset { padding: 2px 4px; font-size: 11.5px; max-width: 96px; }
+.add-fx { justify-content: center; }

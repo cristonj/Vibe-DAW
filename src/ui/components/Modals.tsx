@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash, Plus, Copy, Cloud, LogOut } from 'lucide-react';
+import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from 'lucide-react';
 import { useSettings, MODELS, type Thinking } from '../../state/settings';
 import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
 import { useAuth, signIn, signOut } from '../../cloud/cloud';
@@ -7,6 +7,8 @@ import { usePersist, openProject, newProject, deleteProject, duplicateProject, s
 import { useDaw } from '../../state/store';
 import { relativeTime } from '../hooks';
 import { toast } from '../toast';
+import { ACTIONS, bindings, comboFromEvent, useKeymap, type ActionId } from '../../state/keymap';
+import { ACCENTS, THEMES, useTheme, type ThemeId } from '../../state/theme';
 
 function Modal({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -26,12 +28,31 @@ function Modal({ title, sub, onClose, children }: { title: string; sub?: string;
 }
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<'ai' | 'appearance' | 'keyboard' | 'playback'>('ai');
+  return (
+    <Modal title="Settings" onClose={onClose}>
+      <div className="tabs settings-tabs" role="tablist">
+        {([['ai', 'AI'], ['appearance', 'Appearance'], ['keyboard', 'Keyboard'], ['playback', 'Playback & editing']] as const).map(([id, label]) => (
+          <button key={id} className={`tab ${tab === id ? 'active' : ''}`} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
+      <div className="settings-body">
+        {tab === 'ai' && <AiSettings />}
+        {tab === 'appearance' && <AppearanceSettings />}
+        {tab === 'keyboard' && <KeyboardSettings />}
+        {tab === 'playback' && <PlaybackSettings />}
+      </div>
+      <div className="modal-actions"><button className="btn primary" onClick={onClose}>Done</button></div>
+    </Modal>
+  );
+}
+
+function AiSettings() {
   const s = useSettings();
   const user = useAuth((x) => x.user);
   const [key, setKey] = useState(s.apiKey);
-  const save = () => { s.set({ apiKey: key.trim() }); onClose(); };
   return (
-    <Modal title="Settings" sub="How the agent connects to Gemini and how much freedom it has." onClose={onClose}>
+    <>
       {hostedAiEnabled && (
         <div className="field">
           <span>Connection</span>
@@ -49,10 +70,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       )}
       <label className="field">
         <span>Gemini API key</span>
-        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="AIza…" autoComplete="off" spellCheck={false} />
+        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => s.set({ apiKey: key.trim() })} placeholder="AIza…" autoComplete="off" spellCheck={false} />
         <small>
-          Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a> (Google’s free tier covers casual use).
-          The key is saved only in this browser and sent only to Google — Vibe has no server that sees it. Usage counts against your own Google quota.
+          Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
+          Saved only in this browser and sent only to Google.
         </small>
       </label>
       <label className="field">
@@ -88,11 +109,133 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
       )}
-      <div className="modal-actions">
-        <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" onClick={save}>Save</button>
+    </>
+  );
+}
+
+function AppearanceSettings() {
+  const t = useTheme();
+  return (
+    <>
+      <div className="field">
+        <span>Theme</span>
+        <div className="theme-grid">
+          {(Object.keys(THEMES) as ThemeId[]).map((id) => {
+            const v = { '--bg': '#161925', '--panel': '#1c2030', '--raised': '#282e46', '--text': '#ebe9f4', ...THEMES[id].vars } as Record<string, string>;
+            return (
+              <button key={id} className={`theme-card ${t.theme === id ? 'on' : ''}`} onClick={() => t.set({ theme: id })} aria-pressed={t.theme === id}>
+                <span className="theme-swatch" style={{ background: v['--bg'] }}>
+                  <i style={{ background: v['--panel'] }} />
+                  <i style={{ background: v['--raised'] }} />
+                  <i style={{ background: t.accent }} />
+                </span>
+                {THEMES[id].name}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </Modal>
+      <div className="field">
+        <span>Accent color</span>
+        <small>Used for AI changes, selection, and primary buttons.</small>
+        <div className="accent-row">
+          {ACCENTS.map((c) => (
+            <button key={c} className={`accent-dot ${t.accent === c ? 'on' : ''}`} style={{ background: c }} onClick={() => t.set({ accent: c })} aria-label={`Accent ${c}`} title={c} />
+          ))}
+          <label className="accent-custom" title="Pick any color">
+            <input type="color" value={t.accent} onChange={(e) => t.set({ accent: e.target.value })} aria-label="Custom accent color" /> Custom
+          </label>
+        </div>
+      </div>
+      <label className="field">
+        <span>Interface size</span>
+        <select value={t.scale} onChange={(e) => t.set({ scale: Number(e.target.value) })}>
+          {[0.85, 0.9, 1, 1.1, 1.25].map((v) => <option key={v} value={v}>{Math.round(v * 100)}%</option>)}
+        </select>
+      </label>
+    </>
+  );
+}
+
+function KeyboardSettings() {
+  const { overrides, setBinding, reset } = useKeymap();
+  const [recording, setRecording] = useState<ActionId | null>(null);
+  useEffect(() => {
+    if (!recording) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') { setRecording(null); return; }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      // Take the combo away from any other action that used it.
+      for (const id of Object.keys(ACTIONS) as ActionId[]) {
+        if (id !== recording && bindings(id).includes(combo)) setBinding(id, bindings(id).filter((c) => c !== combo));
+      }
+      setBinding(recording, [combo]);
+      setRecording(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [recording, setBinding]);
+  const groups = [...new Set(Object.values(ACTIONS).map((a) => a.group))];
+  return (
+    <>
+      <p className="sub" style={{ marginTop: 0 }}>Click a shortcut, then press the new key combination. Esc cancels.</p>
+      {groups.map((g) => (
+        <div key={g} className="keymap-group">
+          <h4>{g}</h4>
+          {(Object.keys(ACTIONS) as ActionId[]).filter((id) => ACTIONS[id].group === g).map((id) => {
+            const custom = !!overrides[id];
+            return (
+              <div key={id} className="keymap-row">
+                <span>{ACTIONS[id].label}</span>
+                <button className={`key-capture ${recording === id ? 'recording' : ''}`} onClick={() => setRecording(id)} title="Click, then press keys">
+                  {recording === id ? 'Press keys…' : bindings(id).length ? bindings(id).map((k) => <kbd key={k}>{k}</kbd>) : <i>Unassigned</i>}
+                </button>
+                <button className="btn icon" disabled={!custom} onClick={() => reset(id)} title="Restore default" aria-label="Restore default"><RotateCcw size={13} /></button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+        <button className="btn" onClick={() => reset()}>Reset all shortcuts</button>
+      </div>
+    </>
+  );
+}
+
+function PlaybackSettings() {
+  const s = useSettings();
+  const daw = useDaw();
+  return (
+    <>
+      <div className="field">
+        <span>Playback buffer</span>
+        <div className="radio-cards">
+          <button className={`radio-card ${s.latency === 'stable' ? 'on' : ''}`} onClick={() => s.set({ latency: 'stable' })}>
+            <b>Stable</b>
+            <span>Larger buffer. No crackles on heavy projects. Recommended.</span>
+          </button>
+          <button className={`radio-card ${s.latency === 'low' ? 'on' : ''}`} onClick={() => s.set({ latency: 'low' })}>
+            <b>Low latency</b>
+            <span>Snappier note previews. May crackle on busy songs.</span>
+          </button>
+        </div>
+        <small>Takes effect after you reload the page.</small>
+      </div>
+      <label className="field">
+        <span>Default snap for clips</span>
+        <select value={daw.snap} onChange={(e) => daw.setSnap(Number(e.target.value))}>
+          <option value={0}>Bar</option><option value={1}>1/4</option><option value={0.5}>1/8</option><option value={0.25}>1/16</option><option value={-1}>Off</option>
+        </select>
+      </label>
+      <label className="toggle">
+        <input type="checkbox" checked={daw.followPlayhead} onChange={(e) => daw.setFollow(e.target.checked)} />
+        <span>Follow the playhead<small>Scroll the timeline to keep the playhead in view while playing.</small></span>
+      </label>
+    </>
   );
 }
 

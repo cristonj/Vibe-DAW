@@ -7,12 +7,13 @@ import { AgentPanel } from './components/AgentPanel';
 import { InlineAI, openInlineAI } from './components/InlineAI';
 import { SettingsModal, ProjectsModal } from './components/Modals';
 import { useToasts } from './toast';
-import { useDaw } from '../state/store';
+import { useDaw, useTransport } from '../state/store';
 import { togglePlay, stop } from '../engine/api';
 import { isTypingTarget } from './hooks';
 import { Tooltips } from './Tooltips';
 import { HelpModal } from './components/HelpModal';
-import { copySelectedClips, deleteSelectedClips, duplicateSelectedClips, pasteClips, splitAtPlayhead } from './actions';
+import { copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, splitAtPlayhead } from './actions';
+import { matches } from '../state/keymap';
 
 function Toasts() {
   const toasts = useToasts((s) => s.toasts);
@@ -40,25 +41,31 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      const k = e.key.toLowerCase();
-      if (mod && k === 'k') { e.preventDefault(); openInlineAI(); return; }
-      if (mod && k === 'l') { e.preventDefault(); setAgentOpen(true); setFocusAgent((n) => n + 1); return; }
+      const run = (fn: () => void) => { e.preventDefault(); fn(); };
+      // These work even while typing in a text box.
+      if (matches(e, 'inlineAI')) return run(() => openInlineAI());
+      if (matches(e, 'focusAgent')) return run(() => { setAgentOpen(true); setFocusAgent((n) => n + 1); });
       if (isTypingTarget(e.target)) return;
       const daw = useDaw.getState();
-      if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) daw.redo(); else daw.undo(); return; }
-      if (mod && k === 'y') { e.preventDefault(); daw.redo(); return; }
-      if (e.code === 'Space') { e.preventDefault(); void togglePlay(); return; }
-      if (e.key === 'Home') { stop(true); return; }
-      if (k === 'l' && !mod) { daw.update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; }); return; }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && daw.selection.clipIds.length) { deleteSelectedClips(); return; }
-      if (mod && k === 'd') { e.preventDefault(); duplicateSelectedClips(); return; }
-      if (mod && k === 'c') { copySelectedClips(); return; }
-      if (mod && k === 'x') { copySelectedClips(true); return; }
-      if (mod && k === 'v') { e.preventDefault(); pasteClips(); return; }
-      if (mod && k === 'e') { e.preventDefault(); splitAtPlayhead(); return; }
-      if (e.key === '?') { setHelp(true); return; }
-      if (e.key === 'Escape') { daw.select({ clipIds: [] }); }
+      if (matches(e, 'undo')) return run(() => daw.undo());
+      if (matches(e, 'redo')) return run(() => daw.redo());
+      if (matches(e, 'playPause')) return run(() => void togglePlay());
+      if (matches(e, 'stopRewind')) return run(() => stop(true));
+      if (matches(e, 'toggleLoop')) return run(() => daw.update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; }));
+      if (matches(e, 'toggleMetronome')) return run(() => useTransport.getState().setMetronome(!useTransport.getState().metronome));
+      if (matches(e, 'delete') && daw.selection.clipIds.length) return run(deleteSelectedClips);
+      if (matches(e, 'duplicate')) return run(duplicateSelectedClips);
+      if (matches(e, 'copy')) return run(() => copySelectedClips());
+      if (matches(e, 'cut')) return run(() => copySelectedClips(true));
+      if (matches(e, 'paste')) return run(pasteClips);
+      if (matches(e, 'split')) return run(splitAtPlayhead);
+      if (matches(e, 'newClip')) return run(() => void newClipOnSelectedTrack());
+      if (matches(e, 'help')) return run(() => setHelp(true));
+      if (matches(e, 'toggleBrowser')) return run(() => setBrowserOpen((v) => !v));
+      if (matches(e, 'toggleAgent')) return run(() => setAgentOpen((v) => !v));
+      if (matches(e, 'zoomIn')) return run(() => daw.setZoom(daw.zoom * 1.25));
+      if (matches(e, 'zoomOut')) return run(() => daw.setZoom(daw.zoom / 1.25));
+      if (e.key === 'Escape') daw.select({ clipIds: [] });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
