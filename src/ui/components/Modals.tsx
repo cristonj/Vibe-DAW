@@ -48,7 +48,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       <label className="field">
         <span>Gemini API key</span>
         <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="AIza…" autoComplete="off" spellCheck={false} />
-        <small>Stored only in this browser. Also used for Lyria loop generation. Get one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.</small>
+        <small>Stored only in this browser. Get one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.</small>
       </label>
       <label className="field">
         <span>Model</span>
@@ -68,10 +68,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       <label className="toggle">
         <input type="checkbox" checked={s.autoListen} onChange={(e) => s.set({ autoListen: e.target.checked })} />
         <span>Let the agent listen<small>It bounces audio and sends it to Gemini to audition samples and check the mix.</small></span>
-      </label>
-      <label className="toggle">
-        <input type="checkbox" checked={s.allowGeneration} onChange={(e) => s.set({ allowGeneration: e.target.checked })} />
-        <span>Let the agent generate audio with Lyria<small>New loops (guitar, keys, textures) made from text. Uses more quota.</small></span>
       </label>
       {firebaseConfigured && (
         <div className="field">

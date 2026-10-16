@@ -12,7 +12,7 @@ import { Markdown } from '../Markdown';
 import { toast } from '../toast';
 
 const TOOL_ICONS: Record<string, typeof Ear> = {
-  listen: Ear, audition_samples: Ear, generate_loop: Sparkles, write_drums: Drum, write_notes: Piano, create_track: Plus,
+  listen: Ear, audition_samples: Ear, write_drums: Drum, write_notes: Piano, create_track: Plus,
   update_track: Pencil, delete_track: Trash, add_effect: SlidersHorizontal, update_effect: SlidersHorizontal, remove_effect: SlidersHorizontal,
   search_samples: Search, design_sound: AudioLines, set_project: Gauge, copy_bars: Layers, clear_bars: Scissors, play: Play, stop: CircleStop,
   set_drum_lane: Drum, add_audio_clip: AudioLines, edit_clip: Pencil, delete_clips: Trash, transform_notes: Music, set_sections: ListChecks,

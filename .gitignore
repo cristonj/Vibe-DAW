@@ -1,4 +1,4 @@
-node_modules
+**/node_modules/
 dist
 .env
 .env.local
@@ -6,7 +6,6 @@ dist
 *.log
 .DS_Store
 .firebase
-functions/lib
-functions/node_modules
 coverage
 *.tsbuildinfo
+.firebaserc

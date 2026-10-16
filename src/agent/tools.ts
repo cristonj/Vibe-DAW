@@ -12,7 +12,6 @@ import { pcmToAudioBuffer } from '../engine/wav';
 import { play as enginePlay, stop as engineStop } from '../engine/engine';
 import { describeClipNotes, describeProject } from './context';
 import { audition, listen } from './ears';
-import { generateLoop } from './lyria';
 import type { ToolDeclaration } from './llm';
 
 // The agent's hands. Every tool validates its input, edits the project through the
@@ -835,39 +834,6 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
         result: { heard: r.heard, measured: r.stats, bars: `${r.startBar}–${r.endBar}` },
         summary: `Listened to bars ${r.startBar}–${r.endBar - 1}${(a.track_ids as string[] | undefined)?.length ? ' (soloed)' : ''}`,
         heard: r.heard,
-      };
-    },
-  },
-  {
-    enabled: () => useSettings.getState().allowGeneration,
-    decl: {
-      name: 'generate_loop',
-      description: `Generate a NEW audio loop with Lyria (Google's music model) — e.g. a melancholic acoustic guitar riff, lo-fi piano, ambient texture. It is trimmed to whole bars at the given tempo and added to the library. Takes ~10–30 s. Describe instrument, playing style, mood, and processing; never name artists. Afterwards, audition it before using.`,
-      parameters: obj({
-        prompt: S('Musical description, e.g. "sad fingerpicked acoustic guitar riff, emo, lo-fi tape warmth, intimate"'),
-        bars: N('Loop length in bars (1–8, default 4)'),
-        bpm: N('Default: project tempo'),
-        key: S('Default: project key, e.g. "C# minor"'),
-        category: S('guitar, keys, synth, strings, texture, drums, bass, vocal…'),
-        name: S('Library name'),
-      }, ['prompt']),
-    },
-    run: async (a, ctx) => {
-      const p = getProject();
-      const r = await generateLoop({
-        prompt: str(a.prompt, 'prompt')!,
-        bars: num(a.bars, 'bars', { min: 1, max: 8, optional: true }) ?? 4,
-        bpm: num(a.bpm, 'bpm', { min: 40, max: 220, optional: true }) ?? p.bpm,
-        key: a.key ? String(a.key) : formatKey(p.key),
-        beatsPerBar: beatsPerBar(p),
-        category: a.category ? String(a.category) : undefined,
-        name: a.name ? String(a.name) : undefined,
-        signal: ctx.signal,
-      });
-      return {
-        result: { sample_id: r.meta.id, name: r.meta.name, seconds: Math.round(r.meta.duration * 100) / 100, bpm: r.meta.bpm, key: r.meta.key, ...(r.note ? { note: r.note } : {}) },
-        summary: `Generated loop “${r.meta.name}” (${Math.round(r.meta.duration * 10) / 10}s)`,
-        sampleIds: [r.meta.id],
       };
     },
   },

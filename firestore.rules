@@ -20,11 +20,6 @@ service cloud.firestore {
       allow create, update: if isOwner(uid) && request.resource.data.id == sampleId;
     }
 
-    // Written only by Cloud Functions (admin SDK bypasses rules); users may read their usage.
-    match /users/{uid}/usage/{day} {
-      allow read: if isOwner(uid);
-      allow write: if false;
-    }
 
     match /{document=**} {
       allow read, write: if false;
