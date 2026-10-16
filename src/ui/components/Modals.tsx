@@ -52,6 +52,8 @@ function AiSettings() {
   const s = useSettings();
   const user = useAuth((x) => x.user);
   const [key, setKey] = useState(s.apiKey);
+  // Pick up a key that arrives from another signed-in device while Settings is open.
+  useEffect(() => { setKey(s.apiKey); }, [s.apiKey]);
   return (
     <>
       {hostedAiEnabled && (
@@ -74,7 +76,7 @@ function AiSettings() {
         <input type="password" value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => s.set({ apiKey: key.trim() })} placeholder="AIza…" autoComplete="off" spellCheck={false} />
         <small>
           Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
-          Saved only in this browser and sent only to Google.
+          {user ? 'Saved in this browser and synced to your account so your other devices have it. Only sent to Google.' : 'Saved only in this browser and sent only to Google.'}
         </small>
       </label>
       <label className="field">
@@ -123,7 +125,10 @@ function AiSettings() {
               <button className="btn" onClick={() => void signOut()}><LogOut size={14} /> Sign out</button>
             </div>
           ) : (
-            <button className="btn solid" onClick={() => signIn().catch((e) => toast(e.message, 'error'))}>Sign in with Google to sync</button>
+            <>
+              <button className="btn solid" onClick={() => signIn().catch((e) => toast(e.message, 'error'))}>Sign in with Google to sync</button>
+              <small>Syncs projects, your API key, AI settings, theme and keyboard shortcuts across devices. Interface size and output latency stay per device.</small>
+            </>
           )}
         </div>
       )}

@@ -48,7 +48,7 @@ Pick the model and thinking level in Settings or from the composer.
 
 ## Production setup (Firebase + Netlify)
 
-Firebase provides sign-in and cloud sync. If you opt into hosted AI (`VITE_HOSTED_AI=true`), chat and listening go through **Firebase AI Logic** on your project, and **App Check** keeps other sites from spending your quota.
+Firebase provides sign-in and cloud sync: projects, samples, your Gemini key, AI settings, theme and keyboard shortcuts follow your Google account across devices. If you opt into hosted AI (`VITE_HOSTED_AI=true`), chat and listening go through **Firebase AI Logic** on your project, and **App Check** keeps other sites from spending your quota.
 
 ### 1. Firebase project
 
@@ -85,7 +85,7 @@ src/
               DSP analysis (tempo, key, pitch, loudness, spectrum)
   agent/      Gemini client (direct key or Firebase AI Logic), agent loop, tools,
               system prompt, ears (render → Gemini), change diffs
-  cloud/      Firebase: auth, Firestore project sync, Storage sample sync
+  cloud/      Firebase: auth, Firestore project + preference sync, Storage sample sync
   ui/         React UI: arrangement, piano roll, drum grid, audio clip editor, mixer,
               track inspector, agent panel, Ctrl+K inline edit
 ```

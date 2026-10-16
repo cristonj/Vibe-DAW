@@ -5,7 +5,7 @@ vi.mock('./llm', () => ({ streamGenerate: mocks.stream, explainError: (e: Error)
 vi.mock('./tools', () => ({ runTool: mocks.tool, toolDeclarations: () => [] }));
 vi.mock('./prompts', () => ({ systemPrompt: () => 'Producer' }));
 vi.mock('../state/settings', () => ({ aiAvailable: () => ({ ok: true }), useSettings: { getState: () => ({ thinking: 'LOW' }) } }));
-import { runAgent, steerAgent, stopAgent, useAgent } from './agent';
+import { keepChanges, revertTo, runAgent, steerAgent, stopAgent, useAgent } from './agent';
 import { useDaw } from '../state/store';
 import { createProject } from '../model/project';
 import type { PlanStep } from './tools';
@@ -145,5 +145,21 @@ describe('voice messages', () => {
     const second = mocks.stream.mock.calls[1][0] as LlmRequest;
     expect(audioParts(second)).toHaveLength(1);
     expect(JSON.stringify(second.contents)).toContain('Latest steering from the user, by voice');
+  });
+});
+
+describe('reviewing agent changes', () => {
+  it('gives Keep and Undo all a fresh version so other signed-in devices pick them up', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const checkpoint = useDaw.getState().project;
+    useDaw.getState().update('AI', (d) => { d.tracks.push({ id: 't', name: 'Drums', kind: 'drums', color: '#fff', volumeDb: 0, pan: 0, mute: false, solo: false, effects: [], clips: [{ id: 'c', type: 'midi', start: 0, length: 4, notes: [], aiPending: true }] } as never); });
+    vi.spyOn(Date, 'now').mockReturnValue(2000);
+    keepChanges('none');
+    expect(useDaw.getState().project.updatedAt).toBe(2000);
+    expect(useDaw.getState().project.tracks[0].clips[0].aiPending).toBeUndefined();
+    vi.spyOn(Date, 'now').mockReturnValue(3000);
+    revertTo(checkpoint);
+    expect(useDaw.getState().project.tracks).toHaveLength(0);
+    expect(useDaw.getState().project.updatedAt).toBe(3000);
   });
 });

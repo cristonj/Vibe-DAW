@@ -20,6 +20,22 @@ service cloud.firestore {
       allow create, update: if isOwner(uid) && request.resource.data.id == sampleId;
     }
 
+    // AI settings (including the user's Gemini key), appearance and shortcuts.
+    // Each section is { data: JSON string, updatedAt: number }.
+    match /users/{uid}/prefs/{prefId} {
+      function validSection(d, k) {
+        return !(k in d) || (d[k] is map
+          && d[k].keys().hasOnly(['data', 'updatedAt'])
+          && d[k].data is string && d[k].data.size() < 20000
+          && d[k].updatedAt is number);
+      }
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && prefId == 'main'
+        && request.resource.data.keys().hasOnly(['ai', 'appearance', 'keymap'])
+        && validSection(request.resource.data, 'ai')
+        && validSection(request.resource.data, 'appearance')
+        && validSection(request.resource.data, 'keymap');
+    }
 
     match /{document=**} {
       allow read, write: if false;

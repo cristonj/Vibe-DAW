@@ -269,7 +269,7 @@ function KeySetup() {
         <button className="btn primary" type="submit" disabled={checking || !key.trim()}>{checking ? 'Checking…' : 'Connect'}</button>
       </form>
       {error && <div className="err" style={{ marginTop: 10 }}>{error}</div>}
-      <div className="hero-foot">Your key is saved only in this browser and sent only to Google. Vibe has no server that sees it.</div>
+      <div className="hero-foot">Your key is saved in this browser (and in your own account if you sign in to sync) and sent only to Google.</div>
     </>
   );
 }
