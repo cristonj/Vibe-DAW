@@ -4,6 +4,7 @@ import type { InstrumentSpec } from '../model/types';
 import { PRESET_BY_ID, defaultPresetParams } from '../model/catalog';
 import { bass808 } from '../samples/synth';
 import { loadMultisample, isMultisampled } from './multisamples';
+import { lfoClock, type LfoClock } from './lfo';
 
 // Every instrument exposes the same tiny interface so the scheduler doesn't care
 // whether it's a streamed piano, an FM bell, or a sliding 808.
@@ -13,6 +14,8 @@ export interface Instrument {
   trigger(midi: number, durationSec: number, time: number, velocity: number): void;
   releaseAll(time?: number): void;
   setParams(params: Record<string, number>): void;
+  /** Built-in modulation (chorus, vibrato, tremolo) kept in phase with the song. */
+  lfo?: LfoClock;
   dispose(): void;
 }
 
@@ -195,6 +198,7 @@ function poly(voice: PolyVoice, chain: Tone.ToneAudioNode[], out: Tone.Gain, app
     trigger: (midi, dur, time, v) => voice.triggerAttackRelease(midiToFreq(midi), Math.max(0.02, dur), time, vel(v)),
     releaseAll: (t) => voice.releaseAll(t),
     setParams: apply,
+    lfo: lfoClock(...chain.filter((c): c is Tone.Chorus | Tone.Tremolo | Tone.Vibrato => c instanceof Tone.Chorus || c instanceof Tone.Tremolo || c instanceof Tone.Vibrato)),
     dispose: () => { voice.dispose(); chain.forEach((c) => c.dispose()); extra.forEach((e) => e.dispose()); out.dispose(); },
   };
 }
@@ -274,6 +278,7 @@ function synth(spec: InstrumentSpec): Instrument {
         trigger: (midi, dur, time, ve) => v.triggerAttackRelease(midiToFreq(midi), Math.max(0.05, dur), time, vel(ve)),
         releaseAll: (t) => v.releaseAll(t),
         setParams: apply,
+        lfo: lfoClock(vib),
         dispose: () => { v.dispose(); f1.dispose(); f2.dispose(); sum.dispose(); vib.dispose(); out.dispose(); },
       };
     }
@@ -334,6 +339,7 @@ function synth(spec: InstrumentSpec): Instrument {
         },
         releaseAll: (t) => v.triggerRelease(t),
         setParams: apply,
+        lfo: lfoClock(vib),
         dispose: () => { v.dispose(); vib.dispose(); out.dispose(); },
       };
     }

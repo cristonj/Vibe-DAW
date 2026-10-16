@@ -74,14 +74,18 @@ export function getTrackLevel(trackId: string): number {
   return engine?.getTrackLevel(trackId) ?? -Infinity;
 }
 
+// Bounces render at the playback context's sample rate, so load the engine first.
 export async function renderProject(project: Project, opts?: RenderOptions): Promise<PcmData> {
+  await loadEngine();
   return (await import('./render')).renderProject(project, opts);
 }
 
 export async function exportAudio(project: Project, format: ExportFormat, onProgress?: (fraction: number, stage: 'render' | 'encode') => void): Promise<Blob> {
+  await loadEngine();
   return (await import('./render')).exportAudio(project, format, onProgress);
 }
 
 export async function renderSamplePreview(project: Project, sampleId: string) {
+  await loadEngine();
   return (await import('./samplePreview')).renderSamplePreview(project, sampleId);
 }

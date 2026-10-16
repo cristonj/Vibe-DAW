@@ -161,9 +161,12 @@ export class EngineGraph {
       t.loopStart = `${Math.round(p.loop.start * t.PPQ)}i`;
       t.loopEnd = `${Math.round(p.loop.end * t.PPQ)}i`;
     }
+    // Tempo-synced params (delay times like '8n.') are converted to seconds when
+    // applied, so a tempo change has to re-apply them even if the params didn't change.
+    const tempoChanged = !!prev && prev.bpm !== p.bpm;
     if (!this.opts.bypassMaster) {
       this.masterChannel.volume.value = p.master.volumeDb;
-      this.masterFx = await this.syncFx(this.masterFx, p.master.effects, this.masterIn, this.masterChannel);
+      this.masterFx = await this.syncFx(this.masterFx, p.master.effects, this.masterIn, this.masterChannel, tempoChanged);
     }
 
     const gk = `${p.bpm}|${p.swing}|${p.timeSignature.join('/')}|${this.duckSignature(p)}`;
@@ -217,12 +220,13 @@ export class EngineGraph {
           if (this.disposed) return;
           s.instrument = createInstrument(track.instrument, assets);
           s.instrument.output.connect(s.input);
+          this.alignIfPlaying(s.instrument);
         }
         s.instKey = key;
       } else if (track.instrument && s.track.instrument?.params !== track.instrument.params) {
         s.instrument?.setParams(track.instrument.params);
       }
-      s.fx = await this.syncFx(s.fx, track.effects, s.input, s.liveGate);
+      s.fx = await this.syncFx(s.fx, track.effects, s.input, s.liveGate, tempoChanged);
       }
       // Frozen audio enters the channel directly. Keep the live chain connected for
       // keyboard previews; its notes are not scheduled while the track is frozen.
@@ -268,12 +272,12 @@ export class EngineGraph {
     return parts.join(',');
   }
 
-  private async syncFx(slots: FxSlot[], effects: Effect[], input: Tone.ToneAudioNode, output: Tone.ToneAudioNode): Promise<FxSlot[]> {
+  private async syncFx(slots: FxSlot[], effects: Effect[], input: Tone.ToneAudioNode, output: Tone.ToneAudioNode, tempoChanged = false): Promise<FxSlot[]> {
     const enabled = effects.filter((e) => e.enabled);
     const sameChain = slots.length === enabled.length && slots.every((s, i) => s.key === fxKey(enabled[i]));
     if (sameChain) {
       slots.forEach((s, i) => {
-        if (s.effect.params !== enabled[i].params) s.unit.update(enabled[i].params);
+        if (tempoChanged || s.effect.params !== enabled[i].params) s.unit.update(enabled[i].params);
         s.effect = enabled[i];
       });
       await Promise.all(slots.map((s) => s.unit.ready));
@@ -287,11 +291,12 @@ export class EngineGraph {
       const reuse = old.get(k);
       if (reuse) {
         old.delete(k);
-        if (reuse.effect.params !== e.params) reuse.unit.update(e.params);
+        if (tempoChanged || reuse.effect.params !== e.params) reuse.unit.update(e.params);
         reuse.effect = e;
         next.push(reuse);
       } else {
         const unit = createEffect(e);
+        this.alignIfPlaying(unit);
         next.push({ id: e.id, key: k, unit, effect: e });
       }
     }
@@ -553,6 +558,7 @@ export class EngineGraph {
   private chaseAudio(time: number, offsetSec: number) {
     const p = this.project;
     if (!p) return;
+    this.alignLfos(time, offsetSec);
     const pos = (offsetSec * p.bpm) / 60;
     for (const s of this.strips.values()) {
       if (s.ghost) continue;
@@ -566,6 +572,22 @@ export class EngineGraph {
       }
       this.chaseMidi(s, time, pos);
     }
+  }
+
+  /** Put every modulation LFO where it would be at this song position. */
+  alignLfos(time: number, songSeconds: number) {
+    for (const f of this.masterFx) f.unit.lfo?.align(time, songSeconds);
+    for (const s of this.strips.values()) {
+      s.instrument?.lfo?.align(time, songSeconds);
+      for (const f of s.fx) f.unit.lfo?.align(time, songSeconds);
+    }
+  }
+
+  /** Units built mid-playback join the song's LFO phase instead of free-running. */
+  private alignIfPlaying(clock: { lfo?: { align(time: number, songSeconds: number): void } } | null) {
+    if (!clock?.lfo || this.transport.state !== 'started') return;
+    const at = this.context.now() + 0.02;
+    clock.lfo.align(at, this.transport.getSecondsAtTime(at));
   }
 
   private stopVoices(time: number, releaseInstruments = false) {
