@@ -10,7 +10,6 @@ import { getLoadedBuffer, loadBuffer } from '../samples/library';
 // because offline renders temporarily swap Tone's global context.
 
 let graph: EngineGraph | null = null;
-let ctx: Tone.BaseContext | null = null;
 let transport: ReturnType<typeof Tone.getTransport> | null = null;
 let started = false;
 let syncing: Promise<void> = Promise.resolve();
@@ -31,9 +30,10 @@ function setLoading(v: boolean) {
 /** Create the graph (no audio yet — browsers need a gesture before the context runs). */
 export function initEngine() {
   if (graph) return;
-  ctx = Tone.getContext();
+  // A larger output buffer ('playback') trades a few ms of latency for no dropouts
+  // with heavy projects; a DAW's transport doesn't need game-level latency.
+  Tone.setContext(new Tone.Context({ latencyHint: 'playback', lookAhead: 0.12 }), true);
   transport = Tone.getTransport();
-  ctx.lookAhead = 0.08;
   graph = new EngineGraph({ live: true });
   queueSync(getProject());
   useDaw.subscribe((s, prev) => {

@@ -28,6 +28,8 @@ export interface RenderOptions {
   sampleRate?: number;
   /** 0..1 as rendering advances. */
   onProgress?: (fraction: number) => void;
+  /** Render tracks as parallel stems (default) or the whole mix in one pass. */
+  stems?: boolean;
 }
 
 const WINDOW_SEC = 1;
@@ -136,6 +138,36 @@ function activeSpan(t: Track, from: number, to: number): [number, number] | null
   return e > s ? [s, e] : null;
 }
 
+function noteValueBeats(v: string): number {
+  const m = /^(\d+)(n|t)(\.)?$/.exec(v.trim());
+  if (!m) return 0.5;
+  let beats = 4 / Number(m[1]);
+  if (m[2] === 't') beats *= 2 / 3;
+  if (m[3]) beats *= 1.5;
+  return beats;
+}
+
+/**
+ * How long a track keeps sounding after its last note: instrument release plus
+ * reverb/delay tails. Stems render this far so no tail gets cut off.
+ */
+function trackTail(t: Track, bpm: number): number {
+  let tail = 0.5;
+  const ip = t.instrument?.params;
+  if (ip) tail = Math.max(tail, ip.release ?? 0, ip.decay ?? 0);
+  for (const e of t.effects) {
+    if (!e.enabled) continue;
+    if (e.type === 'reverb') tail += Number(e.params.decay ?? 2.5) + Number(e.params.preDelay ?? 0);
+    if (e.type === 'delay') {
+      const sec = (noteValueBeats(String(e.params.time ?? '8n.')) * 60) / bpm;
+      const fb = Math.min(0.95, Math.max(0.01, Number(e.params.feedback ?? 0.35)));
+      tail += Math.min(12, sec * (Math.log(0.001) / Math.log(fb) + 1));
+    }
+    if (e.type === 'chorus' || e.type === 'phaser' || e.type === 'lofi') tail += 0.1;
+  }
+  return Math.min(20, tail + 0.3);
+}
+
 async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>) {
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => {
@@ -152,6 +184,10 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
   const p: Project = { ...project, loop: { ...project.loop, enabled: false } };
   const assets = await preloadProject(p);
   const total = Math.ceil((beatsToSeconds(p, end - start) + tail) * sampleRate);
+  if (opts.stems === false) {
+    const one = await renderPass({ project: p, assets, startBeat: start, endBeat: end, tail, sampleRate, onlyTracks: opts.onlyTracks ?? null, bypassMaster: false, onProgress: opts.onProgress });
+    return { sampleRate, channels: one.map((c) => c.slice(0, total)) };
+  }
   const mix = [new Float32Array(total), new Float32Array(total)];
 
   // Stems, in parallel. Longest first so the pool finishes evenly.
@@ -166,7 +202,7 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
   await pool(stems, workers, async ({ t, span }) => {
     const len = span[1] - span[0];
     const stem = await renderPass({
-      project: p, assets, startBeat: span[0], endBeat: span[1], tail, sampleRate,
+      project: p, assets, startBeat: span[0], endBeat: span[1], tail: Math.max(tail, trackTail(t, p.bpm)), sampleRate,
       onlyTracks: [t.id], bypassMaster: true,
       onProgress: (f) => { done.set(t.id, f * len); report(); },
     });
