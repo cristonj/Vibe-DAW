@@ -404,6 +404,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   background: var(--panel);
   box-shadow: var(--shadow-pop);
 }
+.hero-card { position: relative; }
+.hero-close { position: absolute; top: 12px; right: 12px; }
+.hero-card h1 { padding-right: 32px; }
+.key-steps { margin: 0 0 16px; padding-left: 20px; color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+.key-steps a { color: var(--agent); }
+.key-steps b { color: var(--text); }
 .hero-card h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; line-height: 1.15; font-weight: 650; }
 .hero-card p { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
 .hero-input { display: flex; gap: 8px; }
