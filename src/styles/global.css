@@ -42,7 +42,10 @@
 
 * { box-sizing: border-box; }
 
+/* The Interface size setting zooms #root, and viewport units inside it get zoomed too,
+   so the app sizes itself with percentages and only html uses the viewport height. */
 html, body, #root { height: 100%; margin: 0; }
+html { height: 100dvh; }
 
 body {
   background: var(--bg);
@@ -94,7 +97,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   grid-template-columns: auto 1fr auto;
   grid-template-areas: 'top top top' 'browser main agent';
   height: 100%;
-  height: 100dvh;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
@@ -629,6 +631,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .composer-row .spacer { flex: 1; }
 .composer .status { color: var(--agent); font-size: 12px; display: flex; align-items: center; gap: 6px; }
 .attach-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--agent-wash); color: var(--agent); font-size: 11.5px; }
+.mic.listening { color: #fff; background: var(--rec); animation: mic-pulse 1.4s ease-in-out infinite; }
+.mic.listening:hover { background: var(--rec); color: #fff; }
+@keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 93, 115, 0.45); } 50% { box-shadow: 0 0 0 5px rgba(255, 93, 115, 0); } }
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .send { width: 30px; height: 30px; border-radius: var(--radius-s); display: grid; place-items: center; background: var(--agent); color: #1a1430; }
 .send:hover { background: var(--agent-strong); }
 .send:disabled { opacity: 0.35; }
@@ -643,7 +650,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 /* ---------------------------------------------------------------- overlays */
 
 .overlay { position: fixed; inset: 0; z-index: 50; background: rgba(8, 9, 16, 0.6); display: grid; place-items: center; }
-.modal { width: min(560px, 94vw); max-height: 86vh; max-height: 86dvh; overflow: auto; background: var(--panel); border-radius: var(--radius-l); box-shadow: var(--shadow-pop); padding: 20px; }
+.modal { width: min(560px, 94%); max-height: 86%; overflow: auto; background: var(--panel); border-radius: var(--radius-l); box-shadow: var(--shadow-pop); padding: 20px; }
 .modal h2 { margin: 0 0 4px; font-size: 18px; letter-spacing: -0.01em; }
 .modal .sub { color: var(--muted); margin: 0 0 16px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -673,7 +680,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   left: 50%;
   top: 72px;
   transform: translateX(-50%);
-  width: min(560px, 92vw);
+  width: min(560px, 92%);
   background: var(--panel);
   border-radius: var(--radius-l);
   box-shadow: 0 0 0 1.5px var(--agent), 0 24px 60px rgba(5, 6, 14, 0.6);
@@ -683,7 +690,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .inline-ai input { width: 100%; border: 0; background: transparent; font-size: 15px; padding: 4px 0; }
 .inline-ai .hint { color: var(--faint); font-size: 11px; margin-top: 6px; }
 
-.toast-wrap { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); left: 50%; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.toast-wrap { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); max-width: calc(100% - 24px); left: 50%; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 6px; align-items: center; }
 .toast { background: var(--raised); box-shadow: var(--shadow-pop); padding: 8px 14px; border-radius: var(--radius-m); font-size: 12.5px; }
 .toast.error { color: var(--rec); }
 
@@ -736,7 +743,7 @@ kbd {
 .grid.select-tool { cursor: default; }
 .marquee { position: absolute; border: 1px solid var(--agent); background: rgba(182, 156, 255, 0.12); pointer-events: none; z-index: 2; }
 .roll-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--signal); pointer-events: none; z-index: 3; }
-.modal.help { width: min(640px, 94vw); }
+.modal.help { width: min(640px, 94%); }
 .modal.help h3 { margin: 18px 0 8px; font-size: 14px; }
 .howto { display: flex; flex-direction: column; gap: 8px; }
 .howto div { display: grid; grid-template-columns: 170px 1fr; gap: 10px; font-size: 12.5px; }
@@ -831,11 +838,11 @@ kbd {
     box-shadow: var(--shadow-pop);
     transition: transform 0.22s ease, visibility 0.22s;
   }
-  .browser { left: 0; width: min(300px, 86vw); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  .agent { right: 0; width: min(420px, 100vw); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0; }
+  .browser { left: 0; width: min(300px, 86%); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .agent { right: 0; width: min(420px, 100%); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0; }
   .browser.collapsed, .agent.collapsed { visibility: hidden; box-shadow: none; }
-  .browser.collapsed { width: min(300px, 86vw); transform: translateX(-100%); }
-  .agent.collapsed { width: min(420px, 100vw); transform: translateX(100%); }
+  .browser.collapsed { width: min(300px, 86%); transform: translateX(-100%); }
+  .agent.collapsed { width: min(420px, 100%); transform: translateX(100%); }
   .drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 44; background: rgba(8, 9, 16, 0.55); }
 
   .topbar { gap: 4px; min-width: 0; }
@@ -905,7 +912,7 @@ kbd {
   .val-input { width: 64px; }
 
   .overlay { align-items: end; }
-  .modal { width: 100%; max-height: 92dvh; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); border-radius: var(--radius-l) var(--radius-l) 0 0; }
+  .modal { width: 100%; max-height: 92%; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); border-radius: var(--radius-l) var(--radius-l) 0 0; }
   .modal.help { width: 100%; }
   .settings-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .settings-tabs::-webkit-scrollbar { display: none; }
@@ -931,7 +938,14 @@ kbd {
   .editor-hint { display: none; }
 }
 
-/* Fingers: bigger hit areas, and gestures the browser shouldn't steal. */
+/* Touch gestures the browser shouldn't steal. touch-action only affects touch input, so these
+   apply everywhere, including touchscreen laptops whose primary pointer is a mouse. */
+.scroller { touch-action: pan-x pan-y; } /* pinch is handled in JS as timeline zoom */
+.clip { touch-action: pan-x pan-y; } /* swipe scrolls; once selected, drag moves it */
+.clip.selected, .clip .resize, .note, .note .nresize, .velocity, .ruler .marks, .playhead-grip, .dock-resize, .fader, .pan, .grid.select-tool { touch-action: none; }
+.grid { touch-action: pan-x pan-y; }
+
+/* Fingers: bigger hit areas. */
 @media (pointer: coarse) {
   .btn { height: 32px; }
   .btn.icon { width: 32px; }
@@ -949,10 +963,6 @@ kbd {
   .composer textarea { font-size: 16px; }
   .track-head .tname { font-size: 14px; }
 
-  .scroller { touch-action: pan-x pan-y; } /* pinch is handled in JS as timeline zoom */
-  .clip { touch-action: pan-x pan-y; } /* swipe scrolls; once selected, drag moves it */
-  .clip.selected, .clip .resize, .note, .note .nresize, .velocity, .ruler .marks, .playhead-grip, .dock-resize, .fader, .pan, .grid.select-tool { touch-action: none; }
-  .grid { touch-action: pan-x pan-y; }
   .clip .resize { width: 16px; }
   .note .nresize { width: 10px; }
   .playhead-grip { left: -11px; width: 23px; }

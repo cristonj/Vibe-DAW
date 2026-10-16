@@ -7,7 +7,7 @@ import type { AudioClip, Clip, MidiClip, Project, Track } from '../../model/type
 import { seek, stop, play } from '../../engine/api';
 import { getSampleMeta } from '../../samples/library';
 import { audioClipRate, repeatNotes } from '../../model/edit';
-import { PHONE, usePeaks, useMediaQuery } from '../hooks';
+import { PHONE, uiZoom, usePeaks, useMediaQuery } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
@@ -119,7 +119,7 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
 
   const beatAt = (e: RPointerEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    return Math.max(0, (e.clientX - rect.left) / zoom);
+    return Math.max(0, (e.clientX - rect.left) / uiZoom() / zoom);
   };
 
   return (
@@ -212,7 +212,7 @@ function Playhead({ zoom, headerW, scroller }: { zoom: number; headerW: number; 
         title="Drag to move the playhead"
         onPointerDown={(e) => {
           const timeline = (e.currentTarget.closest('.timeline') as HTMLElement).getBoundingClientRect();
-          scrub(e, (ev) => (ev.clientX - timeline.left - headerW) / useDaw.getState().zoom, bpb);
+          scrub(e, (ev) => ((ev.clientX - timeline.left) / uiZoom() - headerW) / useDaw.getState().zoom, bpb);
         }}
       />
     </div>
@@ -306,6 +306,8 @@ export function Arrangement() {
   const headerW = useMediaQuery(PHONE) ? HEADER_W_PHONE : HEADER_W;
   const headerRef = useRef(headerW);
   headerRef.current = headerW;
+  // Cancels an in-progress touch drag (and undoes it) when a pinch starts.
+  const abortTouchDrag = useRef<(() => void) | null>(null);
   const [dropTrack, setDropTrack] = useState<string | null>(null);
   const bpb = beatsPerBar(project);
   const totalBeats = projectLength(project) + bpb * 16;
@@ -319,11 +321,11 @@ export function Arrangement() {
     // Zoom around a screen x so the beat under it stays put.
     const zoomAround = (clientX: number, nextZoom: number) => {
       const hw = headerRef.current;
-      const rect = el.getBoundingClientRect();
-      const anchorBeat = (el.scrollLeft + clientX - rect.left - hw) / useDaw.getState().zoom;
+      const x = (clientX - el.getBoundingClientRect().left) / uiZoom() - hw;
+      const anchorBeat = (el.scrollLeft + x) / useDaw.getState().zoom;
       const nz = Math.max(4, Math.min(200, nextZoom));
       useDaw.getState().setZoom(nz);
-      requestAnimationFrame(() => { el.scrollLeft = anchorBeat * nz - (clientX - rect.left - hw); });
+      requestAnimationFrame(() => { el.scrollLeft = anchorBeat * nz - x; });
     };
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -332,9 +334,11 @@ export function Arrangement() {
     };
     // Two-finger pinch zooms the timeline horizontally on touch screens.
     let pinch: { dist: number; zoom: number } | null = null;
-    const spread = (t: TouchList) => Math.abs(t[0].clientX - t[1].clientX) || 1;
+    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY) || 1;
     const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) pinch = { dist: spread(e.touches), zoom: useDaw.getState().zoom };
+      if (e.touches.length !== 2) return;
+      abortTouchDrag.current?.();
+      pinch = { dist: spread(e.touches), zoom: useDaw.getState().zoom };
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!pinch || e.touches.length !== 2) return;
@@ -359,23 +363,39 @@ export function Arrangement() {
   const startDrag = (e: RPointerEvent, clip: Clip, track: Track, mode: 'move' | 'resize') => {
     if (e.button !== 0) return;
     e.stopPropagation();
+    // Another finger landing during a touch drag starts a pinch, not a second drag.
+    if (e.pointerType === 'touch' && abortTouchDrag.current) { abortTouchDrag.current(); return; }
     // Shift/Ctrl-click toggles selection, except on the resize handle where Shift means fine snapping.
     const additive = mode === 'move' && (e.shiftKey || e.metaKey || e.ctrlKey);
     const ids = additive
       ? (selection.clipIds.includes(clip.id) ? selection.clipIds.filter((x) => x !== clip.id) : [...selection.clipIds, clip.id])
       : selection.clipIds.includes(clip.id) ? selection.clipIds : [clip.id];
+    const wasSelected = selection.clipIds.includes(clip.id);
     select({ clipIds: ids, trackId: track.id });
     if (additive) return;
     const el = e.currentTarget as HTMLElement;
+    const touch = e.pointerType === 'touch';
+    // Touch has no double-click: a tap opens the clip in the editor.
+    const openOnTap = (ev: PointerEvent) => { if (ev.type === 'pointerup' && mode === 'move') openEditor(clip.id); };
+    if (touch && !wasSelected) {
+      // An unselected clip never drags on touch, so a swipe that starts on it just scrolls.
+      const done = (ev: PointerEvent) => { el.removeEventListener('pointerup', done); el.removeEventListener('pointercancel', done); openOnTap(ev); };
+      el.addEventListener('pointerup', done);
+      el.addEventListener('pointercancel', done);
+      return;
+    }
     el.setPointerCapture(e.pointerId);
+    const snapshot = cloneDeep(clip);
     const sx = e.clientX, sy = e.clientY;
+    const uz = uiZoom();
     const origStart = clip.start, origLen = clip.length;
     const tIdx = project.tracks.findIndex((t) => t.id === track.id);
     let duplicated = false;
     let moved = false;
     let currentClipId = clip.id;
     const onMove = (ev: PointerEvent) => {
-      const dxBeats = (ev.clientX - sx) / zoom;
+      if (ev.pointerId !== e.pointerId) return;
+      const dxBeats = (ev.clientX - sx) / uz / zoom;
       if (!moved && Math.abs(ev.clientX - sx) < 3 && Math.abs(ev.clientY - sy) < 3) return;
       moved = true;
       const s = useDaw.getState().snap;
@@ -399,7 +419,7 @@ export function Arrangement() {
         return;
       }
       const newStart = Math.max(0, snapBeat(origStart + dxBeats, s, bpb));
-      const dRows = Math.round((ev.clientY - sy) / TRACK_H);
+      const dRows = Math.round((ev.clientY - sy) / uz / TRACK_H);
       update('Move clip', (d) => {
         if (ev.altKey && !duplicated) {
           // Alt-drag leaves a copy behind.
@@ -426,14 +446,28 @@ export function Arrangement() {
         }
       }, { coalesce: true });
     };
-    const onUp = (ev: PointerEvent) => {
+    const detach = () => {
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onUp);
-      if (duplicated) select({ clipIds: [currentClipId] });
-      // Touch has no double-click: a tap opens the clip in the editor.
-      if (ev.type === 'pointerup' && ev.pointerType === 'touch' && !moved && mode === 'move') openEditor(clip.id);
+      if (abortTouchDrag.current === abort) abortTouchDrag.current = null;
     };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      detach();
+      if (duplicated) select({ clipIds: [currentClipId] });
+      if (touch && !moved) openOnTap(ev);
+    };
+    // A second finger means a pinch: drop the drag and put the clip back where it was.
+    const abort = () => {
+      detach();
+      if (!moved || duplicated) return;
+      update(mode === 'resize' ? 'Resize clip' : 'Move clip', (d) => {
+        for (const t of d.tracks) t.clips = t.clips.filter((c) => c.id !== snapshot.id);
+        d.tracks.find((t) => t.id === track.id)?.clips.push(cloneDeep(snapshot));
+      }, { coalesce: true });
+    };
+    if (touch) abortTouchDrag.current = abort;
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
     // A touch that turns into a scroll is cancelled by the browser.
@@ -443,7 +477,7 @@ export function Arrangement() {
   const laneDoubleClick = (e: React.MouseEvent, track: Track) => {
     if (track.kind === 'audio') return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const beat = Math.floor((e.clientX - rect.left) / zoom / bpb) * bpb;
+    const beat = Math.floor((e.clientX - rect.left) / uiZoom() / zoom / bpb) * bpb;
     let id = '';
     update('New clip', (d) => {
       const t = d.tracks.find((x) => x.id === track.id)!;
@@ -466,7 +500,7 @@ export function Arrangement() {
     }
     if (!sampleId) return;
     const lane = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const beat = Math.max(0, snapBeat((e.clientX - lane.left) / zoom, snap <= 0 ? bpb : snap, bpb));
+    const beat = Math.max(0, snapBeat((e.clientX - lane.left) / uiZoom() / zoom, snap <= 0 ? bpb : snap, bpb));
     placeSample(sampleId, track?.id ?? null, track ? beat : 0);
   };
 
@@ -604,7 +638,8 @@ function AddTrackMenu() {
         onClick={(e) => {
           // Fixed position, so the menu isn't clipped when the toolbar scrolls sideways on small screens.
           const r = e.currentTarget.getBoundingClientRect();
-          setAt({ left: Math.max(8, Math.min(r.left, window.innerWidth - 248)), top: r.bottom + 6 });
+          const z = uiZoom();
+          setAt({ left: Math.max(8, Math.min(r.left / z, window.innerWidth / z - 248)), top: r.bottom / z + 6 });
           setOpen((o) => !o);
         }}
         aria-haspopup="menu" aria-expanded={open} aria-label="Add track" title="Add a drum, instrument, or audio track"

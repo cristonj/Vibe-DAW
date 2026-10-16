@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowUp, Square, Ear, Sparkles, Drum, Piano, Plus, SlidersHorizontal, Search, AudioLines, Gauge, Layers, Scissors, Play, Check,
-  RotateCcw, Paperclip, X, Brain, ListChecks, Trash, Pencil, Music, Repeat, CircleStop, Eye,
+  RotateCcw, Paperclip, X, Brain, ListChecks, Trash, Pencil, Music, Repeat, CircleStop, Eye, Mic, LoaderCircle,
 } from 'lucide-react';
 import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } from '../../agent/agent';
 import { analyzeReference } from '../../agent/ears';
@@ -9,6 +9,7 @@ import { useSettings, MODELS, aiAvailable } from '../../state/settings';
 import { useDaw } from '../../state/store';
 import { Markdown } from '../Markdown';
 import { toast } from '../toast';
+import { useVoiceInput, voiceSupported } from '../voice';
 
 const TOOL_ICONS: Record<string, typeof Ear> = {
   listen: Ear, audition_samples: Ear, write_drums: Drum, write_notes: Piano, create_track: Plus,
@@ -127,6 +128,15 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const stick = useRef(true);
+  // Dictation fills the box after whatever was already typed.
+  const voiceBase = useRef('');
+  const voice = useVoiceInput(
+    (spoken) => setText(voiceBase.current ? `${voiceBase.current.trimEnd()} ${spoken}` : spoken),
+    (message) => toast(message, 'error'),
+  );
+  const toggleVoice = () => {
+    if (voice.state === 'idle') { voiceBase.current = text; voice.start(); } else if (voice.state === 'listening') voice.stop();
+  };
   const latestPlan = items.findLast((it): it is Extract<ChatItem, { kind: 'plan' }> => it.kind === 'plan');
 
   useEffect(() => { if (focusSignal) taRef.current?.focus(); }, [focusSignal]);
@@ -137,7 +147,8 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   }, [items]);
 
   const send = (t = text) => {
-    if (!t.trim() || analyzing) return;
+    if (!t.trim() || analyzing || voice.state === 'transcribing') return;
+    voice.cancel();
     const att = attachments.map((a) => `<reference_track name="${a.name}">\n${a.text}\n</reference_track>`);
     void runAgent(t, { attachments: att });
     setText('');
@@ -202,7 +213,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
             ref={taRef}
             value={text}
             rows={2}
-            placeholder={running ? 'Steer the agent while it works…' : mode === 'agent' ? 'Describe what to make or change…' : 'Ask about your track…'}
+            placeholder={voice.state === 'listening' ? 'Listening… tap the mic when you’re done' : voice.state === 'transcribing' ? 'Transcribing…' : running ? 'Steer the agent while it works…' : mode === 'agent' ? 'Describe what to make or change…' : 'Ask about your track…'}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
             aria-label="Message the agent"
@@ -219,10 +230,22 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
               {MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
             <div className="spacer" />
+            {voiceSupported() && (
+              <button
+                className={`btn icon mic ${voice.state}`}
+                onClick={toggleVoice}
+                disabled={voice.state === 'transcribing'}
+                aria-pressed={voice.state === 'listening'}
+                aria-label={voice.state === 'listening' ? 'Stop voice input' : voice.state === 'transcribing' ? 'Transcribing' : 'Voice input'}
+                title={voice.state === 'listening' ? 'Stop listening' : 'Talk to the Producer: your words appear in the box to review before sending'}
+              >
+                {voice.state === 'transcribing' ? <LoaderCircle size={15} className="spin" /> : <Mic size={15} />}
+              </button>
+            )}
             {running && (
               <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} fill="currentColor" /></button>
             )}
-            <button className="send" onClick={() => send()} disabled={!text.trim() || analyzing} title={running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
+            <button className="send" onClick={() => send()} disabled={!text.trim() || analyzing || voice.state === 'transcribing'} title={running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
           </div>
         </div>
         <div className="agent-foot">

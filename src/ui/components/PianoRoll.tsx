@@ -9,7 +9,7 @@ import { previewNote } from '../../engine/api';
 import { copyNotes, getCopiedNotes } from '../clipboard';
 import { matches, tip } from '../../state/keymap';
 import { openInlineAI } from './InlineAI';
-import { useMediaQuery } from '../hooks';
+import { uiZoom, useMediaQuery } from '../hooks';
 
 const ROW = 14;
 const LOW = 21; // A0
@@ -55,9 +55,10 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
 
   const posFrom = (e: { clientX: number; clientY: number }) => {
     const rect = gridRef.current!.getBoundingClientRect();
-    const beat = (e.clientX - rect.left) / ppb;
-    const pitch = HIGH - Math.floor((e.clientY - rect.top) / ROW);
-    return { beat, pitch: Math.max(LOW, Math.min(HIGH, pitch)), x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const z = uiZoom();
+    const x = (e.clientX - rect.left) / z, y = (e.clientY - rect.top) / z;
+    const pitch = HIGH - Math.floor(y / ROW);
+    return { beat: x / ppb, pitch: Math.max(LOW, Math.min(HIGH, pitch)), x, y };
   };
 
   const startMarquee = (e: RPointerEvent, additive: boolean) => {
@@ -360,8 +361,9 @@ function VelocityLane({ clip, ppb, width, color, selected, onEdit }: { clip: Mid
   const H = useMediaQuery('(max-height: 500px)') ? 32 : 56;
   const set = (e: RPointerEvent | PointerEvent, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
-    const beat = (e.clientX - rect.left) / ppb;
-    const v = Math.max(0.05, Math.min(1, 1 - (e.clientY - rect.top) / H));
+    const z = uiZoom();
+    const beat = (e.clientX - rect.left) / z / ppb;
+    const v = Math.max(0.05, Math.min(1, 1 - (e.clientY - rect.top) / z / H));
     const target = clip.notes.reduce<Note | null>((best, n) => (Math.abs(n.start - beat) < 0.2 && (!best || Math.abs(n.start - beat) < Math.abs(best.start - beat)) ? n : best), null);
     if (!target) return;
     const ids = selected.includes(target.id) ? selected : [target.id];

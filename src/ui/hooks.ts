@@ -57,6 +57,18 @@ export function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
+/**
+ * The Interface size setting applies CSS zoom to #root. Pointer events and element rects
+ * are in screen pixels, while the app lays itself out in its own (unzoomed) CSS pixels,
+ * so divide screen distances by this before turning them into beats, pitches or positions.
+ */
+export function uiZoom(): number {
+  const root = document.getElementById('root') as (HTMLElement & { currentCSSZoom?: number }) | null;
+  if (!root) return 1;
+  const z = root.currentCSSZoom ?? parseFloat(getComputedStyle(root).zoom);
+  return z > 0 && isFinite(z) ? z : 1;
+}
+
 /** Layout breakpoints, kept in sync with the media queries in global.css. */
 export const NARROW = '(max-width: 1024px)'; // side panels become drawers
 export const PHONE = '(max-width: 640px)'; // compact top bar and timeline

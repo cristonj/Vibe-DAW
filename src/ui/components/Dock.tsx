@@ -7,6 +7,7 @@ import { DrumEditor } from './DrumEditor';
 import { AudioEditor } from './AudioEditor';
 import { Mixer } from './Mixer';
 import { TrackInspector } from './Inspector';
+import { uiZoom } from '../hooks';
 
 export function Dock() {
   const project = useDaw((s) => s.project);
@@ -16,7 +17,10 @@ export function Dock() {
   const selectedTrack = useDaw((s) => s.selection.trackId);
   const { setBottom, toggleBottom } = useDaw.getState();
   // Leave the timeline room on short screens (phones, landscape).
-  const [height, setHeight] = useState(() => Math.round(Math.max(140, Math.min(300, Math.max(200, window.innerHeight * 0.4), window.innerHeight - 190))));
+  const [height, setHeight] = useState(() => {
+    const vh = window.innerHeight / uiZoom();
+    return Math.round(Math.max(140, Math.min(300, Math.max(200, vh * 0.4), vh - 190)));
+  });
   const drag = useRef<{ y: number; h: number } | null>(null);
 
   const found = editorClipId ? findClip(project, editorClipId) : undefined;
@@ -48,7 +52,8 @@ export function Dock() {
           }}
           onPointerMove={(e) => {
             if (!drag.current) return;
-            setHeight(Math.max(140, Math.min(window.innerHeight - 220, drag.current.h - (e.clientY - drag.current.y))));
+            const z = uiZoom();
+            setHeight(Math.max(140, Math.min(window.innerHeight / z - 220, drag.current.h - (e.clientY - drag.current.y) / z)));
           }}
           onPointerUp={() => { drag.current = null; }}
           onPointerCancel={() => { drag.current = null; }}
