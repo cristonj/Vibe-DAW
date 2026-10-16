@@ -7,6 +7,7 @@ import { firebaseConfigured } from '../../cloud/config';
 import { togglePlay, stop, exportAudio } from '../../engine/api';
 import { EXPORT_FORMATS, downloadBlob, type ExportFormat } from '../../engine/exportFormats';
 import { formatPosition } from '../../model/project';
+import { projectToMidi } from '../../model/midi';
 import { PITCH_CLASSES, SCALES } from '../../model/theory';
 import type { PitchClass, ScaleName } from '../../model/types';
 import { toast } from '../toast';
@@ -137,10 +138,12 @@ function ExportMenu() {
     setProgress({ pct: 0, stage: 'render' });
     try {
       const p = useDaw.getState().project;
-      const blob = await exportAudio(p, format, (f, stage) => setProgress({ pct: Math.round(f * 100), stage }));
+      const blob = format === 'midi'
+        ? new Blob([projectToMidi(p) as BlobPart], { type: 'audio/midi' })
+        : await exportAudio(p, format, (f, stage) => setProgress({ pct: Math.round(f * 100), stage }));
       const ext = EXPORT_FORMATS.find((x) => x.id === format)!.ext;
       downloadBlob(blob, `${p.name.replace(/[^\w\- ]+/g, '').trim() || 'beat'}.${ext}`);
-      toast(`Exported ${ext.toUpperCase()} (${(blob.size / 1048576).toFixed(1)} MB)`);
+      toast(format === 'midi' ? 'Exported MIDI' : `Exported ${ext.toUpperCase()} (${(blob.size / 1048576).toFixed(1)} MB)`);
     } catch (e) {
       toast(`Export failed: ${(e as Error).message}`, 'error');
     } finally {
