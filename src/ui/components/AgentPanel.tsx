@@ -112,7 +112,7 @@ function Item({ item }: { item: ChatItem }) {
   }
 }
 
-export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: number }) {
+export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focusSignal: number; onClose: () => void }) {
   const items = useAgent((s) => s.items);
   const running = useAgent((s) => s.running);
   const status = useAgent((s) => s.status);
@@ -169,6 +169,7 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
           <button className={mode === 'ask' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('ask')} role="radio" aria-checked={mode === 'ask'} title="Read-only: questions and feedback">Ask</button>
         </div>
         <button className="btn icon" title="New chat" disabled={running} onClick={() => useAgent.getState().clear()}><Plus size={15} /></button>
+        <button className="btn icon drawer-close" onClick={onClose} aria-label="Close Producer panel"><X size={16} /></button>
       </div>
 
       {latestPlan && <Plan key={latestPlan.id} item={latestPlan} pinned />}
@@ -225,7 +226,7 @@ export function AgentPanel({ open, focusSignal }: { open: boolean; focusSignal: 
           </div>
         </div>
         <div className="agent-foot">
-          <span>Ctrl+K edits a selected clip</span>
+          <span className="hide-touch">Ctrl+K edits a selected clip</span>
           {context.compactions > 0 && <span title="Older exchanges are summarized automatically. The agent can also manage its own working memory.">Memory compacted {context.compactions}×</span>}
           {tokens.input + tokens.output > 0 && <span>{Math.round((tokens.input + tokens.output) / 1000)}k tokens</span>}
         </div>

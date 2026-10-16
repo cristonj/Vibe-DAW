@@ -1,19 +1,20 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X, Copy, CopyPlus, ClipboardPaste, Scissors, ChevronDown } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
-import { beatsPerBar, cloneDeep, createAudioClip, createMidiClip, createTrack, projectLength, secondsToBeats } from '../../model/project';
+import { beatsPerBar, cloneDeep, createMidiClip, createTrack, projectLength } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
 import type { AudioClip, Clip, MidiClip, Project, Track } from '../../model/types';
 import { seek, stop, play } from '../../engine/api';
 import { getSampleMeta } from '../../samples/library';
 import { audioClipRate, repeatNotes } from '../../model/edit';
-import { usePeaks } from '../hooks';
+import { PHONE, usePeaks, useMediaQuery } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
-import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, splitAtPlayhead } from '../actions';
+import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, placeSample, splitAtPlayhead } from '../actions';
 
 const HEADER_W = 200;
+const HEADER_W_PHONE = 124;
 const TRACK_H = 68;
 
 const SNAPS: Array<[string, number]> = [['Bar', 0], ['1/4', 1], ['1/8', 0.5], ['1/16', 0.25], ['Off', -1]];
@@ -123,7 +124,7 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
 
   return (
     <div className="ruler">
-      <div className="corner" style={{ ['--header-w' as string]: `${HEADER_W}px` }}>
+      <div className="corner">
         <span className="chip">{project.tracks.length} tracks</span>
       </div>
       <div
@@ -182,25 +183,27 @@ function scrub(e: RPointerEvent, toBeat: (ev: PointerEvent | RPointerEvent) => n
   const onUp = (ev: PointerEvent) => {
     el.removeEventListener('pointermove', onMove);
     el.removeEventListener('pointerup', onUp);
+    el.removeEventListener('pointercancel', onUp);
     const b = at(ev);
     if (wasPlaying) void play(b);
     else seek(b);
   };
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
 }
 
-function Playhead({ zoom, scroller }: { zoom: number; scroller: React.RefObject<HTMLDivElement | null> }) {
+function Playhead({ zoom, headerW, scroller }: { zoom: number; headerW: number; scroller: React.RefObject<HTMLDivElement | null> }) {
   const pos = useTransport((s) => s.position);
   const playing = useTransport((s) => s.playing);
   const follow = useDaw((s) => s.followPlayhead);
-  const x = HEADER_W + pos * zoom;
+  const x = headerW + pos * zoom;
   useEffect(() => {
     const el = scroller.current;
     if (!el || !playing || !follow) return;
     const visibleRight = el.scrollLeft + el.clientWidth;
-    if (x > visibleRight - 60 || x < el.scrollLeft + HEADER_W) el.scrollLeft = Math.max(0, x - HEADER_W - 80);
-  }, [x, playing, follow, scroller]);
+    if (x > visibleRight - 60 || x < el.scrollLeft + headerW) el.scrollLeft = Math.max(0, x - headerW - 80);
+  }, [x, playing, follow, scroller, headerW]);
   const bpb = beatsPerBar(useDaw.getState().project);
   return (
     <div className="playhead" style={{ left: x }}>
@@ -209,7 +212,7 @@ function Playhead({ zoom, scroller }: { zoom: number; scroller: React.RefObject<
         title="Drag to move the playhead"
         onPointerDown={(e) => {
           const timeline = (e.currentTarget.closest('.timeline') as HTMLElement).getBoundingClientRect();
-          scrub(e, (ev) => (ev.clientX - timeline.left - HEADER_W) / useDaw.getState().zoom, bpb);
+          scrub(e, (ev) => (ev.clientX - timeline.left - headerW) / useDaw.getState().zoom, bpb);
         }}
       />
     </div>
@@ -280,7 +283,7 @@ function EmptyHero() {
   };
   if (dismissed || aiAvailable().ok) return null;
   return (
-    <div className="empty-arrange" style={{ ['--header-w' as string]: `${HEADER_W}px` }}>
+    <div className="empty-arrange">
       <div className="hero-card">
         <button className="btn icon hero-close" onClick={close} aria-label="Close" title="Close"><X size={16} /></button>
         <KeySetup />
@@ -300,6 +303,9 @@ export function Arrangement() {
   const follow = useDaw((s) => s.followPlayhead);
   const { update, select, openEditor, setZoom, setSnap, setFollow } = useDaw.getState();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerW = useMediaQuery(PHONE) ? HEADER_W_PHONE : HEADER_W;
+  const headerRef = useRef(headerW);
+  headerRef.current = headerW;
   const [dropTrack, setDropTrack] = useState<string | null>(null);
   const bpb = beatsPerBar(project);
   const totalBeats = projectLength(project) + bpb * 16;
@@ -310,17 +316,44 @@ export function Arrangement() {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    // Zoom around a screen x so the beat under it stays put.
+    const zoomAround = (clientX: number, nextZoom: number) => {
+      const hw = headerRef.current;
+      const rect = el.getBoundingClientRect();
+      const anchorBeat = (el.scrollLeft + clientX - rect.left - hw) / useDaw.getState().zoom;
+      const nz = Math.max(4, Math.min(200, nextZoom));
+      useDaw.getState().setZoom(nz);
+      requestAnimationFrame(() => { el.scrollLeft = anchorBeat * nz - (clientX - rect.left - hw); });
+    };
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const mouseBeat = (el.scrollLeft + e.clientX - rect.left - HEADER_W) / useDaw.getState().zoom;
-      const nz = Math.max(4, Math.min(200, useDaw.getState().zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
-      useDaw.getState().setZoom(nz);
-      requestAnimationFrame(() => { el.scrollLeft = mouseBeat * nz - (e.clientX - rect.left - HEADER_W); });
+      zoomAround(e.clientX, useDaw.getState().zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
     };
+    // Two-finger pinch zooms the timeline horizontally on touch screens.
+    let pinch: { dist: number; zoom: number } | null = null;
+    const spread = (t: TouchList) => Math.abs(t[0].clientX - t[1].clientX) || 1;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) pinch = { dist: spread(e.touches), zoom: useDaw.getState().zoom };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      zoomAround((e.touches[0].clientX + e.touches[1].clientX) / 2, pinch.zoom * (spread(e.touches) / pinch.dist));
+    };
+    const onTouchEnd = (e: TouchEvent) => { if (e.touches.length < 2) pinch = null; };
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
   }, []);
 
   const startDrag = (e: RPointerEvent, clip: Clip, track: Track, mode: 'move' | 'resize') => {
@@ -393,13 +426,18 @@ export function Arrangement() {
         }
       }, { coalesce: true });
     };
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
       if (duplicated) select({ clipIds: [currentClipId] });
+      // Touch has no double-click: a tap opens the clip in the editor.
+      if (ev.type === 'pointerup' && ev.pointerType === 'touch' && !moved && mode === 'move') openEditor(clip.id);
     };
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
+    // A touch that turns into a scroll is cancelled by the browser.
+    el.addEventListener('pointercancel', onUp);
   };
 
   const laneDoubleClick = (e: React.MouseEvent, track: Track) => {
@@ -427,18 +465,9 @@ export function Arrangement() {
       return;
     }
     if (!sampleId) return;
-    const meta = getSampleMeta(sampleId);
-    if (!meta) return;
     const lane = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const beat = Math.max(0, snapBeat((e.clientX - lane.left) / zoom, snap <= 0 ? bpb : snap, bpb));
-    update(`Place ${meta.name}`, (d) => {
-      let t = track && track.kind === 'audio' ? d.tracks.find((x) => x.id === track.id) : undefined;
-      if (!t) { t = createTrack(d, 'audio', { name: meta.name.slice(0, 24) }); d.tracks.push(t); }
-      const len = meta.bpm ? (meta.duration * meta.bpm) / 60 : secondsToBeats(d, meta.duration);
-      const c = createAudioClip(d, sampleId, track ? beat : 0, len, meta.name);
-      if (meta.bpm && Math.abs(meta.bpm - d.bpm) > 0.01) c.warp = meta.category === 'loop' || meta.category === 'guitar' || meta.category === 'keys' ? 'stretch' : 'resample';
-      t.clips.push(c);
-    });
+    placeSample(sampleId, track?.id ?? null, track ? beat : 0);
   };
 
   const laneBg = (i: number) => ({
@@ -451,34 +480,34 @@ export function Arrangement() {
   const addTrack = addTrackAction;
 
   return (
-    <section className="arrange" style={{ ['--header-w' as string]: `${HEADER_W}px`, ['--track-h' as string]: `${TRACK_H}px` }} aria-label="Arrangement">
+    <section className="arrange" style={{ ['--header-w' as string]: `${headerW}px`, ['--track-h' as string]: `${TRACK_H}px` }} aria-label="Arrangement">
       <div className="arrange-tools">
         <AddTrackMenu />
         <div className="tool-divider" />
-        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')}><Plus size={14} /> New clip</button>
+        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')} aria-label="New clip"><Plus size={14} /> <span className="btn-label">New clip</span></button>
         <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title={tip('Copy selected clips', 'copy')}><Copy size={14} /></button>
         <button className="btn icon" onClick={() => pasteClips()} title={tip('Paste clips at the playhead', 'paste')}><ClipboardPaste size={14} /></button>
         <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title={tip('Duplicate selected clips', 'duplicate')}><CopyPlus size={14} /></button>
         <button className="btn icon" onClick={() => splitAtPlayhead()} title={tip('Split clips at the playhead', 'split')}><Scissors size={14} /></button>
         <button className="btn icon danger" onClick={() => deleteSelectedClips()} disabled={!selection.clipIds.length} title={tip('Delete selected clips', 'delete')}><Trash size={14} /></button>
         <div className="tool-divider" />
-        <label title="Clips snap to this grid when you move or resize them">Snap
+        <label title="Clips snap to this grid when you move or resize them"><span className="btn-label minor">Snap</span>
           <select value={snap} onChange={(e) => setSnap(Number(e.target.value))} aria-label="Snap">
             {SNAPS.map(([l, v]) => <option key={l} value={v}>{l}</option>)}
           </select>
         </label>
-        <label title="Scroll the timeline to keep the playhead in view"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow playhead</label>
+        <label title="Scroll the timeline to keep the playhead in view"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} aria-label="Follow playhead" /> <span className="btn-label minor">Follow playhead</span></label>
         <button className="btn icon" title={tip('Zoom out', 'zoomOut')} onClick={() => setZoom(zoom / 1.3)}><ZoomOut size={15} /></button>
         <button className="btn icon" title={tip('Zoom in', 'zoomIn')} onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
         <div style={{ flex: 1 }} />
         {hasPending && (
           <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed and remove the purple outlines">
-            <Check size={14} /> Keep AI changes
+            <Check size={14} /> Keep<span className="btn-label minor"> AI changes</span>
           </button>
         )}
       </div>
       <div className="scroller" ref={scrollRef} onPointerDown={(e) => { if (e.target === e.currentTarget) select({ clipIds: [] }); }}>
-        <div className="timeline" style={{ width: HEADER_W + width }}>
+        <div className="timeline" style={{ width: headerW + width }}>
           <Ruler project={project} zoom={zoom} width={width} />
           {project.tracks.map((t, i) => (
             <div className="track-row" key={t.id}>
@@ -493,7 +522,10 @@ export function Arrangement() {
                 onDrop={(e) => onLaneDrop(e, t)}
               >
                 {!t.clips.length && (
-                  <div className="lane-hint">{t.kind === 'audio' ? 'Drag a sound from the left panel onto this lane' : 'Double-click here (or use New clip) to draw a pattern'}</div>
+                  <div className="lane-hint">
+                    <span className="hide-touch">{t.kind === 'audio' ? 'Drag a sound from the left panel onto this lane' : 'Double-click here (or use New clip) to draw a pattern'}</span>
+                    <span className="only-touch">{t.kind === 'audio' ? 'Tap + next to a sound in the browser to add it' : 'Tap New clip to draw a pattern'}</span>
+                  </div>
                 )}
                 {t.clips.map((c) => (
                   <ClipView
@@ -512,8 +544,8 @@ export function Arrangement() {
           ))}
           <div className="add-track-row">
             <div className="track-head">
-              <button className="btn" onClick={() => addTrack('drums')} title="Add drum track"><Drum size={14} /> Drums</button>
-              <button className="btn" onClick={() => addTrack('instrument')} title="Add instrument track"><Piano size={14} /> Synth</button>
+              <button className="btn" onClick={() => addTrack('drums')} title="Add drum track" aria-label="Add drum track"><Drum size={14} /> <span className="btn-label">Drums</span></button>
+              <button className="btn" onClick={() => addTrack('instrument')} title="Add instrument track" aria-label="Add instrument track"><Piano size={14} /> <span className="btn-label">Synth</span></button>
               <button className="btn icon" onClick={() => addTrack('audio')} title="Add audio track"><AudioLines size={14} /></button>
             </div>
             <div
@@ -523,10 +555,10 @@ export function Arrangement() {
               onDragLeave={() => setDropTrack(null)}
               onDrop={(e) => onLaneDrop(e, null)}
             >
-              <Plus size={13} />&nbsp;Drop a sound or instrument here for a new track
+              <Plus size={13} />&nbsp;<span className="hide-touch">Drop a sound or instrument here for a new track</span><span className="only-touch">Add a track</span>
             </div>
           </div>
-          <Playhead zoom={zoom} scroller={scrollRef} />
+          <Playhead zoom={zoom} headerW={headerW} scroller={scrollRef} />
         </div>
         {empty && <EmptyHero />}
       </div>
@@ -556,6 +588,7 @@ const TrackHeader = memo(function TrackHeader({ track, selected }: { track: Trac
 
 function AddTrackMenu() {
   const [open, setOpen] = useState(false);
+  const [at, setAt] = useState({ left: 0, top: 0 });
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -566,9 +599,18 @@ function AddTrackMenu() {
   const pick = (kind: 'drums' | 'instrument' | 'audio') => { addTrackAction(kind); setOpen(false); };
   return (
     <div className="menu-wrap" ref={ref}>
-      <button className="btn solid" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} title="Add a drum, instrument, or audio track"><Plus size={14} /> Add track <ChevronDown size={13} /></button>
+      <button
+        className="btn solid"
+        onClick={(e) => {
+          // Fixed position, so the menu isn't clipped when the toolbar scrolls sideways on small screens.
+          const r = e.currentTarget.getBoundingClientRect();
+          setAt({ left: Math.max(8, Math.min(r.left, window.innerWidth - 248)), top: r.bottom + 6 });
+          setOpen((o) => !o);
+        }}
+        aria-haspopup="menu" aria-expanded={open} aria-label="Add track" title="Add a drum, instrument, or audio track"
+      ><Plus size={14} /> <span className="btn-label">Add track</span> <ChevronDown size={13} /></button>
       {open && (
-        <div className="menu left" role="menu">
+        <div className="menu fixed" role="menu" style={at}>
           <button className="menu-item" role="menuitem" onClick={() => pick('drums')}><b><Drum size={13} /> Drums</b><span>Step-sequenced drum kit</span></button>
           <button className="menu-item" role="menuitem" onClick={() => pick('instrument')}><b><Piano size={13} /> Instrument</b><span>Piano, guitar, 808, synths (change it in Sound &amp; FX)</span></button>
           <button className="menu-item" role="menuitem" onClick={() => pick('audio')}><b><AudioLines size={13} /> Audio</b><span>For samples and loops you drag in</span></button>

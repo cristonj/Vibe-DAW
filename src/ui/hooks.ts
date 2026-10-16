@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getLoadedBuffer, loadBuffer } from '../samples/library';
 import { waveformPeaks } from '../samples/analysis';
 
@@ -55,4 +55,26 @@ export function relativeTime(ts: number): string {
   const h = Math.round(m / 60);
   if (h < 24) return `${h} h ago`;
   return new Date(ts).toLocaleDateString();
+}
+
+/** Layout breakpoints, kept in sync with the media queries in global.css. */
+export const NARROW = '(max-width: 1024px)'; // side panels become drawers
+export const PHONE = '(max-width: 640px)'; // compact top bar and timeline
+
+export function matchesMedia(query: string): boolean {
+  return typeof matchMedia === 'function' && matchMedia(query).matches;
+}
+
+/** Live result of a CSS media query. */
+export function useMediaQuery(query: string): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      if (typeof matchMedia !== 'function') return () => {};
+      const mq = matchMedia(query);
+      mq.addEventListener('change', cb);
+      return () => mq.removeEventListener('change', cb);
+    },
+    () => matchesMedia(query),
+    () => false,
+  );
 }

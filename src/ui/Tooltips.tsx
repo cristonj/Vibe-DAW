@@ -18,6 +18,8 @@ export function Tooltips() {
       setTip(null);
     };
     const over = (e: PointerEvent) => {
+      // Touch has no hover; a tap would just flash the tooltip.
+      if (e.pointerType === 'touch') return;
       const el = (e.target as Element | null)?.closest?.('[title],[data-tip]') as HTMLElement | null;
       if (el === current) return;
       hide();

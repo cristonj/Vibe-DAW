@@ -208,7 +208,7 @@ function DrumKit({ track }: { track: Track }) {
     if (l) fn(l);
   }, { coalesce: true });
   return (
-    <div className="card" style={{ gridColumn: 'span 2' }}>
+    <div className="card wide">
       <div className="card-head">Drum kit</div>
       {(track.drumLanes ?? []).map((l) => (
         <div className="lane-row" key={l.id}>

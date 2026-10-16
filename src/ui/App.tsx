@@ -9,7 +9,7 @@ import { SettingsModal, ProjectsModal } from './components/Modals';
 import { useToasts } from './toast';
 import { useDaw, useTransport } from '../state/store';
 import { togglePlay, stop } from '../engine/api';
-import { isTypingTarget } from './hooks';
+import { isTypingTarget, matchesMedia, NARROW, useMediaQuery } from './hooks';
 import { Tooltips } from './Tooltips';
 import { HelpModal } from './components/HelpModal';
 import { copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, splitAtPlayhead } from './actions';
@@ -28,9 +28,15 @@ export function App() {
   const [settings, setSettings] = useState(false);
   const [projects, setProjects] = useState(false);
   const [help, setHelp] = useState(false);
-  const [browserOpen, setBrowserOpen] = useState(true);
-  const [agentOpen, setAgentOpen] = useState(true);
+  // On narrow screens the side panels are drawers over the timeline, so they start closed.
+  const narrow = useMediaQuery(NARROW);
+  const [browserOpen, setBrowserOpen] = useState(() => !matchesMedia(NARROW));
+  const [agentOpen, setAgentOpen] = useState(() => !matchesMedia(NARROW));
   const [focusAgent, setFocusAgent] = useState(0);
+
+  // Only one drawer at a time; on wide screens both columns can stay open.
+  useEffect(() => { if (narrow && browserOpen) setAgentOpen(false); }, [narrow, browserOpen]);
+  useEffect(() => { if (narrow && agentOpen) setBrowserOpen(false); }, [narrow, agentOpen]);
 
   useEffect(() => {
     // The agent asks for a key the first time someone tries it, not on page load.
@@ -65,7 +71,10 @@ export function App() {
       if (matches(e, 'toggleAgent')) return run(() => setAgentOpen((v) => !v));
       if (matches(e, 'zoomIn')) return run(() => daw.setZoom(daw.zoom * 1.25));
       if (matches(e, 'zoomOut')) return run(() => daw.setZoom(daw.zoom / 1.25));
-      if (e.key === 'Escape') daw.select({ clipIds: [] });
+      if (e.key === 'Escape') {
+        daw.select({ clipIds: [] });
+        if (matchesMedia(NARROW)) { setBrowserOpen(false); setAgentOpen(false); }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -82,12 +91,15 @@ export function App() {
         toggleBrowser={() => setBrowserOpen((v) => !v)}
         toggleAgent={() => setAgentOpen((v) => !v)}
       />
-      <Browser open={browserOpen} />
+      <Browser open={browserOpen} onClose={() => setBrowserOpen(false)} />
       <main className="main">
         <Arrangement />
         <Dock />
       </main>
-      <AgentPanel open={agentOpen} focusSignal={focusAgent} />
+      <AgentPanel open={agentOpen} focusSignal={focusAgent} onClose={() => setAgentOpen(false)} />
+      {narrow && (browserOpen || agentOpen) && (
+        <div className="drawer-backdrop" onPointerDown={() => { setBrowserOpen(false); setAgentOpen(false); }} aria-hidden />
+      )}
       <InlineAI />
       {settings && <SettingsModal onClose={() => setSettings(false)} />}
       {projects && <ProjectsModal onClose={() => setProjects(false)} />}

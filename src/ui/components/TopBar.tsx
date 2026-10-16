@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark } from 'lucide-react';
+import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark, Ellipsis } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
 import { usePersist } from '../../state/persistence';
 import { useAuth, signIn } from '../../cloud/cloud';
@@ -57,21 +57,24 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
   return (
     <header className="topbar">
       <button className="btn icon" title={tip('Show or hide the sound browser', 'toggleBrowser')} onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
-      <div className="brand"><Logo /> Vibe</div>
+      <div className="brand"><Logo /> <span className="brand-name">Vibe</span></div>
       <input
         className="project-name"
         value={name}
         aria-label="Project name"
         onChange={(e) => update('Rename project', (d) => { d.name = e.target.value; }, { coalesce: true })}
       />
-      <span className="save-state">{saveState === 'saved' ? (user ? (syncing ? 'Syncing…' : 'Saved') : 'Saved locally') : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Edited'}</span>
-      <button className="btn icon" title="Open, create, or delete projects" onClick={props.onOpenProjects}><FolderOpen size={16} /></button>
+      <span className="save-state hide-narrow">{saveState === 'saved' ? (user ? (syncing ? 'Syncing…' : 'Saved') : 'Saved locally') : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Edited'}</span>
+      <button className="btn icon hide-narrow" title="Open, create, or delete projects" onClick={props.onOpenProjects}><FolderOpen size={16} /></button>
       <button className="btn icon" title={tip('Undo', 'undo')} disabled={!canUndo} onClick={() => useDaw.getState().undo()}><Undo2 size={16} /></button>
       <button className="btn icon" title={tip('Redo', 'redo')} disabled={!canRedo} onClick={() => useDaw.getState().redo()}><Redo2 size={16} /></button>
 
+      {/* Phones put the transport and LCD on a second row. */}
+      <div className="topbar-break" aria-hidden />
+
       <div className="transport">
         <button className="btn icon" title={tip('Back to start', 'stopRewind')} onClick={() => stop(true)}><SkipBack size={16} /></button>
-        <button className="btn icon" title="Stop" onClick={() => stop(false)}><Square size={14} fill="currentColor" /></button>
+        <button className="btn icon hide-narrow" title="Stop" onClick={() => stop(false)}><Square size={14} fill="currentColor" /></button>
         <button className={`play ${playing ? 'playing' : ''}`} title={tip('Play / pause', 'playPause')} onClick={() => void togglePlay().catch((e) => toast(`Playback failed: ${(e as Error).message}`, 'error'))}>
           {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
         </button>
@@ -114,20 +117,21 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
             {user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : (user.name ?? '?')[0]}
           </span>
         ) : (
-          <button className="btn" onClick={() => signIn().catch((e) => toast(e.message, 'error'))} title="Sign in to sync projects and samples"><LogIn size={15} /> Sign in</button>
+          <button className="btn hide-narrow" onClick={() => signIn().catch((e) => toast(e.message, 'error'))} title="Sign in to sync projects and samples"><LogIn size={15} /> Sign in</button>
         ))}
         {user && <Cloud size={14} color="var(--faint)" aria-label="Cloud sync on" />}
-        <button className="btn icon" title={tip('Help and keyboard shortcuts', 'help')} onClick={props.onOpenHelp}><CircleQuestionMark size={16} /></button>
-        <button className="btn icon" title="Settings: Gemini key, model, account" onClick={props.onOpenSettings}><Settings size={16} /></button>
+        <button className="btn icon hide-narrow" title={tip('Help and keyboard shortcuts', 'help')} onClick={props.onOpenHelp}><CircleQuestionMark size={16} /></button>
+        <button className="btn icon hide-narrow" title="Settings: Gemini key, model, account" onClick={props.onOpenSettings}><Settings size={16} /></button>
+        <MoreMenu onOpenProjects={props.onOpenProjects} onOpenHelp={props.onOpenHelp} onOpenSettings={props.onOpenSettings} signedIn={!!user} />
         <button className="btn icon" title={tip('Show or hide the Producer panel', 'toggleAgent')} onClick={props.toggleAgent} aria-pressed={props.agentOpen}><PanelRight size={16} /></button>
       </div>
     </header>
   );
 }
 
-function ExportMenu() {
+/** Open/close state for a dropdown that closes on any press outside it. */
+function useDropdown() {
   const [open, setOpen] = useState(false);
-  const [progress, setProgress] = useState<{ pct: number; stage: 'render' | 'encode' } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -135,6 +139,33 @@ function ExportMenu() {
     window.addEventListener('pointerdown', close);
     return () => window.removeEventListener('pointerdown', close);
   }, [open]);
+  return { open, setOpen, ref };
+}
+
+/** Narrow-screen overflow menu for the actions that don't fit in the top bar. */
+function MoreMenu(props: { onOpenProjects: () => void; onOpenHelp: () => void; onOpenSettings: () => void; signedIn: boolean }) {
+  const { open, setOpen, ref } = useDropdown();
+  const pick = (fn: () => void) => () => { setOpen(false); fn(); };
+  return (
+    <div className="menu-wrap only-narrow" ref={ref}>
+      <button className="btn icon" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="More"><Ellipsis size={16} /></button>
+      {open && (
+        <div className="menu" role="menu">
+          <button className="menu-item" role="menuitem" onClick={pick(props.onOpenProjects)}><b><FolderOpen size={14} /> Projects</b><span>Open, create, or delete projects</span></button>
+          {firebaseConfigured && !props.signedIn && (
+            <button className="menu-item" role="menuitem" onClick={pick(() => void signIn().catch((e) => toast(e.message, 'error')))}><b><LogIn size={14} /> Sign in</b><span>Sync projects and samples</span></button>
+          )}
+          <button className="menu-item" role="menuitem" onClick={pick(props.onOpenSettings)}><b><Settings size={14} /> Settings</b><span>Gemini key, model, theme, playback</span></button>
+          <button className="menu-item" role="menuitem" onClick={pick(props.onOpenHelp)}><b><CircleQuestionMark size={14} /> Help</b><span>How Vibe works</span></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExportMenu() {
+  const { open, setOpen, ref } = useDropdown();
+  const [progress, setProgress] = useState<{ pct: number; stage: 'render' | 'encode' } | null>(null);
 
   const run = async (format: ExportFormat) => {
     setOpen(false);
@@ -167,8 +198,8 @@ function ExportMenu() {
 
   return (
     <div className="menu-wrap" ref={ref}>
-      <button className="btn" onClick={() => setOpen((o) => !o)} disabled={!!progress} aria-haspopup="menu" aria-expanded={open} title="Bounce the song to an audio file">
-        <Download size={15} /> {progress ? `${progress.stage === 'render' ? 'Bouncing' : 'Encoding'} ${progress.pct}%` : 'Export'}
+      <button className="btn" onClick={() => setOpen((o) => !o)} disabled={!!progress} aria-haspopup="menu" aria-expanded={open} aria-label="Export" title="Bounce the song to an audio file">
+        <Download size={15} /> {progress ? `${progress.stage === 'render' ? 'Bouncing' : 'Encoding'} ${progress.pct}%` : <span className="btn-label">Export</span>}
       </button>
       {open && (
         <div className="menu" role="menu">
