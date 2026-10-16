@@ -1,0 +1,505 @@
+import * as Tone from 'tone';
+import type { AudioClip, DrumLane, Effect, MidiClip, Project, Track } from '../model/types';
+import { beatsToSeconds } from '../model/project';
+import { getLoadedBuffer, getSampleMeta, loadBuffer } from '../samples/library';
+import { reverseBuffer } from '../samples/synth';
+import { createEffect, structuralParams, type EffectUnit } from './effects';
+import { createInstrument, prepareInstrument, type Instrument, type InstrumentAssets } from './instruments';
+
+// EngineGraph turns a Project into a live Tone.js graph and schedules it on a
+// transport. The same class drives realtime playback and offline bounces, which is
+// what lets the agent hear exactly what the user hears.
+
+interface FxSlot { id: string; key: string; unit: EffectUnit; effect: Effect }
+
+interface Strip {
+  id: string;
+  track: Track;
+  instKey: string;
+  instrument: Instrument | null;
+  input: Tone.Gain;
+  fx: FxSlot[];
+  channel: Tone.Channel;
+  meter: Tone.Meter | null;
+  events: number[];
+  scheduledClips: Track['clips'] | null;
+  scheduledLanes: DrumLane[] | undefined;
+  chokes: Map<number, { src: Tone.ToneBufferSource; gain: Tone.Gain }>;
+  audioVoices: Set<{ stop(time: number): void }>;
+}
+
+export interface GraphOptions {
+  /** Live graphs get meters and a metronome. */
+  live: boolean;
+  /** If set, only these tracks are audible. */
+  onlyTracks?: string[] | null;
+}
+
+const reversedCache = new WeakMap<AudioBuffer, AudioBuffer>();
+function maybeReversed(buf: AudioBuffer, reverse: boolean) {
+  if (!reverse) return buf;
+  let r = reversedCache.get(buf);
+  if (!r) { r = reverseBuffer(buf); reversedCache.set(buf, r); }
+  return r;
+}
+
+function safetyCurve(): Float32Array {
+  const n = 4096;
+  const knee = 0.79; // -2 dBFS
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    // WaveShaper input is [-1, 1]; the signal arrives pre-scaled by 0.5, so this
+    // covers true amplitudes up to ±2 (+6 dBFS) instead of hard-clamping at 0 dBFS.
+    const x = ((i / (n - 1)) * 2 - 1) * 2;
+    const a = Math.abs(x);
+    const y = a <= knee ? a : knee + (1 - knee) * Math.tanh((a - knee) / (1 - knee));
+    c[i] = Math.sign(x) * Math.min(0.999, y);
+  }
+  return c;
+}
+
+function instKey(t: Track): string {
+  if (t.kind !== 'instrument' || !t.instrument) return t.kind;
+  const p = t.instrument.params;
+  // 808 body is rendered from these params; everything else updates live.
+  const extra = t.instrument.preset === 'bass808' ? `${p.decay}|${p.punch}|${p.drive}` : '';
+  return `${t.instrument.preset}|${extra}`;
+}
+
+function fxKey(e: Effect): string {
+  return `${e.id}|${e.type}|${structuralParams(e)}`;
+}
+
+/** Collect everything a project needs loaded before it can play. */
+export async function preloadProject(p: Project): Promise<Map<string, InstrumentAssets>> {
+  const assets = new Map<string, InstrumentAssets>();
+  const sampleIds = new Set<string>();
+  await Promise.all(p.tracks.map(async (t) => {
+    if (t.kind === 'instrument' && t.instrument) assets.set(t.id, await prepareInstrument(t.instrument));
+    t.drumLanes?.forEach((l) => sampleIds.add(l.sampleId));
+    t.clips.forEach((c) => { if (c.type === 'audio') sampleIds.add(c.sampleId); });
+  }));
+  await Promise.all([...sampleIds].map((id) => loadBuffer(id)));
+  return assets;
+}
+
+export class EngineGraph {
+  readonly transport: ReturnType<typeof Tone.getTransport>;
+  readonly context: Tone.BaseContext;
+  private strips = new Map<string, Strip>();
+  private masterIn: Tone.Gain;
+  private masterFx: FxSlot[] = [];
+  private masterChannel: Tone.Channel;
+  private safety: Tone.WaveShaper;
+  private safetyPre: Tone.Gain;
+  readonly masterMeter: Tone.Meter | null;
+  readonly analyser: Tone.Analyser | null;
+  private project: Project | null = null;
+  private globalKey = '';
+  private metronomeId: number | null = null;
+  private clickBuffers: { hi: AudioBuffer; lo: AudioBuffer } | null = null;
+  private disposed = false;
+  private listeners: Array<[string, (...args: never[]) => void]> = [];
+
+  constructor(private opts: GraphOptions) {
+    this.context = Tone.getContext();
+    this.transport = Tone.getTransport();
+    this.masterIn = new Tone.Gain(1);
+    this.masterChannel = new Tone.Channel({ volume: 0, channelCount: 2 });
+    this.masterMeter = opts.live ? new Tone.Meter({ smoothing: 0.8, channelCount: 2 }) : null;
+    this.analyser = opts.live ? new Tone.Analyser('fft', 256) : null;
+    this.masterIn.connect(this.masterChannel);
+    // Final safety: transparent below -2 dBFS, soft-saturates above, never exceeds 0 dBFS.
+    this.safety = new Tone.WaveShaper(safetyCurve(), 4096);
+    this.safety.oversample = '2x';
+    this.safetyPre = new Tone.Gain(0.5);
+    this.masterChannel.connect(this.safetyPre);
+    this.safetyPre.connect(this.safety);
+    this.safety.connect(Tone.getDestination());
+    if (this.masterMeter) this.masterChannel.connect(this.masterMeter);
+    if (this.analyser) this.masterChannel.connect(this.analyser);
+
+    const on = (ev: string, fn: (...args: never[]) => void) => {
+      this.transport.on(ev as 'start', fn as never);
+      this.listeners.push([ev, fn]);
+    };
+    on('start', ((time: number, offset: number) => this.chaseAudio(time, offset)) as never);
+    on('loopStart', ((time: number, offset: number) => this.chaseAudio(time, offset)) as never);
+    on('loopEnd', ((time: number) => this.stopVoices(time)) as never);
+    on('stop', ((time: number) => this.stopVoices(time, true)) as never);
+    on('pause', ((time: number) => this.stopVoices(time, true)) as never);
+  }
+
+  // ---------------------------------------------------------------- sync
+
+  /** Bring the graph in line with the project. Only changed parts are rebuilt/rescheduled. */
+  async sync(p: Project, preloaded?: Map<string, InstrumentAssets>): Promise<void> {
+    if (this.disposed) return;
+    const prev = this.project;
+    this.project = p;
+    const t = this.transport;
+    t.bpm.value = p.bpm;
+    t.timeSignature = p.timeSignature[0] * (4 / p.timeSignature[1]);
+    t.loop = p.loop.enabled;
+    if (p.loop.end > p.loop.start) {
+      t.loopStart = `${Math.round(p.loop.start * t.PPQ)}i`;
+      t.loopEnd = `${Math.round(p.loop.end * t.PPQ)}i`;
+    }
+    this.masterChannel.volume.value = p.master.volumeDb;
+    this.masterFx = await this.syncFx(this.masterFx, p.master.effects, this.masterIn, this.masterChannel);
+
+    const gk = `${p.bpm}|${p.swing}|${p.timeSignature.join('/')}|${this.duckSignature(p)}`;
+    const globalChanged = gk !== this.globalKey;
+    this.globalKey = gk;
+
+    const live = new Set(p.tracks.map((x) => x.id));
+    for (const [id, s] of this.strips) if (!live.has(id)) this.disposeStrip(s);
+
+    const anySolo = p.tracks.some((x) => x.solo);
+    for (const track of p.tracks) {
+      let s = this.strips.get(track.id);
+      if (!s) {
+        const input = new Tone.Gain(1);
+        const channel = new Tone.Channel({ volume: track.volumeDb, pan: track.pan, channelCount: 2 });
+        input.connect(channel); // empty FX chain; syncFx rewires when effects are added
+        channel.connect(this.masterIn);
+        const meter = this.opts.live ? new Tone.Meter({ smoothing: 0.75 }) : null;
+        if (meter) channel.connect(meter);
+        s = { id: track.id, track, instKey: '', instrument: null, input, fx: [], channel, meter, events: [], scheduledClips: null, scheduledLanes: undefined, chokes: new Map(), audioVoices: new Set() };
+        this.strips.set(track.id, s);
+      }
+      const key = instKey(track);
+      if (key !== s.instKey) {
+        s.instrument?.releaseAll();
+        s.instrument?.dispose();
+        s.instrument = null;
+        if (track.kind === 'instrument' && track.instrument) {
+          const assets = preloaded?.get(track.id) ?? (await prepareInstrument(track.instrument));
+          if (this.disposed) return;
+          s.instrument = createInstrument(track.instrument, assets);
+          s.instrument.output.connect(s.input);
+        }
+        s.instKey = key;
+      } else if (track.instrument && s.track.instrument?.params !== track.instrument.params) {
+        s.instrument?.setParams(track.instrument.params);
+      }
+      s.fx = await this.syncFx(s.fx, track.effects, s.input, s.channel);
+      s.channel.volume.rampTo(track.volumeDb, 0.02);
+      s.channel.pan.rampTo(track.pan, 0.02);
+      const audible = this.opts.onlyTracks ? this.opts.onlyTracks.includes(track.id) : !track.mute && (!anySolo || track.solo);
+      s.channel.mute = !audible;
+      const needsSchedule = globalChanged || s.scheduledClips !== track.clips || s.scheduledLanes !== track.drumLanes || prev === null;
+      s.track = track;
+      if (needsSchedule) await this.scheduleTrack(s);
+    }
+    this.syncMetronome();
+  }
+
+  private duckSignature(p: Project): string {
+    const parts: string[] = [];
+    for (const t of p.tracks) for (const e of t.effects) if (e.type === 'duck') parts.push(`${t.id}<${e.params.source}`);
+    return parts.join(',');
+  }
+
+  private async syncFx(slots: FxSlot[], effects: Effect[], input: Tone.ToneAudioNode, output: Tone.ToneAudioNode): Promise<FxSlot[]> {
+    const enabled = effects.filter((e) => e.enabled);
+    const sameChain = slots.length === enabled.length && slots.every((s, i) => s.key === fxKey(enabled[i]));
+    if (sameChain) {
+      slots.forEach((s, i) => {
+        if (s.effect.params !== enabled[i].params) s.unit.update(enabled[i].params);
+        s.effect = enabled[i];
+      });
+      return slots;
+    }
+    // Rebuild the chain, reusing units whose key is unchanged.
+    const old = new Map(slots.map((s) => [s.key, s]));
+    const next: FxSlot[] = [];
+    for (const e of enabled) {
+      const k = fxKey(e);
+      const reuse = old.get(k);
+      if (reuse) {
+        old.delete(k);
+        if (reuse.effect.params !== e.params) reuse.unit.update(e.params);
+        reuse.effect = e;
+        next.push(reuse);
+      } else {
+        const unit = createEffect(e);
+        next.push({ id: e.id, key: k, unit, effect: e });
+      }
+    }
+    await Promise.all(next.map((s) => s.unit.ready));
+    input.disconnect();
+    for (const s of slots) s.unit.output.disconnect();
+    for (const s of old.values()) s.unit.dispose();
+    let node: Tone.ToneAudioNode = input;
+    for (const s of next) { node.connect(s.unit.input); node = s.unit.output; }
+    node.connect(output);
+    return next;
+  }
+
+  // ---------------------------------------------------------------- scheduling
+
+  private ticks(beat: number): string {
+    return `${Math.max(0, Math.round(beat * this.transport.PPQ))}i`;
+  }
+
+  private swingOffset(beat: number): number {
+    const p = this.project!;
+    if (!p.swing) return 0;
+    const sixteenth = beat * 4;
+    const isOff = Math.abs(sixteenth - Math.round(sixteenth)) < 0.02 && Math.round(sixteenth) % 2 === 1;
+    return isOff ? p.swing * 0.25 * 0.66 : 0;
+  }
+
+  private async scheduleTrack(s: Strip) {
+    for (const id of s.events) this.transport.clear(id);
+    s.events = [];
+    s.scheduledClips = s.track.clips;
+    s.scheduledLanes = s.track.drumLanes;
+    const p = this.project!;
+    const track = s.track;
+    for (const clip of track.clips) {
+      if (clip.muted) continue;
+      if (clip.type === 'midi') this.scheduleMidi(s, clip, p);
+      else await this.scheduleAudio(s, clip);
+    }
+  }
+
+  private duckTargets(sourceTrackId: string): EffectUnit[] {
+    const out: EffectUnit[] = [];
+    for (const st of this.strips.values()) for (const f of st.fx) if (f.effect.type === 'duck' && f.effect.params.source === sourceTrackId && f.unit.duck) out.push(f.unit);
+    return out;
+  }
+
+  private scheduleMidi(s: Strip, clip: MidiClip, p: Project) {
+    const isDrums = s.track.kind === 'drums';
+    const laneByNote = new Map((s.track.drumLanes ?? []).map((l) => [l.note, l]));
+    for (const n of clip.notes) {
+      if (n.start >= clip.length || n.start < 0) continue;
+      const beat = clip.start + n.start + this.swingOffset(n.start);
+      const durBeats = Math.min(n.duration, clip.length - n.start);
+      const durSec = beatsToSeconds(p, Math.max(0.01, durBeats));
+      const trackId = s.track.id;
+      if (isDrums) {
+        const lane = laneByNote.get(n.pitch);
+        if (!lane) continue;
+        const id = this.transport.schedule((time) => {
+          this.triggerDrum(s, lane, time, n.velocity);
+          for (const d of this.duckTargets(trackId)) d.duck!(time);
+        }, this.ticks(beat));
+        s.events.push(id);
+      } else {
+        const id = this.transport.schedule((time) => {
+          s.instrument?.trigger(n.pitch, durSec, time, n.velocity);
+          for (const d of this.duckTargets(trackId)) d.duck!(time);
+        }, this.ticks(beat));
+        s.events.push(id);
+      }
+    }
+  }
+
+  triggerDrum(s: Strip | string, lane: DrumLane, time: number, velocity: number) {
+    const strip = typeof s === 'string' ? this.strips.get(s) : s;
+    if (!strip) return;
+    const buf = getLoadedBuffer(lane.sampleId);
+    if (!buf) return;
+    if (lane.choke !== undefined) {
+      const prev = strip.chokes.get(lane.choke);
+      if (prev) {
+        try {
+          prev.gain.gain.cancelScheduledValues(time);
+          prev.gain.gain.setValueAtTime(prev.gain.gain.getValueAtTime(time), time);
+          prev.gain.gain.linearRampToValueAtTime(0, time + 0.015);
+          prev.src.stop(time + 0.02);
+        } catch { /* already stopped */ }
+      }
+    }
+    const context = this.context;
+    const gain = new Tone.Gain({ gain: Tone.dbToGain(lane.gainDb) * Math.max(0.05, velocity), context }).connect(strip.input);
+    const src = new Tone.ToneBufferSource({ url: buf, playbackRate: Math.pow(2, lane.pitch / 12), context }).connect(gain);
+    src.start(time);
+    src.onended = () => { src.dispose(); gain.dispose(); if (lane.choke !== undefined && strip.chokes.get(lane.choke)?.src === src) strip.chokes.delete(lane.choke); };
+    if (lane.choke !== undefined) strip.chokes.set(lane.choke, { src, gain });
+  }
+
+  private async scheduleAudio(s: Strip, clip: AudioClip) {
+    if (!getLoadedBuffer(clip.sampleId)) await loadBuffer(clip.sampleId);
+    const id = this.transport.schedule((time) => this.startAudioVoice(s, clip, time, 0), this.ticks(clip.start));
+    s.events.push(id);
+  }
+
+  /** Rate at which the sample plays to match project tempo/pitch. */
+  private audioRate(clip: AudioClip): { rate: number; detune: number } {
+    const p = this.project!;
+    const meta = getSampleMeta(clip.sampleId);
+    const tempoRatio = clip.warp !== 'off' && meta?.bpm ? p.bpm / meta.bpm : 1;
+    if (clip.warp === 'stretch') return { rate: tempoRatio, detune: clip.pitch * 100 };
+    return { rate: tempoRatio * Math.pow(2, clip.pitch / 12), detune: 0 };
+  }
+
+  /** Start an audio clip voice at `time`, `elapsedBeats` into the clip. */
+  private startAudioVoice(s: Strip, clip: AudioClip, time: number, elapsedBeats: number) {
+    const p = this.project!;
+    const raw = getLoadedBuffer(clip.sampleId);
+    if (!raw) return;
+    const buf = maybeReversed(raw, clip.reverse);
+    const { rate, detune } = this.audioRate(clip);
+    const remainingSec = beatsToSeconds(p, clip.length - elapsedBeats);
+    if (remainingSec <= 0.005) return;
+    const elapsedSec = beatsToSeconds(p, elapsedBeats);
+    let offset = clip.offset + elapsedSec * rate;
+    // Loops cycle the whole sample; offset only sets where playback enters it.
+    if (clip.loop && buf.duration > 0.01) offset = ((offset % buf.duration) + buf.duration) % buf.duration;
+    if (!clip.loop && offset >= buf.duration) return;
+    const context = this.context;
+    const gain = new Tone.Gain({ gain: 0, context }).connect(s.input);
+    const g = Tone.dbToGain(clip.gainDb);
+    const fadeIn = elapsedBeats > 0 ? 0.005 : Math.max(0.002, clip.fadeIn);
+    const fadeOut = Math.max(0.005, clip.fadeOut);
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(g, time + fadeIn);
+    const end = time + remainingSec;
+    gain.gain.setValueAtTime(g, Math.max(time + fadeIn, end - fadeOut));
+    gain.gain.linearRampToValueAtTime(0, end);
+
+    let node: Tone.ToneBufferSource | Tone.GrainPlayer;
+    if (clip.warp === 'stretch' && (Math.abs(rate - 1) > 0.001 || detune !== 0)) {
+      const gp = new Tone.GrainPlayer({ context, url: buf, playbackRate: rate, detune, loop: clip.loop, loopStart: 0, loopEnd: buf.duration, grainSize: 0.1, overlap: 0.05 });
+      gp.connect(gain);
+      gp.start(time, offset);
+      gp.stop(end + 0.01);
+      node = gp;
+    } else {
+      const src = new Tone.ToneBufferSource({ context, url: buf, playbackRate: rate, loop: clip.loop, loopStart: 0, loopEnd: buf.duration });
+      src.connect(gain);
+      src.start(time, offset);
+      src.stop(end + 0.01);
+      node = src;
+    }
+    const voice = {
+      stop: (t: number) => {
+        try {
+          gain.gain.cancelScheduledValues(t);
+          gain.gain.setValueAtTime(gain.gain.getValueAtTime(t), t);
+          gain.gain.linearRampToValueAtTime(0, t + 0.01);
+          node.stop(t + 0.015);
+        } catch { /* stopped */ }
+      },
+    };
+    s.audioVoices.add(voice);
+    const cleanup = () => { s.audioVoices.delete(voice); node.dispose(); gain.dispose(); };
+    if (node instanceof Tone.ToneBufferSource) node.onended = cleanup;
+    else node.onstop = cleanup;
+  }
+
+  /** On play/loop, start any audio clip whose start we've already passed. */
+  private chaseAudio(time: number, offsetSec: number) {
+    const p = this.project;
+    if (!p) return;
+    const pos = (offsetSec * p.bpm) / 60;
+    for (const s of this.strips.values()) {
+      for (const c of s.track.clips) {
+        if (c.type !== 'audio' || c.muted) continue;
+        if (c.start < pos - 1e-4 && c.start + c.length > pos + 1e-3) this.startAudioVoice(s, c, time, pos - c.start);
+      }
+    }
+  }
+
+  private stopVoices(time: number, releaseInstruments = false) {
+    for (const s of this.strips.values()) {
+      for (const v of s.audioVoices) v.stop(time);
+      s.audioVoices.clear();
+      if (releaseInstruments) s.instrument?.releaseAll(time);
+    }
+  }
+
+  // ---------------------------------------------------------------- metronome
+
+  private metronomeOn = false;
+  setMetronome(on: boolean) {
+    this.metronomeOn = on;
+    this.syncMetronome();
+  }
+
+  private syncMetronome() {
+    if (!this.opts.live) return;
+    if (this.metronomeId !== null) { this.transport.clear(this.metronomeId); this.metronomeId = null; }
+    if (!this.metronomeOn || !this.project) return;
+    if (!this.clickBuffers) {
+      const mk = (f: number) => {
+        const sr = this.context.sampleRate;
+        const b = this.context.createBuffer(1, Math.floor(sr * 0.03), sr);
+        const d = b.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.sin((2 * Math.PI * f * i) / sr) * Math.exp(-i / (sr * 0.006));
+        return b;
+      };
+      this.clickBuffers = { hi: mk(1800), lo: mk(1100) };
+    }
+    const bpb = this.project.timeSignature[0] * (4 / this.project.timeSignature[1]);
+    this.metronomeId = this.transport.scheduleRepeat((time) => {
+      const beat = Math.round(this.transport.getTicksAtTime(time) / this.transport.PPQ);
+      const src = new Tone.ToneBufferSource({ context: this.context, url: beat % bpb === 0 ? this.clickBuffers!.hi : this.clickBuffers!.lo }).connect(this.masterChannel);
+      src.start(time);
+      src.onended = () => src.dispose();
+    }, '4n', 0);
+  }
+
+  // ---------------------------------------------------------------- live helpers
+
+  /** Preview a note on a track (piano roll clicks, typing). */
+  previewNote(trackId: string, midi: number, velocity = 0.8, durSec = 0.4) {
+    const s = this.strips.get(trackId);
+    if (!s) return;
+    const now = this.context.now() + 0.01;
+    if (s.track.kind === 'drums') {
+      const lane = s.track.drumLanes?.find((l) => l.note === midi);
+      if (lane) this.triggerDrum(s, lane, now, velocity);
+    } else {
+      s.instrument?.trigger(midi, durSec, now, velocity);
+    }
+  }
+
+  trackLevel(trackId: string): number {
+    const m = this.strips.get(trackId)?.meter;
+    if (!m) return -Infinity;
+    const v = m.getValue();
+    return typeof v === 'number' ? v : Math.max(...v);
+  }
+
+  masterLevel(): number[] {
+    if (!this.masterMeter) return [-Infinity, -Infinity];
+    const v = this.masterMeter.getValue();
+    return typeof v === 'number' ? [v, v] : v;
+  }
+
+  panic() {
+    const now = this.context.now();
+    this.stopVoices(now, true);
+  }
+
+  private disposeStrip(s: Strip) {
+    for (const id of s.events) this.transport.clear(id);
+    for (const v of s.audioVoices) v.stop(this.context.now());
+    s.instrument?.releaseAll();
+    s.instrument?.dispose();
+    s.fx.forEach((f) => f.unit.dispose());
+    s.input.dispose();
+    s.channel.dispose();
+    s.meter?.dispose();
+    this.strips.delete(s.id);
+  }
+
+  dispose() {
+    this.disposed = true;
+    for (const s of [...this.strips.values()]) this.disposeStrip(s);
+    if (this.metronomeId !== null) this.transport.clear(this.metronomeId);
+    for (const [ev, fn] of this.listeners) this.transport.off(ev as 'start', fn as never);
+    this.masterFx.forEach((f) => f.unit.dispose());
+    this.masterIn.dispose();
+    this.masterChannel.dispose();
+    this.safety.dispose();
+    this.safetyPre.dispose();
+    this.masterMeter?.dispose();
+    this.analyser?.dispose();
+  }
+}
