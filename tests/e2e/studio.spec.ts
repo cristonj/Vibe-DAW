@@ -45,9 +45,11 @@ test('first-run Gemini setup is fully visible and not covered by the timeline', 
       inView: box.top >= 0 && box.bottom <= innerHeight + 1,
       titleOnTop: onTop(el.querySelector('h1')!),
       inputOnTop: onTop(el.querySelector('input')!),
+      // Phones show it centered on screen; desktop centers it in the timeline instead.
+      centered: innerWidth > 640 || Math.abs((box.top + box.bottom) / 2 - innerHeight / 2) <= 2,
     };
   });
-  expect(layout).toEqual({ fits: true, inView: true, titleOnTop: true, inputOnTop: true });
+  expect(layout).toEqual({ fits: true, inView: true, titleOnTop: true, inputOnTop: true, centered: true });
 });
 
 test('range drag from inside a clip passes exact notes to Ctrl+K', async ({ page }, info) => {
