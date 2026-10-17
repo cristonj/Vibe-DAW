@@ -43,7 +43,7 @@ export async function initCloud() {
     if (u) void watchSampleIndex(u.uid).then((stop) => {
       if (currentUser?.uid === u.uid) stopSamples = stop;
       else stop();
-    }).catch((e) => sampleError('index', e));
+    }).catch((e) => { if (currentUser?.uid === u.uid) sampleError('index', e); });
   });
   setRemoteSampleFetcher(fetchSampleBytes);
   setRemoteSampleUploader(uploadSample);

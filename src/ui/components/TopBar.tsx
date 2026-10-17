@@ -82,6 +82,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
         <button className={`play ${playing || starting ? 'playing' : ''}`} aria-label={starting ? 'Cancel playback startup' : playing ? 'Pause' : 'Play'} title={starting ? 'Loading audio… Click to cancel' : tip('Play / pause', 'playPause')} onClick={() => void togglePlay().catch((e) => toast(`Playback failed: ${(e as Error).message}`, 'error'))}>
           {playing || starting ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
         </button>
+        {starting && <span className="transport-loading" role="status">Loading audio…</span>}
         <button className={`btn icon ${loop ? 'on' : ''}`} title={tip('Loop', 'toggleLoop')} onClick={() => update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; })}><Repeat size={16} /></button>
         <button className={`btn icon ${metronome ? 'on' : ''}`} title={tip('Metronome click', 'toggleMetronome')} onClick={() => useTransport.getState().setMetronome(!metronome)}><Metronome size={16} /></button>
       </div>

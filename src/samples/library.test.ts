@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SampleMeta } from '../model/types';
 
 const mocks = vi.hoisted(() => ({ data: new Map<string, unknown>(), decoded: { duration: 1 }, decode: vi.fn() }));
@@ -18,8 +18,31 @@ beforeEach(async () => {
   vi.stubGlobal('OfflineAudioContext', class { decodeAudioData = mocks.decode; });
   lib = await import('./library');
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe('sample transfer between devices', () => {
+  it('moves a PC-only sample to a fresh laptop before its metadata index arrives', async () => {
+    const uploaded = new Map<string, ArrayBuffer>();
+    lib.useLibrary.getState().upsert(meta());
+    mocks.data.set('vibe:sample:s-local', audio());
+    lib.setRemoteSampleUploader(async (m, bytes) => {
+      uploaded.set(m.id, bytes);
+      return `users/a/samples/${m.id}`;
+    });
+    await lib.syncSamples(['s-local'], true);
+    const cloudMeta = lib.getSampleMeta('s-local')!;
+    // New device: no IndexedDB data, decoded buffers, or library index.
+    mocks.data.clear();
+    vi.resetModules();
+    const laptop = await import('./library');
+    laptop.setRemoteSampleFetcher(async (_meta, id) => uploaded.get(id) ?? null);
+    expect(laptop.getSampleMeta('s-local')).toBeUndefined();
+    expect(await laptop.loadBuffer('s-local')).toBe(mocks.decoded);
+    laptop.mergeRemoteSamples([cloudMeta]);
+    expect(laptop.getSampleMeta('s-local')?.storagePath).toBe('users/a/samples/s-local');
+    expect(mocks.data.has('vibe:sample:s-local')).toBe(true);
+  });
+
   it('downloads by sample id even when cloud metadata has not arrived', async () => {
     const bytes = new ArrayBuffer(8);
     const fetcher = vi.fn(async () => bytes);
