@@ -5,7 +5,7 @@ import { openSavePreset } from './SavePreset';
 import { useDaw } from '../../state/store';
 import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams, type EffectInfo } from '../../model/catalog';
 import type { Effect, EffectType, Project, Track } from '../../model/types';
-import { mintId } from '../../model/project';
+import { cloneDeep, mintId } from '../../model/project';
 import { useLibrary } from '../../samples/library';
 import { previewNote } from '../../engine/api';
 import { CUSTOM_BLANK, CUSTOM_STARTERS, customDefaults, effectName, newCustomEffect } from '../../model/customEffect';
@@ -205,7 +205,7 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
           onChange={(fn) => update(`Edit ${effectName(fx)}`, (d) => { const e = list(d).find((x) => x.id === fx.id); if (e) fn(e); }, { coalesce: true })}
           onDuplicate={() => update('Duplicate effect', (d) => {
             const l = list(d); const at = l.findIndex((x) => x.id === fx.id);
-            if (at >= 0) l.splice(at + 1, 0, { ...structuredClone(l[at]), id: mintId(d, 'fx') });
+            if (at >= 0) l.splice(at + 1, 0, { ...cloneDeep(l[at]), id: mintId(d, 'fx') });
           })}
           onRemove={() => update('Remove effect', (d) => { const l = list(d); l.splice(l.findIndex((x) => x.id === fx.id), 1); })}
           onMove={(dir) => update('Reorder effects', (d) => {
