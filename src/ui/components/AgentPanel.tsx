@@ -57,7 +57,7 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-/** A sent voice message: tap to hear it again. */
+/** A voice message, sent or waiting to be sent: tap to hear it. */
 function VoiceNote({ url, seconds }: { url: string; seconds: number }) {
   const [playing, setPlaying] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -155,10 +155,10 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   // Voice messages go to the model as audio; anything typed in the box rides along.
   const textRef = useRef(text);
   textRef.current = text;
-  const recorder = useVoiceRecorder(
-    (clip) => dispatch(textRef.current, clip),
-    (message) => toast(message, 'error'),
-  );
+  // A stopped recording waits here so it can be heard back before it is sent.
+  const [draft, setDraft] = useState<VoiceClip | null>(null);
+  const recorder = useVoiceRecorder(setDraft, (message) => toast(message, 'error'));
+  const discardDraft = () => { if (draft) URL.revokeObjectURL(draft.url); setDraft(null); };
   const recording = recorder.state === 'recording';
   const latestPlan = items.findLast((it): it is Extract<ChatItem, { kind: 'plan' }> => it.kind === 'plan');
 
@@ -172,7 +172,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
     });
     useChatReferences.setState({ extras: [...extras, ...recentReferences] });
   }, [items, recentReferences]);
-  useEffect(() => { useChatReferences.setState({ pending: [] }); setAttachments([]); setRecentReferences([]); }, [project.id]);
+  useEffect(() => { useChatReferences.setState({ pending: [] }); setAttachments([]); setRecentReferences([]); setDraft(null); }, [project.id]);
 
   useEffect(() => { if (focusSignal) taRef.current?.focus(); }, [focusSignal]);
 
@@ -187,7 +187,8 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
     const references = resolveChatReferences();
     const att = [...attachments.map((a) => `<reference_track>\n${JSON.stringify(a)}\n</reference_track>`), ...references.map(serializeChatReference)];
     const focusSelection = references.findLast((r) => r.selection)?.selection;
-    void runAgent(t || 'Please review the attached references.', { attachments: att, focusSelection, voice });
+    // A voice message speaks for itself: a stand-in text would read as the request and drown it out.
+    void runAgent(t || (voice ? '' : 'Please review the attached references.'), { attachments: att, focusSelection, voice });
     useChatReferences.setState({ pending: [] });
     setText('');
     setAttachments([]);
@@ -201,6 +202,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
       if (clip) dispatch(textRef.current, clip);
       return;
     }
+    if (draft) { dispatch(t, draft); setDraft(null); return; }
     if (!t.trim() && !pending.length && !attachments.length) return;
     dispatch(t);
   };
@@ -217,6 +219,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   const startVoice = () => {
     const avail = aiAvailable();
     if (!avail.ok) { toast(avail.reason!, 'error'); window.dispatchEvent(new Event('vibe:open-settings')); return; }
+    discardDraft();
     void recorder.start();
   };
 
@@ -268,9 +271,17 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
             <div className="rec-row" role="status">
               {recording ? <span className="rec-dot" /> : <LoaderCircle size={13} className="spin" />}
               <span>{recording ? `Recording ${clock(recorder.seconds)}` : 'Preparing…'}</span>
-              {recording && recorder.seconds > MAX_VOICE_SECONDS - 15 && <span className="rec-limit">sends at {clock(MAX_VOICE_SECONDS)}</span>}
+              {recording && recorder.seconds > MAX_VOICE_SECONDS - 15 && <span className="rec-limit">stops at {clock(MAX_VOICE_SECONDS)}</span>}
               <div className="spacer" />
+              {recording && <button className="btn" onClick={() => void recorder.stop().then((clip) => clip && setDraft(clip))} aria-label="Stop recording to listen back" title="Stop and listen back before sending"><Square size={11} fill="currentColor" /> Stop</button>}
               {recording && <button className="btn" onClick={recorder.cancel} aria-label="Discard voice message"><X size={13} /> Discard</button>}
+            </div>
+          )}
+          {draft && recorder.state === 'idle' && (
+            <div className="rec-row">
+              <VoiceNote url={draft.url} seconds={draft.seconds} />
+              <div className="spacer" />
+              <button className="btn" onClick={discardDraft} aria-label="Discard voice message"><X size={13} /> Discard</button>
             </div>
           )}
           {(attachments.length > 0 || pending.length > 0 || analyzing) && (
@@ -294,7 +305,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
             ref={taRef}
             value={text}
             rows={2}
-            placeholder={recording ? 'Talk now. Tap send when you’re done (you can add a typed note too).' : running ? 'Steer the agent while it works…' : mode === 'agent' ? 'Describe what to make or change…' : 'Ask about your track…'}
+            placeholder={recording ? 'Talk now. Tap send when you’re done, or stop to listen back first.' : draft ? 'Add a typed note if you like, then send.' : running ? 'Steer the agent while it works…' : mode === 'agent' ? 'Describe what to make or change…' : 'Ask about your track…'}
             onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart); }}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onKeyDown={(e) => {
@@ -337,7 +348,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
             {running && (
               <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} fill="currentColor" /></button>
             )}
-            <button className={`send ${recording ? 'recording' : ''}`} onClick={() => void send()} disabled={(!text.trim() && !recording && !pending.length && !attachments.length) || analyzing || recorder.state === 'encoding'} title={recording ? 'Send voice message (Enter)' : running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={recording ? 'Send voice message' : running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
+            <button className={`send ${recording ? 'recording' : ''}`} onClick={() => void send()} disabled={(!text.trim() && !recording && !draft && !pending.length && !attachments.length) || analyzing || recorder.state === 'encoding'} title={recording || draft ? 'Send voice message (Enter)' : running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={recording || draft ? 'Send voice message' : running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
           </div>
         </div>
         <div className="agent-foot">

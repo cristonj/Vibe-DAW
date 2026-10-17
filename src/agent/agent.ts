@@ -95,14 +95,18 @@ const VOICE_TAG = /<voice_message id="([^"]+)">[\s\S]*?<\/voice_message>/g;
 function registerVoice(voice: NonNullable<RunOptions['voice']>): string {
   const id = `v${nid()}`;
   runVoices.set(id, { inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(voice.wav) } });
-  return `<voice_message id="${id}">The user spoke this message (${Math.round(voice.seconds)} s recording attached just before this text). Listen to it: it is their request, in their own words and tone. If they hum or sing a tune, treat it as the melody or rhythm they want.</voice_message>`;
+  return `<voice_message id="${id}">The user spoke this message (${Math.round(voice.seconds)} s recording attached just before this text). Listen to it: it is their request, in their own words and tone. The recording is already here; it is not a sample or track, so do not search for it or audition it with tools. If they hum or sing a tune, treat it as the melody or rhythm they want.</voice_message>`;
 }
 
+// The tag id is bookkeeping only: the model never sees it, or it mistakes it for a sample
+// or track id and goes looking for it with tools.
+const hideVoiceIds = (p: Part): Part => (p.text && !p.thoughtSignature && p.text.includes('<voice_message id=') ? { ...p, text: p.text.replace(/<voice_message id="[^"]+">/g, '<voice_message>') } : p);
+
 function withVoices(history: Content[]): Content[] {
-  if (!runVoices.size) return history;
   return history.map((c) => {
     const audio = c.parts.flatMap((p) => [...(p.text?.matchAll(VOICE_TAG) ?? [])].map((m) => runVoices.get(m[1])).filter((a): a is Part => !!a));
-    return audio.length ? { ...c, parts: [...audio, ...c.parts] } : c;
+    const parts = c.parts.map(hideVoiceIds);
+    return { ...c, parts: audio.length ? [...audio, ...parts] : parts };
   });
 }
 

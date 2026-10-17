@@ -120,7 +120,9 @@ describe('voice messages', () => {
       expect(audioParts(req)).toEqual([{ inlineData: { mimeType: 'audio/wav', data: 'UklGRgECAwQ=' } }]);
       // The clip sits right before the message that refers to it.
       const msg = req.contents.find((c) => c.parts.some((p) => p.inlineData))!;
-      expect(msg.parts[1].text).toContain('<voice_message id=');
+      expect(msg.parts[1].text).toContain('<voice_message>');
+      // The internal tag id never reaches the model, which would otherwise look it up as a sample.
+      expect(JSON.stringify(req.contents)).not.toContain('<voice_message id=');
     }
     const s = useAgent.getState();
     expect(s.items.find((i) => i.kind === 'user')).toMatchObject({ text: '', voice: { url: 'blob:voice', seconds: 3.2 } });
