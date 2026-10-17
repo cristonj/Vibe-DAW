@@ -15,6 +15,7 @@ vi.mock('./graph', () => ({
 }));
 vi.mock('./freeze', () => ({ configureFreeze: mocks.configure, scheduleFreeze: mocks.schedule }));
 vi.mock('./samplePreview', () => ({ renderSamplePreview: vi.fn() }));
+vi.mock('./unlock', () => ({ nativeAudioContext: () => ({}) }));
 vi.mock('../state/settings', () => ({ useSettings: { getState: () => ({ latency: 'playback' }) } }));
 
 let engine: typeof import('./engine');

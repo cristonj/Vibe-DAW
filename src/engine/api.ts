@@ -4,6 +4,7 @@ import type { RenderOptions } from './render';
 import type { ExportFormat } from './exportFormats';
 import type { PcmData } from './wav';
 import { contextLock } from './lock';
+import { unlockAudioOnGestures } from './unlock';
 
 // Everything outside src/engine talks to audio through this file. It never imports
 // Tone directly: Tone creates an AudioContext the moment it's imported, and browsers
@@ -25,15 +26,9 @@ export function loadEngine(): Promise<EngineModule> {
   return loading;
 }
 
-/** Load the engine on the first real user interaction. */
+/** Unlock audio on every user interaction, and load the engine on the first one. */
 export function loadEngineOnFirstGesture() {
-  const go = () => {
-    window.removeEventListener('pointerdown', go, true);
-    window.removeEventListener('keydown', go, true);
-    void loadEngine();
-  };
-  window.addEventListener('pointerdown', go, true);
-  window.addEventListener('keydown', go, true);
+  unlockAudioOnGestures(() => void loadEngine());
 }
 
 export async function play(fromBeat?: number) {
