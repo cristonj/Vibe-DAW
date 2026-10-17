@@ -1,27 +1,19 @@
 import { useState } from 'react';
-import { ArrowUpRight, ArrowRight, Code2 as Github, Heart, Copy, Check, Sparkles, SlidersHorizontal, AudioLines, MousePointer2 } from 'lucide-react';
+import { ArrowUpRight, Code2 as Github, Heart, Copy, Check, Sparkles, SlidersHorizontal, AudioLines, MousePointer2 } from 'lucide-react';
 import { donationWallets } from './donations';
 import './landing.css';
 
 const REPO = 'https://github.com/cristonj/Vibe-DAW';
-const TRACKS = [
-  { label: 'Glass keys', color: '#c6adfa', notes: [[0, 42, 46], [0, 57, 46], [0, 72, 46], [54, 35, 46], [54, 50, 46], [54, 65, 46], [108, 45, 46], [108, 60, 46], [108, 75, 46], [162, 40, 46], [162, 55, 46], [162, 70, 46]] },
-  { label: 'Soft bass', color: '#eeac87', notes: [[0, 58, 36], [45, 58, 10], [56, 46, 34], [108, 62, 32], [151, 52, 10], [164, 55, 44]] },
-  { label: 'Pocket drums', color: '#9bbfaf', notes: Array.from({ length: 32 }, (_, i) => [i * 6.7, i % 4 === 0 ? 65 : i % 4 === 2 ? 45 : 28, i % 4 === 0 ? 4 : 2]) },
-];
+// Real studio captures from scripts/capture-landing-screenshots.mjs. Regenerate when the UI changes.
+const SHOTS = {
+  studio: { src: '/screenshots/studio.webp', width: 2880, height: 1800 },
+  instruments: { src: '/screenshots/instruments.webp', width: 496, height: 1040 },
+  inlineEdit: { src: '/screenshots/inline-edit.webp', width: 2096, height: 1040 },
+  mixer: { src: '/screenshots/mixer.webp', width: 1256, height: 600 },
+};
 
-function SessionArt() {
-  return <div className="session-art" role="img" aria-label="An example Vibe arrangement with glass keys, soft bass, and drums selected for an AI edit">
-    <div className="art-toolbar"><span className="art-dot" /><b>Night moves</b><span className="art-tempo">96 BPM <i /> A minor</span><span className="art-time">001 : 01</span></div>
-    <div className="art-ruler"><span>TRACKS</span>{[1, 2, 3, 4, 5].map((bar) => <span key={bar}>{bar}</span>)}</div>
-    {TRACKS.map((track, row) => <div className="art-track" key={track.label} style={{ '--track': track.color } as React.CSSProperties}>
-      <div className="art-track-label"><i /><span>{track.label}<small>{row === 2 ? 'Drum kit' : 'Instrument'}</small></span><span className="art-meter" /></div>
-      <div className="art-clips">{[0, 1].map((repeat) => <div className="art-clip" key={repeat}><span>{track.label}</span><svg viewBox="0 0 216 100" preserveAspectRatio="none" aria-hidden>{track.notes.map(([x, y, w], i) => <rect key={i} x={x} y={y} width={w} height={row === 2 ? 10 : 4} rx="1" />)}</svg></div>)}</div>
-    </div>)}
-    <div className="art-region"><span>12 notes selected</span></div><div className="art-playhead" />
-    <div className="art-command"><div><span><Sparkles size={14} /> Edit selection</span><kbd>⌘ K</kbd></div><p>Give these drums a little more swing</p><div className="art-command-foot"><span>Just this phrase. Your call.</span><ArrowRight size={17} /></div></div>
-    <div className="art-bottom"><span><span className="art-dot" /> All changes are yours to keep.</span><span>UNDO ↶</span></div>
-  </div>;
+function Shot({ shot, alt, eager = false }: { shot: typeof SHOTS[keyof typeof SHOTS]; alt: string; eager?: boolean }) {
+  return <img src={shot.src} width={shot.width / 2} height={shot.height / 2} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" {...(eager ? { fetchPriority: 'high' as const } : {})} />;
 }
 
 function DonationSection() {
@@ -45,14 +37,19 @@ export function Landing() {
     <nav className="landing-nav" aria-label="Main navigation"><a className="landing-brand" href="/" aria-label="Vibe home"><svg viewBox="0 0 32 32" aria-hidden><path d="M3 19c4 0 4-10 8-10s4 15 8 15S23 5 27 5s2 9 3 9" /></svg>vibe<span> / </span></a><div><a href="#possibilities">The possibilities</a><a href="#support">Support Vibe</a><a className="nav-open" href="/studio">Open studio <ArrowUpRight size={15} /></a></div></nav>
     <main>
       <section className="landing-hero">
-        <div className="hero-copy"><span className="landing-eyebrow"><span className="live-dot" /> YOUR BROWSER. YOUR STUDIO.</span><h1>Less friction.<br />More <em>feeling.</em></h1><p>A music studio that moves at the speed of your ideas. Play, draw, and produce with an AI collaborator that hears what you hear.</p><div className="hero-links"><a className="landing-primary" href="/studio">Make something <ArrowUpRight size={21} /></a><a className="landing-secondary" href={REPO} target="_blank" rel="noreferrer"><Github size={17} /> Explore the code</a></div><span className="hero-note">Free &amp; open source. No install. No account needed to start.</span></div>
-        <div className="hero-session"><div className="session-kicker"><span>AN IDEA, TAKING SHAPE</span><span>01 — ∞</span></div><SessionArt /><div className="session-caption"><MousePointer2 size={13} /><span>Select a phrase. Say what you feel. Keep what you love.</span></div></div>
+        <div className="hero-copy"><span className="landing-eyebrow"><span className="live-dot" /> OPEN SOURCE. RUNS IN YOUR BROWSER.</span><h1>The open source agentic DAW built to <em>augment, not replace,</em> human creativity.</h1>
+          <div className="hero-row"><p>Arrangement, piano roll, step sequencer, mixer, and effects, with a producer agent that listens to what it makes. Everything it does is ordinary session state you can edit by hand, and one undo takes back a whole run.</p>
+            <div><div className="hero-links"><a className="landing-primary" href="/studio">Make something <ArrowUpRight size={21} /></a><a className="landing-secondary" href={REPO} target="_blank" rel="noreferrer"><Github size={17} /> Explore the code</a></div><span className="hero-note">Free &amp; open source. No install. No account needed to start.</span></div></div></div>
+        <figure className="hero-shot"><Shot eager shot={SHOTS.studio} alt="The Vibe studio: a five-track arrangement with drums, Rhodes, bass, pad and a new flute hook drawn in lilac, the hook open in the piano roll, and the Producer panel showing the run with Keep and Undo all buttons." /><figcaption><MousePointer2 size={13} /><span>The actual studio. The Producer’s new flute part stays lilac until you keep it.</span></figcaption></figure>
       </section>
       <section className="landing-manifesto" id="possibilities"><span className="landing-eyebrow">BUILT FOR THE MOMENT IN BETWEEN</span><h2>From “what if”<br />to <span>one more listen.</span></h2><p>The melody in your head. The groove you almost have. Vibe gives you a place to find it, shape it, and make it yours.</p></section>
       <section className="landing-features" aria-label="Studio features">
-        <article><span className="feature-index">01 / CREATE</span><AudioLines size={27} /><h3>A whole palette.<br />An empty canvas.</h3><p>Sampled keys and strings. Offline synths, basses, and mallets. Your own recordings. Explore openly licensed audio when a track needs something unexpected.</p><a href="/studio">Find your sound <ArrowUpRight size={15} /></a></article>
-        <article><span className="feature-index">02 / COLLABORATE</span><Sparkles size={27} /><h3>A co-producer<br />with a pair of ears.</h3><p>Select notes or a section and describe the change. Your agent composes, listens, and edits the same session you do. Review every change. Undo the whole run.</p><a href="/studio">Follow an idea <ArrowUpRight size={15} /></a></article>
-        <article><span className="feature-index">03 / SHAPE</span><SlidersHorizontal size={27} /><h3>Get into<br />the details.</h3><p>Arrange clips, shape notes, dial in effects, and bounce WAV or MP3. Background track freezing keeps completed parts light. A touch interface travels with you.</p><a href="/studio">Open your studio <ArrowUpRight size={15} /></a></article>
+        <article><div className="feature-copy"><span className="feature-index">01 / CREATE</span><AudioLines size={27} /><h3>A whole palette.<br />An empty canvas.</h3><p>Sampled keys and strings. Offline synths, basses, and mallets. Your own recordings. Explore openly licensed audio when a track needs something unexpected.</p><a href="/studio">Find your sound <ArrowUpRight size={15} /></a></div>
+          <figure className="feature-shot tall"><Shot shot={SHOTS.instruments} alt="The Instruments browser listing Grand Piano, Electric Piano, Organ, Chip Keys and guitars, each with a short description." /></figure></article>
+        <article><div className="feature-copy"><span className="feature-index">02 / COLLABORATE</span><Sparkles size={27} /><h3>A co-producer<br />with a pair of ears.</h3><p>Shift-drag across tracks, press Ctrl+K, and describe the change. Your agent gets the exact notes, edits the same session you do, and listens back. Review every change. Undo the whole run.</p><a href="/studio">Follow an idea <ArrowUpRight size={15} /></a></div>
+          <figure className="feature-shot"><Shot shot={SHOTS.inlineEdit} alt="A range selected across the bass and pad tracks with the Ctrl+K edit box open, reading “Walk the bass up into the hook”, above suggested edits." /></figure></article>
+        <article><div className="feature-copy"><span className="feature-index">03 / SHAPE</span><SlidersHorizontal size={27} /><h3>Get into<br />the details.</h3><p>Arrange clips, shape notes, dial in effects, and bounce WAV or MP3. Background track freezing keeps completed parts light. A touch interface travels with you.</p><a href="/studio">Open your studio <ArrowUpRight size={15} /></a></div>
+          <figure className="feature-shot"><Shot shot={SHOTS.mixer} alt="The mixer with channel strips for each track, pan knobs, faders, effect counts, and the master bus." /></figure></article>
       </section>
       <div className="landing-ai-note">Music tools work without an AI key. The Producer uses your Gemini key, or hosted AI when enabled. Streamed instruments and online sounds need a connection on first use.</div>
       <DonationSection />

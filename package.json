@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:browser": "playwright test",
+    "screenshots": "node scripts/capture-landing-screenshots.mjs",
     "test:rules": "npx --yes firebase-tools@15.34.0 emulators:exec --only firestore --project demo-vibe-tests \"node --test tests/rules/library.test.mjs\""
   },
   "dependencies": {
