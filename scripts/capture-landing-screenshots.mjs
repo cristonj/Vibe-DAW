@@ -3,10 +3,11 @@
 // through the same agent tools the Producer uses, so the studio is the live app. Only
 // the Producer chat is seeded (no LLM call): its tool rows are the real tool results.
 import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
 const BASE = process.env.VIBE_URL ?? 'http://127.0.0.1:5173';
-const OUT = new URL('../public/screenshots/', import.meta.url).pathname;
+const OUT = fileURLToPath(new URL('../public/screenshots/', import.meta.url));
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 const browser = await chromium.launch(executablePath ? { executablePath } : {});
