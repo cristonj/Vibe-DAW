@@ -7,6 +7,7 @@ import { configureFreeze, scheduleFreeze } from './freeze';
 import type { Project } from '../model/types';
 import { renderSamplePreview } from './samplePreview';
 import { pcmToAudioBuffer } from './wav';
+import { nativeAudioContext } from './unlock';
 
 // Live playback engine: one EngineGraph on the realtime AudioContext, kept in sync
 // with the store. Everything here captures the realtime context/transport once,
@@ -42,7 +43,8 @@ export function initEngine() {
   // A larger output buffer ('playback') trades a few ms of latency for no dropouts
   // with heavy projects; a DAW's transport doesn't need game-level latency.
   const low = useSettings.getState().latency === 'low';
-  realtimeContext = new Tone.Context({ latencyHint: low ? 'interactive' : 'playback', lookAhead: low ? 0.06 : 0.12 });
+  // Wrap the context the gesture handlers already unlocked (see unlock.ts).
+  realtimeContext = new Tone.Context({ context: nativeAudioContext(), latencyHint: low ? 'interactive' : 'playback', lookAhead: low ? 0.06 : 0.12 });
   Tone.setContext(realtimeContext, true);
   transport = Tone.getTransport();
   graph = new EngineGraph({ live: true });
