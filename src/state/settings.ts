@@ -28,6 +28,8 @@ interface SettingsState {
   latency: 'stable' | 'low';
   listeningQuality: ListeningQuality;
   listeningChannels: ListeningChannels;
+  /** Browser noise suppression on voice messages. Off keeps humming and sung notes intact. */
+  micNoiseSuppression: boolean;
   set: (patch: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -57,6 +59,7 @@ export function sanitizeSettings(saved: Partial<Record<keyof SettingsValues, unk
     latency: saved.latency === 'low' ? 'low' : 'stable',
     listeningQuality: saved.listeningQuality === 'balanced' || saved.listeningQuality === 'compact' ? saved.listeningQuality : 'full',
     listeningChannels: saved.listeningChannels === 'mono' ? 'mono' : 'stereo',
+    micNoiseSuppression: typeof saved.micNoiseSuppression === 'boolean' ? saved.micNoiseSuppression : true,
   };
 }
 

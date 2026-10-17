@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { audioBufferToPcm } from '../engine/wav';
 import { decodeAudio } from '../samples/library';
 import { prepareListeningAudio } from '../agent/listeningAudio';
+import { useSettings } from '../state/settings';
 
 // Voice messages for the Producer chat: record from the mic and send the audio itself to
 // the model, which hears it directly (no transcription step).
@@ -48,7 +49,9 @@ export function useVoiceRecorder(onAutoStop: (clip: VoiceClip) => void, onError:
     starting.current = true;
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      // Noise suppression treats sustained tones as noise and smears humming; it can be turned off in Settings.
+      const noiseSuppression = useSettings.getState().micNoiseSuppression;
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression } });
     } catch {
       cb.current.onError('Microphone access was blocked. Allow it in your browser’s site settings to talk to the Producer.');
       return;

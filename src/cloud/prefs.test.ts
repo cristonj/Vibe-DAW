@@ -54,6 +54,8 @@ describe('synced preference sanitizing', () => {
     expect(s.thinking).toBe('HIGH');
     expect(s.autoListen).toBe(false);
     expect(s.listeningChannels).toBe('stereo');
+    expect(s.micNoiseSuppression).toBe(true);
+    expect(sanitizeSettings({ micNoiseSuppression: false }).micNoiseSuppression).toBe(false);
   });
 
   it('rejects unknown themes and non-color accents', () => {
