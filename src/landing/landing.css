@@ -31,8 +31,7 @@
 .landing kbd { font: 600 0.56em/1 var(--font-ui); display: inline-block; vertical-align: 0.2em; padding: 0.32em 0.45em; margin: 0 0.08em; border-radius: 6px; background: var(--raised); box-shadow: inset 0 -2px 0 var(--line), 0 0 0 1px var(--line); color: var(--text); letter-spacing: 0; }
 
 .lp-hero { padding-top: 88px; }
-.lp-hero-foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 48px; margin-top: 40px; }
-.lp-hero-foot p { max-width: 560px; font-size: 19px; }
+.lp-hero-actions { margin-top: 44px; }
 .lp-hero-shot { position: relative; margin-top: 72px; padding-bottom: 56px; }
 .lp-frame { border-radius: var(--radius-l); overflow: hidden; background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 40px 100px rgba(5, 6, 14, 0.6); }
 .lp-hero-shot .lp-frame { box-shadow: 0 0 0 1px var(--line), 0 40px 120px rgba(5, 6, 14, 0.7), 0 0 160px -40px var(--agent-wash); }
@@ -80,7 +79,6 @@
 .lp-foot .lp-mark { width: 24px; height: 24px; }
 
 @media (max-width: 1000px) {
-  .lp-hero-foot { flex-direction: column; align-items: flex-start; gap: 32px; }
   .lp-split, .lp-band .lp-split, .lp-daw-head { grid-template-columns: 1fr; gap: 48px; }
   .lp-band .lp-split > figure { order: 1; }
   .lp-producer { justify-self: start; }
@@ -92,8 +90,7 @@
   .lp-nav { height: 64px; }
   .lp-nav > div { gap: 18px; }
   .lp-hero { padding-top: 48px; }
-  .lp-hero-foot { margin-top: 28px; }
-  .lp-hero-foot p { font-size: 17px; }
+  .lp-hero-actions { margin-top: 32px; }
   .lp-hero-shot { margin-top: 48px; padding-bottom: 0; }
   /* Phones get the verse-to-hook half of the timeline at a readable size. */
   .lp-bleed { margin-right: -20px; border-radius: var(--radius-m) 0 0 var(--radius-m); }

@@ -52,10 +52,7 @@ export function Landing() {
     <main>
       <section className="lp-hero lp-wrap">
         <h1>The open source agentic DAW built to <mark>augment, not replace,</mark> human creativity.</h1>
-        <div className="lp-hero-foot">
-          <p>A full music studio in your browser with a producer agent built in. It writes parts, picks sounds by listening to them, and mixes by ear. Anything it touches stays lilac until you keep it.</p>
-          <div className="lp-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">View the code</a></div>
-        </div>
+        <div className="lp-actions lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">View the code</a></div>
         <figure className="lp-hero-shot">
           <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.arrangement} alt="A Vibe arrangement: drums, Rhodes, bass and pad tracks across intro, verse and hook, lyric cues above, and a new flute part in lilac waiting for review." /></div>
           <Shot className="lp-float" shot={SHOTS.review} alt="The Changes to review card with Keep and Undo all buttons." />
