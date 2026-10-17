@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Play, Sparkles, MousePointer2 } from 'lucide-react';
+import { Play, MousePointer2 } from 'lucide-react';
 import { useDaw } from '../../state/store';
 import type { MidiClip, Project, Track } from '../../model/types';
 import { beatsPerBar, uid } from '../../model/project';
@@ -87,7 +87,7 @@ export function DrumEditor({ clip, track, project }: { clip: MidiClip; track: Tr
         <span className="hide-touch" style={{ color: 'var(--faint)', fontSize: 12, marginLeft: 8 }}>Click to toggle · Ctrl = accent · Alt = ghost · Shift-drag to select</span>
         <button className="btn" aria-pressed={selectMode} onClick={() => setSelectMode((v) => !v)}><MousePointer2 size={14} /> Select{selected?.length ? ` · ${selected.length}` : ''}</button>
         <div style={{ flex: 1 }} />
-        <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}><Sparkles size={14} /> Edit with AI</button>
+        <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}>Edit with AI</button>
       </div>
       <div className={`drum-grid ${selectMode ? 'selecting-range' : ''}`} onPointerDownCapture={selectRegion}>
         {lanes.map((l, laneIndex) => (

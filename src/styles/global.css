@@ -934,11 +934,6 @@ kbd {
   .inline-ai { top: calc(12px + env(safe-area-inset-top)); }
 }
 
-/* On small screens, keep setup scrollable inside the arrangement. */
-@media (max-width: 640px), (max-height: 600px) {
-  .empty-arrange { position: absolute; inset: 105px 8px 8px; z-index: 6; padding: 4px; place-items: center; background: transparent; }
-  .hero-card { width: min(560px, 100%); }
-}
 
 /* Short landscape screens: keep as much timeline as possible. */
 @media (max-height: 500px) and (max-width: 1024px) {
@@ -1054,5 +1049,11 @@ kbd {
 /* Keep first-run setup inside the arrangement, including short phone layouts. */
 .empty-arrange { min-height: 0; overflow: hidden; }
 .hero-card { max-height: calc(100% - 16px); overflow-y: auto; overscroll-behavior: contain; }
+/* Phones and short screens leave the timeline only a sliver, so first-run setup is centered on
+   the screen instead, over the editor dock (empty on a new project). Drawers and modals stay above it. */
+@media (max-width: 640px), (max-height: 600px) {
+  .empty-arrange { position: fixed; inset: 0; z-index: 30; padding: 12px; overflow: visible; }
+  .hero-card { width: min(560px, 100%); max-height: 100%; }
+}
 
 .msg-add { height: 24px; padding: 0 5px; font-size: 11px; opacity: 0.75; }

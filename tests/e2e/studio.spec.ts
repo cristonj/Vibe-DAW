@@ -32,6 +32,26 @@ test('landing opens the studio without loading its audio engine', async ({ page 
   await expect(page.getByRole('region', { name: 'Arrangement', exact: true })).toBeVisible();
 });
 
+test('first-run Gemini setup is fully visible and not covered by the timeline', async ({ page }) => {
+  await page.goto('/studio');
+  await page.waitForFunction(() => !!(window as any).__vibe);
+  const card = page.locator('.hero-card');
+  await expect(card.getByRole('heading', { name: 'First, connect Gemini.' })).toBeVisible();
+  const layout = await card.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const onTop = (child: Element) => { const r = child.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + 8, r.y + r.height / 2)); };
+    return {
+      fits: el.scrollHeight <= el.clientHeight + 1,
+      inView: box.top >= 0 && box.bottom <= innerHeight + 1,
+      titleOnTop: onTop(el.querySelector('h1')!),
+      inputOnTop: onTop(el.querySelector('input')!),
+      // Phones show it centered on screen; desktop centers it in the timeline instead.
+      centered: innerWidth > 640 || Math.abs((box.top + box.bottom) / 2 - innerHeight / 2) <= 2,
+    };
+  });
+  expect(layout).toEqual({ fits: true, inView: true, titleOnTop: true, inputOnTop: true, centered: true });
+});
+
 test('range drag from inside a clip passes exact notes to Ctrl+K', async ({ page }, info) => {
   await fixture(page);
   const lane = page.locator('.track-row > .lane').first();

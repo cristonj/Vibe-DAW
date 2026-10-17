@@ -16,7 +16,7 @@ import { MessageSquarePlus } from 'lucide-react';
 import { saveSelectedClips } from './SavePreset';
 import { openInlineAI } from './InlineAI';
 import { selectedNotes } from '../../model/selection';
-import { MousePointer2, Sparkles, Bookmark } from 'lucide-react';
+import { MousePointer2, Bookmark } from 'lucide-react';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
 import { toast } from '../toast';
@@ -594,7 +594,7 @@ export function Arrangement() {
         <div className="tool-divider" />
         <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')} aria-label="New clip"><Plus size={14} /> <span className="btn-label">New clip</span></button>
         <button className={`btn ${rangeMode ? 'active' : ''}`} aria-pressed={rangeMode} onClick={() => setRangeMode((v) => !v)} title="Drag across tracks to select a time range. Shift-drag also works."><MousePointer2 size={14} /> Range</button>
-        <button className="btn" onClick={() => openInlineAI()} disabled={!selection.clipIds.length} title="Edit the selected notes or region with AI (Ctrl+K)"><Sparkles size={14} /> Edit selection{selection.range ? ` · ${selection.clipIds.reduce((n, id) => n + selectedNotes(project, selection, id).length, 0)} notes` : ''}</button>
+        <button className="btn" onClick={() => openInlineAI()} disabled={!selection.clipIds.length} title="Edit the selected notes or region with AI (Ctrl+K)">Edit selection{selection.range ? ` · ${selection.clipIds.reduce((n, id) => n + selectedNotes(project, selection, id).length, 0)} notes` : ''}</button>
         <button className="btn icon" disabled={!selection.clipIds.length && !selection.range} onClick={() => attachChatReference('selection')} aria-label="Add selection to chat" title="Add selected notes or region to chat"><MessageSquarePlus size={14} /></button>
         <button className="btn icon" disabled={!selection.clipIds.length} onClick={saveSelectedClips} title="Save selected clips to your library" aria-label="Save selected clips to library"><Bookmark size={14} /></button>
         <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title={tip('Copy selected clips', 'copy')}><Copy size={14} /></button>
