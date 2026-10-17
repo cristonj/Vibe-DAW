@@ -1,6 +1,7 @@
 import type { Project, Track } from '../model/types';
 import { renderProject } from './render';
-import { activeSpan } from './renderPlan';
+import { activeSpan, trackTail } from './renderPlan';
+import { beatsToSeconds } from '../model/project';
 
 // Background track freezing. Each instrument/drum track is rendered offline (its
 // instrument and effects, pre-fader) and live playback streams that audio instead of
@@ -14,6 +15,7 @@ const cache = new Map<string, Frozen>();
 const failed = new Map<string, string>();
 const signatures = new WeakMap<Project, WeakMap<Track, string>>();
 const MAX_CACHE_BYTES = 256 * 1024 * 1024;
+const MAX_RENDER_BYTES = 64 * 1024 * 1024;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let running = false;
 let latest: Project | null = null;
@@ -83,11 +85,17 @@ async function work() {
   if (running) return;
   running = true;
   const inFlight = new Set<string>();
+  let reservedBytes = 0;
   try {
     // Native offline contexts render on separate audio threads. Keep construction
     // serialized by renderProject's context lock, but let their DSP overlap. Leave
     // a core for playback/UI and bound simultaneous graphs and PCM allocations.
-    const workers = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 2) - 1));
+    // Safari's page process has a tighter memory budget, particularly on iOS.
+    // All iOS browsers use WebKit, including ones with a Chrome/Firefox UA token.
+    const ua = globalThis.navigator?.userAgent ?? '';
+    const webkit = /AppleWebKit/i.test(ua) && !/(Chrome|Chromium|Edg|OPR)\//i.test(ua);
+    const cacheLimit = webkit ? MAX_RENDER_BYTES : MAX_CACHE_BYTES;
+    const workers = webkit ? 1 : Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 2) - 1));
     await Promise.all(Array.from({ length: workers }, async () => {
       while (latest) {
         const p = latest;
@@ -100,6 +108,19 @@ async function work() {
         if (!job) break;
         const { t: todo, sig, span } = job;
         const rate = sampleRate, version = generation;
+        // Check BEFORE constructing an OfflineAudioContext: checking the cache
+        // after rendering cannot prevent a native allocation from killing Safari.
+        // Include tails/preroll and both the render output and its cache copy.
+        const seconds = beatsToSeconds(p, span[1] - span[0]) + Math.max(1.5, trackTail(todo, p.bpm)) + 0.5;
+        const renderBytes = Math.ceil(seconds * rate) * 2 * Float32Array.BYTES_PER_ELEMENT;
+        const used = [...cache.values()].reduce((sum, f) => sum + f.buffer.length * f.buffer.numberOfChannels * 4, 0);
+        if (!Number.isFinite(renderBytes) || renderBytes * 2 > MAX_RENDER_BYTES || used + renderBytes > cacheLimit) {
+          failed.set(todo.id, sig);
+          continue; // Large tracks keep playing through the live graph.
+        }
+        // Another worker will pick this job up when its current render finishes.
+        if (reservedBytes + renderBytes * 2 > MAX_RENDER_BYTES || used + reservedBytes + renderBytes > cacheLimit) break;
+        reservedBytes += renderBytes * 2;
         inFlight.add(todo.id);
         // Pre-fader: neutral volume/pan; the live channel applies the real mixer settings.
         const solo: Project = { ...p, tracks: p.tracks.map((t) => (t.id === todo.id ? { ...t, volumeDb: 0, pan: 0, mute: false, solo: false } : { ...t, solo: false })) };
@@ -111,7 +132,7 @@ async function work() {
           const bytes = pcm.channels.reduce((sum, c) => sum + c.byteLength, 0);
           const used = [...cache.values()].reduce((sum, f) => sum + f.buffer.length * f.buffer.numberOfChannels * 4, 0) - (cache.get(todo.id)?.buffer.length ?? 0) * 8;
           // Leave large projects live instead of repeatedly evicting and re-freezing tracks.
-          if (used + bytes > MAX_CACHE_BYTES) { failed.set(todo.id, sig); continue; }
+          if (used + bytes > cacheLimit) { failed.set(todo.id, sig); continue; }
           const buffer = new AudioBuffer({ length: pcm.channels[0].length, numberOfChannels: 2, sampleRate: rate });
           pcm.channels.forEach((d, i) => buffer.copyToChannel(d as Float32Array<ArrayBuffer>, i));
           cache.set(todo.id, { sig, buffer, startBeat });
@@ -119,7 +140,7 @@ async function work() {
         } catch (e) {
           console.warn('Freeze failed; track keeps playing live', e);
           if (version === generation) failed.set(todo.id, sig);
-        } finally { inFlight.delete(todo.id); }
+        } finally { inFlight.delete(todo.id); reservedBytes -= renderBytes * 2; }
       }
     }));
   } finally {

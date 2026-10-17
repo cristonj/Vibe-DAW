@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { getLoadedBuffer, loadBuffer } from '../samples/library';
+import { getLoadedBuffer, loadBuffer, useLibrary } from '../samples/library';
 import { waveformPeaks } from '../samples/analysis';
 
 /** Requests animation frames while mounted, calling `fn` each frame. */
@@ -19,6 +19,7 @@ const peakCache = new Map<string, Float32Array>();
 
 /** Waveform peaks for a sample (2048 buckets), loading the audio if needed. */
 export function usePeaks(sampleId: string | undefined, reverse = false): Float32Array | null {
+  const meta = useLibrary((s) => sampleId ? s.samples[sampleId] : undefined);
   const key = `${sampleId}|${reverse}`;
   const [peaks, setPeaks] = useState<Float32Array | null>(() => peakCache.get(key) ?? null);
   useEffect(() => {
@@ -37,7 +38,7 @@ export function usePeaks(sampleId: string | undefined, reverse = false): Float32
       setPeaks(p);
     })().catch((e) => console.warn('Waveform could not load', e));
     return () => { alive = false; };
-  }, [sampleId, key, reverse]);
+  }, [sampleId, key, reverse, meta]);
   return peaks;
 }
 

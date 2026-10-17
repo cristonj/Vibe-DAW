@@ -171,6 +171,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .transport .play { width: 36px; height: 32px; border-radius: var(--radius-m); background: var(--raised); color: var(--text); display: grid; place-items: center; }
 .transport .play:hover { background: var(--hover); }
 .transport .play.playing { background: var(--signal); color: #2a1a00; }
+.transport-loading { color: var(--muted); font-size: 11px; white-space: nowrap; margin: 0 4px; }
 
 .lcd {
   display: flex;

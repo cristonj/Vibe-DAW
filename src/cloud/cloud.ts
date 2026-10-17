@@ -3,7 +3,7 @@ import type { User } from 'firebase/auth';
 import type { Project, SampleMeta } from '../model/types';
 import { getFirebaseApp } from './firebase';
 import { firebaseConfigured } from './config';
-import { setRemoteSampleFetcher, setRemoteSampleUploader, useLibrary } from '../samples/library';
+import { mergeRemoteSamples, setRemoteSampleFetcher, setRemoteSampleUploader, syncSamples } from '../samples/library';
 
 // Firebase-backed sync: Google sign-in, projects in Firestore, sample audio in Storage.
 // Everything is scoped under users/{uid} and locked down by the rules in firestore.rules
@@ -16,9 +16,11 @@ interface AuthState {
   ready: boolean;
   syncing: boolean;
   lastSyncError: string | null;
+  sampleSyncError: string | null;
+  syncingAudio: boolean;
 }
 
-export const useAuth = create<AuthState>(() => ({ user: null, ready: !firebaseConfigured, syncing: false, lastSyncError: null }));
+export const useAuth = create<AuthState>(() => ({ user: null, ready: !firebaseConfigured, syncing: false, lastSyncError: null, sampleSyncError: null, syncingAudio: false }));
 
 let currentUser: User | null = null;
 
@@ -27,13 +29,21 @@ export async function initCloud() {
   if (!app) return;
   const { getAuth, onAuthStateChanged } = await import('firebase/auth');
   const auth = getAuth(app);
+  let stopSamples: (() => void) | undefined;
   onAuthStateChanged(auth, (u) => {
+    stopSamples?.();
+    stopSamples = undefined;
+    sampleErrors.clear();
+    useAuth.setState({ sampleSyncError: null });
     currentUser = u;
     useAuth.setState({
       ready: true,
       user: u ? { uid: u.uid, name: u.displayName, email: u.email, photo: u.photoURL } : null,
     });
-    if (u) void pullSampleIndex();
+    if (u) void watchSampleIndex(u.uid).then((stop) => {
+      if (currentUser?.uid === u.uid) stopSamples = stop;
+      else stop();
+    }).catch((e) => { if (currentUser?.uid === u.uid) sampleError('index', e); });
   });
   setRemoteSampleFetcher(fetchSampleBytes);
   setRemoteSampleUploader(uploadSample);
@@ -69,6 +79,8 @@ export async function saveProjectToCloud(p: Project): Promise<void> {
     const { doc, setDoc } = await import('firebase/firestore');
     const data = JSON.stringify(p);
     if (data.length > 900_000) throw new Error('Project too large for cloud sync (over ~900 KB). It is still saved on this device.');
+    await syncProjectSamples(p);
+    if (currentUser?.uid !== uid) throw new Error('Account changed while syncing. Please try again.');
     await setDoc(doc(await db(), 'users', uid, 'projects', p.id), { name: p.name, updatedAt: p.updatedAt, bpm: p.bpm, data, schemaVersion: p.schemaVersion });
     useAuth.setState({ lastSyncError: null });
   } catch (e) {
@@ -156,43 +168,78 @@ export async function watchCloudProjects(onChange: (changes: CloudProjectChange[
 
 // ---------------------------------------------------------------- samples
 
-async function uploadSample(meta: SampleMeta, data: ArrayBuffer, mime: string): Promise<string | null> {
-  if (!currentUser) return null;
-  const app = await getFirebaseApp();
-  const { getStorage, ref, uploadBytes } = await import('firebase/storage');
-  const { doc, setDoc } = await import('firebase/firestore');
-  const path = `users/${currentUser.uid}/samples/${meta.id}`;
-  await uploadBytes(ref(getStorage(app!), path), new Uint8Array(data), { contentType: mime });
-  await setDoc(doc(await db(), 'users', currentUser.uid, 'samples', meta.id), { ...stripUndefined(meta), storagePath: path });
-  return path;
+const sampleErrors = new Map<string, string>();
+const uploads = new Map<string, Promise<string>>();
+function sampleError(id: string, error: unknown) {
+  sampleErrors.set(id, `Audio sync failed: ${(error as Error).message ?? String(error)}`);
+  useAuth.setState({ sampleSyncError: sampleErrors.values().next().value ?? null });
+}
+function sampleSynced(id: string) {
+  sampleErrors.delete(id);
+  useAuth.setState({ sampleSyncError: sampleErrors.values().next().value ?? null });
 }
 
-async function fetchSampleBytes(meta: SampleMeta): Promise<ArrayBuffer | null> {
+export async function syncProjectSamples(p: Project, localOnly = false) {
+  const ids = p.tracks.flatMap((t) => [
+    ...t.clips.flatMap((c) => c.type === 'audio' ? [c.sampleId] : []),
+    ...(t.drumLanes?.map((l) => l.sampleId) ?? []),
+  ]);
+  await syncSamples(ids, localOnly);
+}
+
+async function uploadSample(meta: SampleMeta, data: ArrayBuffer, mime: string): Promise<string | null> {
   if (!currentUser) return null;
+  const uid = currentUser.uid;
+  const key = `${uid}/${meta.id}`;
+  const existing = uploads.get(key);
+  if (existing) return existing;
+  const upload = (async () => {
+    try {
+      const app = await getFirebaseApp();
+      const { getStorage, ref, uploadBytes } = await import('firebase/storage');
+      const { doc, setDoc } = await import('firebase/firestore');
+      const path = `users/${uid}/samples/${meta.id}`;
+      await uploadBytes(ref(getStorage(app!), path), new Uint8Array(data), { contentType: mime });
+      await setDoc(doc(await db(), 'users', uid, 'samples', meta.id), { ...stripUndefined(meta), storagePath: path });
+      if (currentUser?.uid === uid) sampleSynced(meta.id);
+      return path;
+    } catch (e) {
+      if (currentUser?.uid === uid) sampleError(meta.id, e);
+      throw e;
+    } finally {
+      uploads.delete(key);
+      useAuth.setState({ syncingAudio: uploads.size > 0 });
+    }
+  })();
+  uploads.set(key, upload);
+  useAuth.setState({ syncingAudio: true });
+  return upload;
+}
+
+async function fetchSampleBytes(meta: SampleMeta | undefined, id: string): Promise<ArrayBuffer | null> {
+  if (!currentUser) return null;
+  const uid = currentUser.uid;
   const app = await getFirebaseApp();
   const { getStorage, ref, getBytes } = await import('firebase/storage');
-  const path = meta.storagePath ?? `users/${currentUser.uid}/samples/${meta.id}`;
+  const path = meta?.storagePath ?? `users/${uid}/samples/${id}`;
   try {
-    return await getBytes(ref(getStorage(app!), path));
-  } catch {
+    const data = await getBytes(ref(getStorage(app!), path));
+    if (currentUser?.uid === uid) sampleSynced(id);
+    return data;
+  } catch (e) {
+    if (currentUser?.uid === uid) sampleError(id, e);
     return null;
   }
 }
 
-/** Merge the user's cloud sample metadata into the local library (audio loads lazily). */
-async function pullSampleIndex() {
-  if (!currentUser) return;
-  try {
-    const { collection, getDocs } = await import('firebase/firestore');
-    const snap = await getDocs(collection(await db(), 'users', currentUser.uid, 'samples'));
-    const lib = useLibrary.getState();
-    for (const d of snap.docs) {
-      const meta = d.data() as SampleMeta;
-      if (!lib.samples[meta.id]) lib.upsert(meta);
-    }
-  } catch (e) {
-    console.warn('Could not pull sample index', e);
-  }
+/** Follow sample metadata too: a PC may finish uploading after the laptop signs in. */
+async function watchSampleIndex(uid: string): Promise<() => void> {
+  const { collection, onSnapshot } = await import('firebase/firestore');
+  return onSnapshot(collection(await db(), 'users', uid, 'samples'), (snap) => {
+    if (currentUser?.uid !== uid) return;
+    mergeRemoteSamples(snap.docs.map((d) => d.data() as SampleMeta));
+    sampleSynced('index');
+  }, (e) => { if (currentUser?.uid === uid) sampleError('index', e); });
 }
 
 function stripUndefined<T extends object>(o: T): T {

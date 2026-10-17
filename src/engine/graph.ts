@@ -1,7 +1,7 @@
 import * as Tone from 'tone';
 import type { AudioClip, DrumLane, Effect, MidiClip, Project, Track } from '../model/types';
 import { beatsToSeconds } from '../model/project';
-import { getLoadedBuffer, loadBuffer } from '../samples/library';
+import { getLoadedBuffer, getSampleMeta, loadBuffer } from '../samples/library';
 import { prepareAudio, fadeEnvelope, type PreparedAudio } from './audio';
 import { frozenFor, type Frozen } from './freeze';
 import { createEffect, structuralParams, type EffectUnit } from './effects';
@@ -79,12 +79,20 @@ function fxKey(e: Effect): string {
 export async function preloadProject(p: Project): Promise<Map<string, InstrumentAssets>> {
   const assets = new Map<string, InstrumentAssets>();
   const sampleIds = new Set<string>();
-  await Promise.all(p.tracks.map(async (t) => {
-    if (t.kind === 'instrument' && t.instrument) assets.set(t.id, await prepareInstrument(t.instrument));
+  for (const t of p.tracks) {
     t.drumLanes?.forEach((l) => sampleIds.add(l.sampleId));
     t.clips.forEach((c) => { if (c.type === 'audio') sampleIds.add(c.sampleId); });
-  }));
-  await Promise.all([...sampleIds].map((id) => loadBuffer(id)));
+  }
+  // Cloud clips and instrument zones can each take time to download. Start both
+  // groups together so a project doesn't wait for one before requesting the other.
+  await Promise.all([
+    Promise.all(p.tracks.map(async (t) => {
+      if (t.kind === 'instrument' && t.instrument) assets.set(t.id, await prepareInstrument(t.instrument));
+    })),
+    Promise.all([...sampleIds].map(async (id) => {
+      if (!await loadBuffer(id)) throw new Error(`Audio file “${getSampleMeta(id)?.name ?? id}” is unavailable. Sync the song from the original computer, then try Play again.`);
+    })),
+  ]);
   for (const t of p.tracks) for (const c of t.clips) if (c.type === 'audio' && !c.muted) prepareAudio(c, p.bpm);
   return assets;
 }

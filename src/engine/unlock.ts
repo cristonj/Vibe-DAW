@@ -8,6 +8,20 @@ import { useSettings } from '../state/settings';
 
 let native: AudioContext | null = null;
 
+/** A blocked resume can stay pending forever under browser autoplay policies. */
+export async function resumeAudioContext(ctx: Pick<AudioContext, 'state' | 'resume'>): Promise<void> {
+  if (ctx.state === 'running') return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const blocked = () => new Error('Audio could not start. Click Play again, or allow sound for this site in your browser settings.');
+  try {
+    await Promise.race([
+      ctx.resume(), // Invoke synchronously, while the caller still has user activation.
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(blocked()), 5000); }),
+    ]);
+    if ((ctx.state as AudioContextState) !== 'running') throw blocked();
+  } finally { clearTimeout(timer); }
+}
+
 /** The realtime AudioContext. Created suspended if no gesture has happened yet. */
 export function nativeAudioContext(): AudioContext {
   native ??= new AudioContext({ latencyHint: useSettings.getState().latency === 'low' ? 'interactive' : 'playback' });
@@ -19,7 +33,7 @@ export function unlockAudio() {
   const ctx = nativeAudioContext();
   // iOS reports 'interrupted' after a call or a trip to the background.
   if (ctx.state === 'running') return;
-  ctx.resume().catch(() => { /* retried on the next gesture */ });
+  void resumeAudioContext(ctx).catch(() => { /* retried on the next gesture */ });
   // Older iOS only unlocks output once a source actually starts inside the gesture.
   const src = ctx.createBufferSource();
   src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);

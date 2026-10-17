@@ -6,7 +6,7 @@ import { Dock } from './components/Dock';
 import { AgentPanel } from './components/AgentPanel';
 import { InlineAI, openInlineAI } from './components/InlineAI';
 import { SettingsModal, ProjectsModal } from './components/Modals';
-import { useToasts } from './toast';
+import { toast, useToasts } from './toast';
 import { useDaw, useTransport } from '../state/store';
 import { togglePlay, stop } from '../engine/api';
 import { isTypingTarget, matchesMedia, NARROW, useMediaQuery } from './hooks';
@@ -55,7 +55,7 @@ export function App() {
       const daw = useDaw.getState();
       if (matches(e, 'undo')) return run(() => daw.undo());
       if (matches(e, 'redo')) return run(() => daw.redo());
-      if (matches(e, 'playPause')) return run(() => void togglePlay());
+      if (matches(e, 'playPause')) return run(() => void togglePlay().catch((err) => toast(`Playback failed: ${(err as Error).message}`, 'error')));
       if (matches(e, 'stopRewind')) return run(() => stop(true));
       if (matches(e, 'toggleLoop')) return run(() => daw.update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; }));
       if (matches(e, 'toggleMetronome')) return run(() => useTransport.getState().setMetronome(!useTransport.getState().metronome));

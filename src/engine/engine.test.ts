@@ -15,7 +15,7 @@ vi.mock('./graph', () => ({
 }));
 vi.mock('./freeze', () => ({ configureFreeze: mocks.configure, scheduleFreeze: mocks.schedule }));
 vi.mock('./samplePreview', () => ({ renderSamplePreview: vi.fn() }));
-vi.mock('./unlock', () => ({ nativeAudioContext: () => ({}) }));
+vi.mock('./unlock', () => ({ nativeAudioContext: () => ({}), resumeAudioContext: vi.fn() }));
 vi.mock('../state/settings', () => ({ useSettings: { getState: () => ({ latency: 'playback' }) } }));
 
 let engine: typeof import('./engine');
@@ -61,6 +61,21 @@ beforeEach(async () => {
 afterEach(() => { engine.stop(); vi.unstubAllGlobals(); });
 
 describe('playback during edits', () => {
+  it('reuses an in-flight asset load when Play is pressed', async () => {
+    engine.pause();
+    const loading = deferred();
+    mocks.preload.mockReturnValueOnce(loading.promise.then(() => new Map()));
+    store.useDaw.getState().update('Change instrument', (p) => { p.tracks[0].instrument!.preset = 'organ'; });
+    await vi.waitFor(() => expect(mocks.preload).toHaveBeenCalledTimes(1));
+    const playing = engine.play(0);
+    expect(store.useTransport.getState().starting).toBe(true);
+    loading.resolve();
+    await playing;
+    expect(mocks.preload).toHaveBeenCalledTimes(1);
+    expect(mocks.transport.start).toHaveBeenCalledTimes(1);
+    expect(store.useTransport.getState().starting).toBe(false);
+  });
+
   it('pauses before changing scheduled notes and resumes from the audible beat', async () => {
     const applying = deferred();
     mocks.sync.mockReturnValueOnce(applying.promise);

@@ -94,6 +94,92 @@ describe('background freezing', () => {
     expect(jobs).toHaveLength(active);
   });
 
+  it.each([
+    'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15',
+    'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/18.0 Mobile Safari/604.1',
+    'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 CriOS/130.0 Mobile Safari/604.1',
+    'Mozilla/5.0 (iPad) AppleWebKit/605.1.15 FxiOS/130.0 Mobile Safari/605.1.15',
+  ])('serializes background audio contexts on WebKit: %s', async (userAgent) => {
+    vi.stubGlobal('navigator', { hardwareConcurrency: 8, userAgent });
+    freeze.scheduleFreeze(fixture([8, 4, 2]));
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(1);
+    await finish(0);
+    expect(jobs).toHaveLength(2);
+  });
+
+  it('keeps desktop Chromium renders concurrent', async () => {
+    vi.stubGlobal('navigator', { hardwareConcurrency: 8, userAgent: 'Mozilla/5.0 AppleWebKit/537.36 Chrome/130.0 Safari/537.36' });
+    freeze.scheduleFreeze(fixture([8, 4, 2]));
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(3);
+  });
+
+  it('skips oversized renders before allocation and still freezes smaller tracks', async () => {
+    const p = fixture([4096, 4]);
+    freeze.scheduleFreeze(p);
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].opts.onlyTracks).toEqual([p.tracks[1].id]);
+    await finish(0);
+    expect(freeze.frozenFor(p, p.tracks[0])).toBeNull();
+    expect(freeze.frozenFor(p, p.tracks[1])).not.toBeNull();
+    freeze.scheduleFreeze(p);
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(1);
+  });
+
+  it('bounds in-flight PCM memory even when more CPU workers are available', async () => {
+    vi.stubGlobal('navigator', { hardwareConcurrency: 8 });
+    // Each 60-second stereo render plus cache copy needs roughly 45 MiB.
+    const p = fixture([140, 140, 140]);
+    freeze.scheduleFreeze(p);
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(1);
+    await finish(0);
+    expect(jobs).toHaveLength(2);
+    await finish(1);
+    expect(jobs).toHaveLength(3);
+  });
+
+  it('includes release tails and the playback sample rate in allocation estimates', async () => {
+    const p = fixture([100, 4]);
+    p.tracks[0].instrument!.params.release = 40;
+    freeze.configureFreeze(96000, changed);
+    freeze.scheduleFreeze(p);
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].opts.onlyTracks).toEqual([p.tracks[1].id]);
+  });
+
+  it('checks the WebKit cache budget before starting another native render', async () => {
+    vi.stubGlobal('navigator', { hardwareConcurrency: 8, userAgent: 'AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15' });
+    const p = fixture([120, 120, 120, 120]);
+    freeze.scheduleFreeze(p);
+    await vi.advanceTimersByTimeAsync(1200);
+    const frames = Math.ceil((120 * 60 / p.bpm + 1.5) * 48000);
+    for (let i = 0; i < 3; i++) {
+      jobs[i].settled = true;
+      jobs[i].resolve({ sampleRate: 48000, channels: [new Float32Array(frames), new Float32Array(frames)] });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(jobs).toHaveLength(3);
+    expect(p.tracks.filter((t) => freeze.frozenFor(p, t))).toHaveLength(3);
+  });
+
+  it('retries a track skipped for size after it is shortened', async () => {
+    const p = fixture([4096]);
+    freeze.scheduleFreeze(p);
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(0);
+    const next = { ...p, tracks: p.tracks.map((t) => ({ ...t, clips: t.clips.map((c) => ({ ...c, length: 4 })) })) };
+    freeze.scheduleFreeze(next);
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(1);
+    await finish(0);
+    expect(freeze.frozenFor(next, next.tracks[0])).not.toBeNull();
+  });
+
   it('does not let mixer or UI edits postpone freezing and keeps mixer controls live', async () => {
     const p = fixture([4]);
     freeze.scheduleFreeze(p);

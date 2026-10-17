@@ -40,10 +40,14 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
   const canRedo = useDaw((s) => s.future.length > 0);
   const update = useDaw((s) => s.update);
   const playing = useTransport((s) => s.playing);
+  const starting = useTransport((s) => s.starting);
   const metronome = useTransport((s) => s.metronome);
   const saveState = usePersist((s) => s.saveState);
   const user = useAuth((s) => s.user);
   const syncing = useAuth((s) => s.syncing);
+  const syncingAudio = useAuth((s) => s.syncingAudio);
+  const sampleSyncError = useAuth((s) => s.sampleSyncError);
+  const cloudSyncError = useAuth((s) => s.lastSyncError);
   const [bpmDraft, setBpmDraft] = useState<string | null>(null);
 
   const commitBpm = () => {
@@ -64,7 +68,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
         aria-label="Project name"
         onChange={(e) => update('Rename project', (d) => { d.name = e.target.value; }, { coalesce: true })}
       />
-      <span className="save-state hide-narrow">{saveState === 'saved' ? (user ? (syncing ? 'Syncing…' : 'Saved') : 'Saved locally') : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Edited'}</span>
+      <span className="save-state hide-narrow" title={sampleSyncError ?? cloudSyncError ?? undefined}>{sampleSyncError ? 'Audio sync failed' : cloudSyncError ? 'Cloud sync failed' : syncingAudio ? 'Syncing audio…' : saveState === 'saved' ? (user ? (syncing ? 'Syncing…' : 'Saved') : 'Saved locally') : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Edited'}</span>
       <button className="btn icon hide-narrow" title="Open, create, or delete projects" onClick={props.onOpenProjects}><FolderOpen size={16} /></button>
       <button className="btn icon" title={tip('Undo', 'undo')} disabled={!canUndo} onClick={() => useDaw.getState().undo()}><Undo2 size={16} /></button>
       <button className="btn icon" title={tip('Redo', 'redo')} disabled={!canRedo} onClick={() => useDaw.getState().redo()}><Redo2 size={16} /></button>
@@ -75,9 +79,10 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
       <div className="transport">
         <button className="btn icon" title={tip('Back to start', 'stopRewind')} onClick={() => stop(true)}><SkipBack size={16} /></button>
         <button className="btn icon hide-narrow" title="Stop" onClick={() => stop(false)}><Square size={14} fill="currentColor" /></button>
-        <button className={`play ${playing ? 'playing' : ''}`} title={tip('Play / pause', 'playPause')} onClick={() => void togglePlay().catch((e) => toast(`Playback failed: ${(e as Error).message}`, 'error'))}>
-          {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+        <button className={`play ${playing || starting ? 'playing' : ''}`} aria-label={starting ? 'Cancel playback startup' : playing ? 'Pause' : 'Play'} title={starting ? 'Loading audio… Click to cancel' : tip('Play / pause', 'playPause')} onClick={() => void togglePlay().catch((e) => toast(`Playback failed: ${(e as Error).message}`, 'error'))}>
+          {playing || starting ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
         </button>
+        {starting && <span className="transport-loading" role="status">Loading audio…</span>}
         <button className={`btn icon ${loop ? 'on' : ''}`} title={tip('Loop', 'toggleLoop')} onClick={() => update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; })}><Repeat size={16} /></button>
         <button className={`btn icon ${metronome ? 'on' : ''}`} title={tip('Metronome click', 'toggleMetronome')} onClick={() => useTransport.getState().setMetronome(!metronome)}><Metronome size={16} /></button>
       </div>

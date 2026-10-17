@@ -34,7 +34,7 @@ const INDEX_KEY = 'vibe:samples:index';
 const blobKey = (id: string) => `vibe:sample:${id}`;
 
 /** Optional hook the cloud layer installs to fetch samples this device has never seen. */
-let remoteFetcher: ((meta: SampleMeta) => Promise<ArrayBuffer | null>) | null = null;
+let remoteFetcher: ((meta: SampleMeta | undefined, id: string) => Promise<ArrayBuffer | null>) | null = null;
 export function setRemoteSampleFetcher(fn: typeof remoteFetcher) {
   remoteFetcher = fn;
 }
@@ -130,6 +130,35 @@ async function persistIndex() {
   }
 }
 
+/** Cloud metadata can arrive after the project; persist it and notify audio/UI. */
+export function mergeRemoteSamples(samples: SampleMeta[]) {
+  for (const meta of samples) useLibrary.getState().upsert({ ...getSampleMeta(meta.id), ...meta });
+  void persistIndex();
+}
+
+/** Upload referenced local audio before the project is reported as synced. */
+export async function syncSamples(ids: Iterable<string>, localOnly = false): Promise<void> {
+  if (!remoteUploader) return;
+  for (const id of new Set(ids)) {
+    const meta = getSampleMeta(id);
+    if (meta?.source === 'builtin' || meta?.storagePath || id.startsWith('b-')) continue;
+    if (!meta) {
+      if (localOnly) continue;
+      throw new Error(`Audio file ${id} is missing on this device. Sync the song from the original computer.`);
+    }
+    const stored = await idbGet<{ data: ArrayBuffer; mime: string }>(blobKey(id));
+    const buffer = buffers.get(id);
+    const audio = stored ?? (buffer ? { data: encodeWav(audioBufferToPcm(buffer)), mime: 'audio/wav' } : null);
+    if (!audio) {
+      if (localOnly) continue;
+      throw new Error(`Audio file “${meta.name}” is missing on this device. Sync the song from the original computer.`);
+    }
+    const path = await remoteUploader(meta, audio.data, audio.mime);
+    if (!path) throw new Error('Sign in to sync audio files.');
+    updateSampleMeta(id, { storagePath: path });
+  }
+}
+
 // ------------------------------------------------------------------ access
 
 export function getSampleMeta(id: string): SampleMeta | undefined {
@@ -150,7 +179,8 @@ export async function loadBuffer(id: string): Promise<AudioBuffer | null> {
       let stored = await idbGet<{ data: ArrayBuffer; mime: string }>(blobKey(id));
       if (!stored && remoteFetcher) {
         const meta = getSampleMeta(id);
-        const data = meta ? await remoteFetcher(meta) : null;
+        // The sample index may still be downloading when a cloud project opens.
+        const data = await remoteFetcher(meta, id);
         if (data) {
           stored = { data, mime: 'audio/wav' };
           await idbSet(blobKey(id), stored);
@@ -159,6 +189,7 @@ export async function loadBuffer(id: string): Promise<AudioBuffer | null> {
       if (!stored) return null;
       const buf = await decodeAudio(stored.data);
       buffers.set(id, buf);
+      ++audioRevision;
       return buf;
     } catch (e) {
       console.warn(`Could not load sample ${id}`, e);
