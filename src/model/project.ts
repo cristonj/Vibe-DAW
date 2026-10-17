@@ -64,6 +64,7 @@ export function createProject(name = 'Untitled beat'): Project {
     swing: 0,
     tracks: [],
     sections: [],
+    annotations: [],
     loop: { enabled: false, start: 0, end: 16 },
     master: {
       volumeDb: 0,

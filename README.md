@@ -1,8 +1,8 @@
-# Vibe DAW
+# Vibe
 
 The open source agentic DAW built to augment, not replace, human creativity.
 
-[VibeDaw.org](https://vibedaw.org/)
+[vibedaw.org](https://vibedaw.org/)
 
 Vibe is a full digital audio workstation — arrangement, piano roll, step sequencer, mixer, effects — with a producer agent built in. Type *"make a Lil Peep type beat"* and it plans the track, picks and **listens to** sounds, writes the parts, arranges and mixes them, then bounces the song and listens back to fix what it hears. Everything it does is ordinary DAW state: you can edit any of it by hand, and one undo takes back a whole agent run.
 
@@ -11,22 +11,22 @@ It's Cursor for music: the agent edits your session the way Cursor edits your co
 ## What makes it agent-native
 
 - **Ears, not just eyes.** Gemini is multimodal, so the agent auditions samples and critiques real offline bounces of your song (rendered by the same engine you hear), paired with measured loudness, spectrum balance, and stereo data.
-- **A DAW API built for a model.** ~30 tools speak producer: step-string drum patterns with trap rolls (`x.x.3.4.`), chord symbols with strum/arpeggio/voice-leading, 1-based bars, `copy_bars`/`clear_bars` arrangement moves, sidechain ducking, sound design, resampling.
+- **A DAW API built for a model.** Tools speak producer: step-string drum patterns with trap rolls (`x.x.3.4.`), chord symbols with strum/arpeggio/voice-leading, 1-based bars, `copy_bars`/`clear_bars` arrangement moves, sidechain ducking, sound design, resampling.
 - **No generated audio.** Every sound is a real instrument, your own samples, or something synthesized from parameters. The agent composes and produces; it never prints audio from a text prompt.
 - **Review like code.** Agent-made clips are drawn in lilac until you **Keep** them. Each run ends with a change summary and **Undo all**; every message has a checkpoint you can restore.
-- **Ctrl+K inline edits.** Select clips, press Ctrl+K, say "add hi-hat rolls" or "make it sadder" — the agent edits just that.
+- **Ctrl+K inline edits.** Shift-drag a region across tracks or select notes, then press Ctrl+K, say "add hi-hat rolls" or "make it sadder" — the agent receives exact note IDs and timing and can rewrite just that phrase. Touch screens have Range / Select controls and an Edit selection button.
 - **Reference tracks.** Attach a song; the agent listens and extracts a production recipe (tempo feel, drum placement, 808 behavior, mix character) to work from.
 - **Agent and Ask modes.** Ask mode is read-only: it listens and gives notes without touching the session.
 
 ## Quick start
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local   # optional: set VITE_GEMINI_API_KEY for local dev
-npm run dev                  # http://localhost:5173
+npm run dev                  # landing: http://localhost:5173; studio: /studio
 ```
 
-No key in the env? The first time you message the agent it asks for a Gemini API key from [AI Studio](https://aistudio.google.com/apikey) (free tier available). The key is stored only in your browser and sent only to Google.
+No key in the env? The first time you message the agent it asks for a Gemini API key from [AI Studio](https://aistudio.google.com/apikey) (free tier available). The key is saved in your browser and used for requests to Google; when signed in, AI settings also sync through your private account preferences.
 
 By default every build is **bring-your-own-key**, so a public deployment costs the host nothing for AI. Set `VITE_HOSTED_AI=true` to instead route Gemini through Firebase AI Logic on the host's project.
 
@@ -37,6 +37,20 @@ npm test          # unit tests (theory, editing ops, analysis, diffs)
 npm run typecheck
 npm run build
 ```
+
+## Sounds and workflow
+
+Vibe includes offline Analog Brass, FM Bass, Marimba, Kalimba, Chip Keys, and Glass Pad alongside the existing instruments. Use the four-band Parametric EQ for precise tone shaping; duplicate effects or move them through the chain. The Producer can reorder effects too.
+
+The **Online** sound-browser tab and the Producer's `search_online_sounds` / `import_online_sound` tools search Wikimedia Commons without an API key. Imports retain authorship, license, and source, including in portable `.vibe` projects. Use **Export → Sound credits (.txt)** when sharing a song; check each source's license requirements. Online imports are limited to 16 MB / three minutes each.
+
+Save phrases, instrument/kit sounds, samples, effect profiles and full project templates in the **Library** tab. Device items work offline; signed-in libraries sync to the account, including audio. **Settings → AI → Custom instructions** applies your preferences across chats. Import standard MIDI files as editable tracks.
+
+Use **Notes & lyrics** to place production notes and timed lyrics anywhere in the arrangement, even without a vocal track. The Producer can read and edit them; export lyrics as LRC. Type **@** in chat or use **Add to chat** / right-click to reference tracks, clips, effects, sounds, cues, library items and Producer reviews. See [studio workflows and remaining production gaps](docs/studio-workflows.md).
+
+Producer and inline suggestions draw from a varied shuffled pool. **More ideas** refreshes the choices without changing your typed request.
+
+See [audio performance and browser checks](docs/audio-performance.md), and [landing-page donation configuration / automatic Firebase rules deployment](docs/deployment.md).
 
 ## Models
 
@@ -59,7 +73,7 @@ Firebase provides sign-in and cloud sync: projects, samples, your Gemini key, AI
 3. **Firestore** → create a database. **Storage** → create the default bucket.
 4. **AI Logic** → get started with the **Gemini Developer API**. (`gemini-4-argon` needs the Blaze plan.)
 5. **App Check** → register the web app with **reCAPTCHA Enterprise**, copy the site key, and enforce App Check for AI Logic, Firestore, Storage, and Functions once it's working.
-6. Deploy the security rules:
+6. Configure [automatic rules deployment via GitHub OIDC](docs/deployment.md#automatic-firebase-rules-deployments), or deploy locally:
 
 ```bash
 npm install -g firebase-tools
@@ -102,7 +116,8 @@ How a run works: the user's message plus a compact text snapshot of the session 
 | Home | Stop and return to start |
 | L | Toggle loop (Shift-drag the ruler to set it) |
 | Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
-| Ctrl+K | Edit selected clips with AI |
+| Ctrl+K | Edit selected notes, region, or clips with AI |
+| Shift-drag track lanes | Select a region across tracks (ruler sets the loop) |
 | Ctrl+L | Focus the agent |
 | Ctrl+D | Duplicate selected clips (or notes in the piano roll) |
 | Delete | Delete selected clips / notes |

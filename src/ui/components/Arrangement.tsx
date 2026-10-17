@@ -1,3 +1,4 @@
+import { AddToChat } from './AddToChat';
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X, Copy, CopyPlus, ClipboardPaste, Scissors, ChevronDown } from 'lucide-react';
 import { useDaw, useTransport } from '../../state/store';
@@ -9,6 +10,13 @@ import { getSampleMeta } from '../../samples/library';
 import { audioClipRate, repeatNotes } from '../../model/edit';
 import { PHONE, uiZoom, usePeaks, useMediaQuery } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
+import { AnnotationLane } from './Annotations';
+import { attachChatReference } from '../chatReferences';
+import { MessageSquarePlus } from 'lucide-react';
+import { saveSelectedClips } from './SavePreset';
+import { openInlineAI } from './InlineAI';
+import { selectedNotes } from '../../model/selection';
+import { MousePointer2, Sparkles, Bookmark } from 'lucide-react';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
 import { toast } from '../toast';
@@ -95,6 +103,7 @@ function ClipView({ clip, track, project, zoom, selected, onPointerDown, onDoubl
   const w = clip.length * zoom;
   return (
     <div
+      data-chat-ref={`clip:${clip.id}`}
       className={`clip ${selected ? 'selected' : ''} ${clip.muted ? 'muted' : ''} ${clip.aiPending ? 'ai' : ''}`}
       style={{ left: clip.start * zoom, width: Math.max(4, w), ['--c' as string]: track.color }}
       onPointerDown={(e) => onPointerDown(e, 'move')}
@@ -102,6 +111,7 @@ function ClipView({ clip, track, project, zoom, selected, onPointerDown, onDoubl
       title={`${clip.name}${clip.aiPending ? ' — made by the agent (not reviewed yet)' : ''} · drag to move, drag the right edge to resize (Shift = fine), double-click to edit`}
     >
       <div className="cname">{clip.name}</div>
+      {selected && <div className="clip-chat"><AddToChat referenceId={`clip:${clip.id}`} label={clip.name} /></div>}
       {clip.type === 'midi' ? <MidiBody clip={clip} track={track} /> : <AudioBody clip={clip} project={project} widthPx={w} />}
       <div className="resize" onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, 'resize'); }} />
     </div>
@@ -132,6 +142,7 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
         className="marks"
         style={{ width }}
         onPointerDown={(e) => {
+          if (e.button !== 0) return;
           const b = beatAt(e);
           if (e.shiftKey) {
             const s = snapBeat(b, snap === -1 ? 0 : snap, bpb);
@@ -158,7 +169,7 @@ function Ruler({ project, zoom, width }: { project: Project; zoom: number; width
           </div>
         ))}
         {project.sections.map((s) => (
-          <div key={s.id} className="section" style={{ left: s.start * zoom, width: Math.max(10, s.length * zoom - 2) }}>{s.name}</div>
+          <div key={s.id} data-chat-ref={`section:${s.id}`} className="section" style={{ left: s.start * zoom, width: Math.max(10, s.length * zoom - 2) }}>{s.name}</div>
         ))}
         {project.loop.end > project.loop.start && (
           <div className={`loop-region ${project.loop.enabled ? 'on' : ''}`} style={{ left: project.loop.start * zoom, width: (project.loop.end - project.loop.start) * zoom }} />
@@ -309,11 +320,12 @@ export function Arrangement() {
   headerRef.current = headerW;
   // Cancels an in-progress touch drag (and undoes it) when a pinch starts.
   const abortTouchDrag = useRef<(() => void) | null>(null);
+  const [rangeMode, setRangeMode] = useState(false);
   const [dropTrack, setDropTrack] = useState<string | null>(null);
   const bpb = beatsPerBar(project);
-  const totalBeats = projectLength(project) + bpb * 16;
+  const totalBeats = Math.max(projectLength(project), ...(project.annotations ?? []).map((a) => a.start + a.length)) + bpb * 16;
   const width = totalBeats * zoom;
-  const hasPending = useMemo(() => project.tracks.some((t) => t.clips.some((c) => c.aiPending)), [project]);
+  const hasPending = useMemo(() => project.tracks.some((t) => t.clips.some((c) => c.aiPending)) || !!project.annotations?.some((a) => a.aiPending), [project]);
   const empty = project.tracks.length === 0;
 
   useEffect(() => {
@@ -388,6 +400,39 @@ export function Arrangement() {
       el.removeEventListener('touchcancel', onTouchEnd);
     };
   }, []);
+
+  const startRange = (e: RPointerEvent) => {
+    if (e.button !== 0 || (!e.shiftKey && !rangeMode) || !(e.target as HTMLElement).closest('.track-row > .lane')) return;
+    e.preventDefault(); e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const point = (ev: { clientX: number; clientY: number }) => {
+      const rect = el.getBoundingClientRect();
+      return { beat: Math.max(0, snapBeat(((ev.clientX - rect.left) / uiZoom() - headerW) / zoom, snap, bpb)), y: ev.clientY };
+    };
+    const first = point(e);
+    const move = (ev: PointerEvent | RPointerEvent) => {
+      const last = point(ev);
+      const start = Math.min(first.beat, last.beat);
+      const end = Math.max(first.beat, last.beat, start + (snap > 0 ? snap : 0.25));
+      const rows = [...el.querySelectorAll<HTMLElement>('.track-row > .lane')];
+      const trackIds = project.tracks.filter((_, i) => {
+        const rect = rows[i].getBoundingClientRect();
+        return rect.bottom >= Math.min(first.y, last.y) && rect.top <= Math.max(first.y, last.y);
+      }).map((t) => t.id);
+      const clipIds = project.tracks.filter((t) => trackIds.includes(t.id)).flatMap((t) => t.clips.filter((c) => c.start < end && c.start + c.length > start).map((c) => c.id));
+      select({ clipIds, trackId: trackIds[0] ?? null, range: { start, end, trackIds } });
+    };
+    const done = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', done);
+      el.removeEventListener('pointercancel', done);
+    };
+    move(e);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', done);
+    el.addEventListener('pointercancel', done);
+  };
 
   const startDrag = (e: RPointerEvent, clip: Clip, track: Track, mode: 'move' | 'resize') => {
     if (e.button !== 0) return;
@@ -548,6 +593,10 @@ export function Arrangement() {
         <AddTrackMenu />
         <div className="tool-divider" />
         <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')} aria-label="New clip"><Plus size={14} /> <span className="btn-label">New clip</span></button>
+        <button className={`btn ${rangeMode ? 'active' : ''}`} aria-pressed={rangeMode} onClick={() => setRangeMode((v) => !v)} title="Drag across tracks to select a time range. Shift-drag also works."><MousePointer2 size={14} /> Range</button>
+        <button className="btn" onClick={() => openInlineAI()} disabled={!selection.clipIds.length} title="Edit the selected notes or region with AI (Ctrl+K)"><Sparkles size={14} /> Edit selection{selection.range ? ` · ${selection.clipIds.reduce((n, id) => n + selectedNotes(project, selection, id).length, 0)} notes` : ''}</button>
+        <button className="btn icon" disabled={!selection.clipIds.length && !selection.range} onClick={() => attachChatReference('selection')} aria-label="Add selection to chat" title="Add selected notes or region to chat"><MessageSquarePlus size={14} /></button>
+        <button className="btn icon" disabled={!selection.clipIds.length} onClick={saveSelectedClips} title="Save selected clips to your library" aria-label="Save selected clips to library"><Bookmark size={14} /></button>
         <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title={tip('Copy selected clips', 'copy')}><Copy size={14} /></button>
         <button className="btn icon" onClick={() => pasteClips()} title={tip('Paste clips at the playhead', 'paste')}><ClipboardPaste size={14} /></button>
         <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title={tip('Duplicate selected clips', 'duplicate')}><CopyPlus size={14} /></button>
@@ -570,8 +619,9 @@ export function Arrangement() {
         )}
       </div>
       <div className="scroller" ref={scrollRef} onPointerDown={(e) => { if (e.target === e.currentTarget) select({ clipIds: [] }); }}>
-        <div className="timeline" style={{ width: headerW + width }}>
+        <div className={`timeline ${rangeMode ? 'selecting-range' : ''}`} style={{ width: headerW + width }} onPointerDownCapture={startRange}>
           <Ruler project={project} zoom={zoom} width={width} />
+          <AnnotationLane project={project} zoom={zoom} width={width} />
           {project.tracks.map((t, i) => (
             <div className="track-row" key={t.id}>
               <TrackHeader track={t} selected={selection.trackId === t.id} />
@@ -590,6 +640,7 @@ export function Arrangement() {
                     <span className="only-touch">{t.kind === 'audio' ? 'Tap + next to a sound in the browser to add it' : 'Tap New clip to draw a pattern'}</span>
                   </div>
                 )}
+                {selection.range?.trackIds.includes(t.id) && <div className="selection-region" style={{ left: selection.range.start * zoom, width: (selection.range.end - selection.range.start) * zoom }} />}
                 {t.clips.map((c) => (
                   <ClipView
                     key={c.id}
@@ -623,7 +674,7 @@ export function Arrangement() {
           </div>
           <Playhead zoom={zoom} headerW={headerW} scroller={scrollRef} />
         </div>
-        {empty && <EmptyHero />}
+        {empty && !project.annotations?.length && <EmptyHero />}
       </div>
     </section>
   );
@@ -634,10 +685,11 @@ const TrackHeader = memo(function TrackHeader({ track, selected }: { track: Trac
   const sub = track.kind === 'instrument' ? PRESET_BY_ID[track.instrument?.preset ?? '']?.name ?? track.instrument?.preset : track.kind === 'drums' ? `Drum kit · ${track.drumLanes?.length ?? 0} lanes` : 'Audio';
   const set = (label: string, fn: (t: Track) => void) => update(label, (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) fn(t); });
   return (
-    <div className={`track-head ${selected ? 'selected' : ''}`} onPointerDown={() => select({ trackId: track.id })} onDoubleClick={() => setBottom('editor')}>
+    <div data-chat-ref={`track:${track.id}`} className={`track-head ${selected ? 'selected' : ''}`} onPointerDown={() => select({ trackId: track.id })} onDoubleClick={() => setBottom('editor')}>
       <div className="swatch" style={{ background: track.color }} />
       <input className="tname" value={track.name} aria-label="Track name" onChange={(e) => update('Rename track', (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) t.name = e.target.value; }, { coalesce: true })} />
       <div className="tbtns">
+        <AddToChat referenceId={`track:${track.id}`} label={track.name} mini />
         <button className={`ms m ${track.mute ? 'on' : ''}`} title="Mute this track" onClick={() => set('Mute', (t) => { t.mute = !t.mute; })}>M</button>
         <button className={`ms s ${track.solo ? 'on' : ''}`} title="Solo: hear only this track" onClick={() => set('Solo', (t) => { t.solo = !t.solo; })}>S</button>
       </div>

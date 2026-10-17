@@ -9,3 +9,8 @@ dist
 coverage
 *.tsbuildinfo
 .firebaserc
+
+playwright-report/
+test-results/
+gha-creds-*.json
+*-debug.log

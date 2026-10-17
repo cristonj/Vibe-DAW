@@ -1,5 +1,6 @@
+import { AddToChat } from './AddToChat';
 import { useMemo, useRef, useState } from 'react';
-import { Play, Square, Upload, Plus, X } from 'lucide-react';
+import { Play, Square, Upload, Plus, X, Bookmark } from 'lucide-react';
 import { useLibrary, addSample, searchSamples } from '../../samples/library';
 import { previewSample, stopPreview } from '../../engine/api';
 import { PRESETS } from '../../model/catalog';
@@ -7,7 +8,11 @@ import { useDaw, useTransport } from '../../state/store';
 import { beatsPerBar, createTrack } from '../../model/project';
 import type { SampleMeta } from '../../model/types';
 import { toast } from '../toast';
+import { importMidiFile } from '../midiActions';
 import { placeSample } from '../actions';
+import { openSavePreset } from './SavePreset';
+import { PresetLibrary } from './PresetLibrary';
+import { OnlineSounds } from './OnlineSounds';
 
 const CATS: Array<[label: string, value: string | undefined, filter?: (m: SampleMeta) => boolean]> = [
   ['All', undefined],
@@ -16,6 +21,7 @@ const CATS: Array<[label: string, value: string | undefined, filter?: (m: Sample
   ['FX', 'fx'],
   ['Loops', undefined, (m) => m.kind === 'loop'],
   ['AI made', undefined, (m) => m.source === 'generated' || m.source === 'designed'],
+  ['Online', undefined, (m) => m.source === 'online'],
   ['Yours', undefined, (m) => m.source === 'user'],
 ];
 
@@ -31,6 +37,11 @@ function guessCategory(name: string): string {
 
 export async function importAudioFiles(files: FileList | File[]) {
   for (const f of Array.from(files)) {
+    if (/\.midi?$/i.test(f.name) || ['audio/midi', 'audio/x-midi'].includes(f.type)) {
+      try { const result = await importMidiFile(f); toast(`Imported ${result.tracks} MIDI tracks`); if (result.warnings.length) toast(result.warnings.join(' ')); }
+      catch (e) { toast(`Couldn't import ${f.name}: ${(e as Error).message}`, 'error'); }
+      continue;
+    }
     if (!f.type.startsWith('audio/') && !/\.(wav|mp3|ogg|flac|m4a|aiff?)$/i.test(f.name)) continue;
     try {
       const data = await f.arrayBuffer();
@@ -55,6 +66,7 @@ function SampleRow({ m, playing, onPlay }: { m: SampleMeta; playing: boolean; on
   const bits = [m.bpm ? `${m.bpm} bpm` : '', m.key ?? '', `${m.duration.toFixed(1)}s`].filter(Boolean).join(' · ');
   return (
     <div
+      data-chat-ref={`sample:${m.id}`}
       className={`sample-row ${m.source === 'generated' || m.source === 'designed' ? 'generated' : ''}`}
       draggable
       onDragStart={(e) => {
@@ -68,14 +80,17 @@ function SampleRow({ m, playing, onPlay }: { m: SampleMeta; playing: boolean; on
       </button>
       <span className="name">{m.name}</span>
       <span className="meta">{bits}</span>
+      <AddToChat referenceId={`sample:${m.id}`} label={m.name} mini />
       <button className="add-mini" onClick={() => addSampleToTimeline(m)} aria-label={`Add ${m.name} to the timeline`} title="Add to the selected audio track at the playhead, or a new track"><Plus size={13} /></button>
+      <button className="add-mini" onClick={() => openSavePreset({ kind: 'sound', name: m.name, sampleId: m.id })} aria-label={`Save ${m.name} to library`} title="Save sound to your library"><Bookmark size={12} /></button>
+      {m.attribution && <a className="heard" href={m.attribution.sourceUrl} target="_blank" rel="noreferrer">{m.attribution.author} · {m.attribution.license}</a>}
       {m.aiDescription && <span className="heard">{m.aiDescription}</span>}
     </div>
   );
 }
 
 export function Browser({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<'sounds' | 'instruments'>('sounds');
+  const [tab, setTab] = useState<'sounds' | 'instruments' | 'online' | 'library'>('sounds');
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState(0);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -116,9 +131,11 @@ export function Browser({ open, onClose }: { open: boolean; onClose: () => void 
       <div className="tabs" role="tablist">
         <button className={`tab ${tab === 'sounds' ? 'active' : ''}`} onClick={() => setTab('sounds')} role="tab">Sounds</button>
         <button className={`tab ${tab === 'instruments' ? 'active' : ''}`} onClick={() => setTab('instruments')} role="tab">Instruments</button>
+        <button className={`tab ${tab === 'online' ? 'active' : ''}`} onClick={() => setTab('online')} role="tab">Online</button>
+        <button className={`tab ${tab === 'library' ? 'active' : ''}`} onClick={() => setTab('library')} role="tab">Library</button>
         <button className="btn icon drawer-close" onClick={onClose} aria-label="Close browser"><X size={16} /></button>
       </div>
-      {tab === 'sounds' ? (
+      {tab === 'library' ? <PresetLibrary /> : tab === 'online' ? <OnlineSounds /> : tab === 'sounds' ? (
         <>
           <div className="browser-search">
             <input type="search" placeholder="Search sounds" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search sounds" />
@@ -139,9 +156,9 @@ export function Browser({ open, onClose }: { open: boolean; onClose: () => void 
               onDragLeave={() => setOver(false)}
               onDrop={(e) => { e.preventDefault(); setOver(false); void importAudioFiles(e.dataTransfer.files); }}
             >
-              <button className="btn" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import audio</button>
+              <button className="btn" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import audio / MIDI</button>
               <div>or drop files here</div>
-              <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={(e) => { if (e.target.files) void importAudioFiles(e.target.files); e.target.value = ''; }} />
+              <input ref={fileRef} type="file" accept="audio/*,.mid,.midi" multiple hidden onChange={(e) => { if (e.target.files) void importAudioFiles(e.target.files); e.target.value = ''; }} />
             </div>
           </div>
         </>

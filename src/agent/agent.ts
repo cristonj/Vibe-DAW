@@ -5,7 +5,8 @@ import { beatToBar } from '../model/project';
 import { getProject, useDaw } from '../state/store';
 import { useSettings, aiAvailable } from '../state/settings';
 import { streamGenerate, explainError, type Content, type Part } from './llm';
-import { describeProject, describeClipNotes } from './context';
+import { describeProject, describeClipNotes, describeSelection } from './context';
+import type { EditSelection } from '../model/selection';
 import { systemPrompt } from './prompts';
 import { runTool, toolDeclarations, type AgentMode, type PlanStep } from './tools';
 import { diffProjects } from './diff';
@@ -77,6 +78,7 @@ function setStatus(status: string) {
 export interface RunOptions {
   /** Restrict attention to these clips (inline Ctrl+K edits). */
   focusClipIds?: string[];
+  focusSelection?: EditSelection;
   /** Extra context, e.g. a reference-track breakdown. */
   attachments?: string[];
   mode?: AgentMode;
@@ -131,7 +133,7 @@ export function steerAgent(text: string, opts: RunOptions = {}): boolean {
   if (!s.running || s.abort?.signal.aborted || (!text.trim() && !opts.voice)) return false;
   const id = nid();
   const p = getProject();
-  const focus = opts.focusClipIds?.length ? focusContext(p, opts.focusClipIds) : null;
+  const focus = opts.focusSelection ? describeSelection(p, opts.focusSelection) : opts.focusClipIds?.length ? focusContext(p, opts.focusClipIds) : null;
   const voiceTag = opts.voice ? registerVoice(opts.voice) : undefined;
   const voice = opts.voice ? { url: opts.voice.url, seconds: opts.voice.seconds } : undefined;
   useAgent.setState((state) => ({
@@ -154,7 +156,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   const mode = opts.mode ?? st.mode;
   const abort = new AbortController();
   const checkpoint = getProject();
-  const focus = opts.focusClipIds?.length ? focusContext(checkpoint, opts.focusClipIds) : null;
+  const focus = opts.focusSelection ? describeSelection(checkpoint, opts.focusSelection) : opts.focusClipIds?.length ? focusContext(checkpoint, opts.focusClipIds) : null;
   push({ kind: 'user', id: nid(), text: text.trim(), checkpoint, focus: focus?.label, voice: opts.voice ? { url: opts.voice.url, seconds: opts.voice.seconds } : undefined });
   useAgent.setState({ running: true, abort, status: opts.voice ? 'Listening…' : 'Thinking…' });
   const daw = useDaw.getState();
@@ -183,6 +185,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   let requestedSummary: string | undefined;
   const active = () => useAgent.getState().abort === abort && getProject().id === checkpoint.id;
   const checkActive = () => { if (!active() || abort.signal.aborted) throw new DOMException('Aborted', 'AbortError'); };
+  let activeSelection = opts.focusSelection;
   const applySteering = () => {
     const queued = useAgent.getState().steering;
     if (!queued.length) return;
@@ -190,12 +193,13 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
       q.text ? `Latest steering from the user: ${q.text}` : 'Latest steering from the user, by voice:',
       q.voiceTag ?? '',
       ...(q.opts.attachments ?? []),
-      q.opts.focusClipIds?.length ? focusContext(getProject(), q.opts.focusClipIds).text : '',
+      q.opts.focusSelection ? describeSelection(getProject(), q.opts.focusSelection).text : q.opts.focusClipIds?.length ? focusContext(getProject(), q.opts.focusClipIds).text : '',
     ].filter(Boolean).join('\n') }));
     const last = history[history.length - 1];
     if (last?.role === 'user') history = [...history.slice(0, -1), { ...last, parts: [...last.parts, ...parts] }];
     else history = [...history, { role: 'user', parts }];
     goal = `${baseGoal}\nSteering:\n${(goal.slice(baseGoal.length) + '\n' + queued.map((q) => q.text || '(voice message)').join('\n')).slice(-8000)}`;
+    for (const q of queued) if (q.opts.focusSelection) activeSelection = q.opts.focusSelection;
     const ids = new Set(queued.map((q) => q.id));
     useAgent.setState((s) => ({ steering: [], items: s.items.map((i) => i.kind === 'user' && ids.has(i.id) ? { ...i, steering: 'applied' } : i) }));
   };
@@ -214,7 +218,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
       const res = await streamGenerate(
         // Keep the live checklist outside compacted history so progress is never
         // lost when old tool exchanges are summarized.
-        { system: system + `\n\n<checklist_state>\n${plan.length ? plan.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join('\n') : 'No checklist yet for this run.'}\n</checklist_state>`, contents: withVoices(history), tools, thinking: settings.thinking, signal: abort.signal },
+        { system: system + (activeSelection ? `\n\n${describeSelection(getProject(), activeSelection).text}` : '') + `\n\n<checklist_state>\n${plan.length ? plan.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join('\n') : 'No checklist yet for this run.'}\n</checklist_state>`, contents: withVoices(history), tools, thinking: settings.thinking, signal: abort.signal },
         {
           onText: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, text: it.text + d } : it)); },
           onThought: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, thinking: it.thinking + d } : it)); },
@@ -258,7 +262,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
         const tid = nid();
         push({ kind: 'tool', id: tid, name: call.name, args: call.args ?? {}, status: 'running', summary: '' });
         setStatus(statusFor(call.name));
-        const out = await runTool(call.name, call.args ?? {}, { signal: abort.signal, goal, plan, context: { chars: historySize(history), budget: CONTEXT_BUDGET } }, mode);
+        const out = await runTool(call.name, call.args ?? {}, { signal: abort.signal, goal, plan, selection: activeSelection, context: { chars: historySize(history), budget: CONTEXT_BUDGET } }, mode);
         checkActive();
         if (out.contextSummary !== undefined) requestedSummary = out.contextSummary;
         const failed = 'error' in out.result;
@@ -327,7 +331,7 @@ export function stopAgent() {
 /** Accept: clear the "unreviewed" highlight on AI-made clips. */
 export function keepChanges(itemId: string) {
   useDaw.setState((s) => {
-    const next = produce(s.project, (d) => { for (const t of d.tracks) for (const c of t.clips) if (c.aiPending) delete c.aiPending; });
+    const next = produce(s.project, (d) => { for (const t of d.tracks) for (const c of t.clips) if (c.aiPending) delete c.aiPending; for (const a of d.annotations ?? []) delete a.aiPending; });
     // A new version, so other signed-in devices pick up the acceptance too.
     return { project: next === s.project ? next : { ...next, updatedAt: Date.now() } };
   });

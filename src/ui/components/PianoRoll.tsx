@@ -18,13 +18,17 @@ const ROWS = HIGH - LOW + 1;
 const BLACK = new Set([1, 3, 6, 8, 10]);
 
 type Tool = 'draw' | 'select';
+const NO_NOTES: string[] = [];
 
 export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Track; project: Project }) {
   const update = useDaw((s) => s.update);
   const [ppb, setPpb] = useState(72);
   const [grid, setGrid] = useState(0.25);
   const [tool, setTool] = useState<Tool>('draw');
-  const [selected, setSelected] = useState<string[]>([]);
+  const selected = useDaw((s) => s.selection.notes?.find((n) => n.clipId === clip.id)?.noteIds ?? NO_NOTES);
+  const setSelected = (noteIds: string[]) => useDaw.getState().select({
+    trackId: track.id, clipIds: [clip.id], notes: noteIds.length ? [{ clipId: clip.id, noteIds }] : undefined,
+  });
   const [lastLen, setLastLen] = useState(0.5);
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -40,7 +44,6 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
     const pitches = clip.notes.map((n) => n.pitch);
     const mid = pitches.length ? (Math.min(...pitches) + Math.max(...pitches)) / 2 : track.kind === 'instrument' && track.instrument?.preset === 'bass808' ? 30 : 60;
     el.scrollTop = (HIGH - mid) * ROW - el.clientHeight / 2;
-    setSelected([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clip.id]);
 

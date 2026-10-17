@@ -20,6 +20,27 @@ service cloud.firestore {
       allow create, update: if isOwner(uid) && request.resource.data.id == sampleId;
     }
 
+    // Reusable clips, track sounds, effect profiles and project templates.
+    // Tombstones stay in this collection so offline devices cannot revive deletions.
+    match /users/{uid}/library/{presetId} {
+      allow read: if isOwner(uid);
+      function validItem() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['id', 'name', 'kind', 'tags', 'data', 'updatedAt', 'revision', 'deleted'])
+          && d.id == presetId
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 480
+          && d.kind in ['clip', 'sound', 'effects', 'template']
+          && d.tags is list && d.tags.size() <= 12
+          && d.data is string && d.data.size() < 800000
+          && d.updatedAt is number && d.updatedAt >= 0
+          && d.revision is string && d.revision.size() > 0 && d.revision.size() <= 100
+          && d.deleted is bool;
+      }
+      allow create: if isOwner(uid) && validItem();
+      allow update: if isOwner(uid) && validItem()
+        && (!resource.data.deleted || request.resource.data.deleted);
+    }
+
     // AI settings (including the user's Gemini key), appearance and shortcuts.
     // Each section is { data: JSON string, updatedAt: number }.
     match /users/{uid}/prefs/{prefId} {

@@ -2,6 +2,7 @@ import type { Project, Track } from '../model/types';
 import { renderProject } from './render';
 import { activeSpan, trackTail } from './renderPlan';
 import { beatsToSeconds } from '../model/project';
+import { audioBudget } from './budget';
 
 // Background track freezing. Each instrument/drum track is rendered offline (its
 // instrument and effects, pre-fader) and live playback streams that audio instead of
@@ -14,7 +15,6 @@ export interface Frozen { sig: string; buffer: AudioBuffer; startBeat: number }
 const cache = new Map<string, Frozen>();
 const failed = new Map<string, string>();
 const signatures = new WeakMap<Project, WeakMap<Track, string>>();
-const MAX_CACHE_BYTES = 256 * 1024 * 1024;
 const MAX_RENDER_BYTES = 64 * 1024 * 1024;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let running = false;
@@ -72,6 +72,8 @@ export function scheduleFreeze(p: Project) {
   for (const id of cache.keys()) if (!ids.has(id)) cache.delete(id);
   for (const id of failed.keys()) if (!ids.has(id)) failed.delete(id);
   const next = new Map(p.tracks.filter(freezable).map((t) => [t.id, freezeSignature(p, t)]));
+  // Invalid audio cannot be reused; release it before reserving replacement PCM.
+  for (const [id, frozen] of cache) if (next.get(id) !== frozen.sig) cache.delete(id);
   const changed = switched || next.size !== queued.size || [...next].some(([id, sig]) => queued.get(id) !== sig);
   queued = next;
   // Mixer/UI edits and freeze-completion syncs must not keep postponing the queue.
@@ -92,10 +94,7 @@ async function work() {
     // a core for playback/UI and bound simultaneous graphs and PCM allocations.
     // Safari's page process has a tighter memory budget, particularly on iOS.
     // All iOS browsers use WebKit, including ones with a Chrome/Firefox UA token.
-    const ua = globalThis.navigator?.userAgent ?? '';
-    const webkit = /AppleWebKit/i.test(ua) && !/(Chrome|Chromium|Edg|OPR)\//i.test(ua);
-    const cacheLimit = webkit ? MAX_RENDER_BYTES : MAX_CACHE_BYTES;
-    const workers = webkit ? 1 : Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 2) - 1));
+    const { freezeCacheBytes: cacheLimit, workers } = audioBudget();
     await Promise.all(Array.from({ length: workers }, async () => {
       while (latest) {
         const p = latest;

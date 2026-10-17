@@ -13,6 +13,7 @@ import type { PitchClass, ScaleName } from '../../model/types';
 import { toast } from '../toast';
 import { tip, useKeymap } from '../../state/keymap';
 import { exportProjectFile } from '../../state/projectFile';
+import { projectCredits } from '../../samples/credits';
 
 export function Logo() {
   return (
@@ -209,6 +210,10 @@ function ExportMenu() {
       {open && (
         <div className="menu" role="menu">
           <button className="menu-item" role="menuitem" onClick={() => void saveProject()}><b>Vibe project (.vibe)</b><span>Portable session with notes, instruments, effects and custom samples</span></button>
+          <button className="menu-item" role="menuitem" onClick={() => {
+            const p = useDaw.getState().project; setOpen(false);
+            downloadBlob(new Blob([projectCredits(p)], { type: 'text/plain' }), `${p.name.replace(/[^\w\- ]+/g, '').trim() || 'project'}-credits.txt`);
+          }}><b>Sound credits (.txt)</b><span>Authors, licenses and sources for online audio and sampled instruments</span></button>
           {EXPORT_FORMATS.map((f) => (
             <button key={f.id} className="menu-item" role="menuitem" onClick={() => void run(f.id)}>
               <b>{f.label}</b>

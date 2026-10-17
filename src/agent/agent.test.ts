@@ -163,3 +163,20 @@ describe('reviewing agent changes', () => {
     expect(useDaw.getState().project.updatedAt).toBe(3000);
   });
 });
+
+describe('selection delivery to the producer', () => {
+  it('keeps exact note context outside compactable history and passes it to tools', async () => {
+    const { createMidiClip, createTrack } = await import('../model/project');
+    const p = createProject(); const t = createTrack(p, 'drums'); const c = createMidiClip(p, 0, 8);
+    c.notes = [{ id: 'selected-hit', pitch: 36, start: 1, duration: 0.25, velocity: 0.5 }, { id: 'other-hit', pitch: 36, start: 5, duration: 0.25, velocity: 0.9 }];
+    t.clips.push(c); p.tracks.push(t); useDaw.getState().replaceProject(p);
+    const selection = { clipIds: [c.id], notes: [{ clipId: c.id, noteIds: ['selected-hit'] }] };
+    mocks.stream.mockResolvedValueOnce({ content: { role: 'model', parts: [{ functionCall: { name: 'edit', args: {} } }] } }).mockResolvedValueOnce(answer());
+    mocks.tool.mockResolvedValueOnce({ result: { ok: true }, summary: 'Edited the selected phrase' });
+    await runAgent('Improve this intro phrase', { focusSelection: selection });
+    expect(mocks.stream.mock.calls[0][0].system).toContain('selected-hit:');
+    expect(mocks.stream.mock.calls[1][0].system).toContain('selected-hit:');
+    expect(mocks.stream.mock.calls[0][0].system).not.toContain('other-hit:');
+    expect(mocks.tool.mock.calls[0][2].selection).toEqual(selection);
+  });
+});

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { produce } from 'immer';
 import { createProject } from '../model/project';
 import type { Project } from '../model/types';
+import type { EditSelection } from '../model/selection';
 
 // Project document + undo history + editor UI state.
 // History is snapshot-based: immer gives structural sharing, so each entry is cheap.
@@ -9,11 +10,10 @@ import type { Project } from '../model/types';
 const HISTORY_LIMIT = 200;
 const COALESCE_MS = 600;
 
-export type BottomPanel = 'editor' | 'mixer' | 'track';
+export type BottomPanel = 'editor' | 'mixer' | 'track' | 'notes';
 
-export interface Selection {
+export interface Selection extends EditSelection {
   trackId: string | null;
-  clipIds: string[];
 }
 
 interface DawState {
@@ -143,7 +143,12 @@ export const useDaw = create<DawState>((set, get) => ({
     });
   },
 
-  select: (sel) => set((s) => ({ selection: { ...s.selection, ...sel } })),
+  select: (sel) => set((s) => ({ selection: {
+    ...s.selection,
+    // A fresh clip selection must not inherit a stale note/range selection.
+    ...(sel.clipIds ? { notes: undefined, range: undefined } : {}),
+    ...sel,
+  } })),
   openEditor: (clipId) => set({ editorClipId: clipId, ...(clipId ? { bottomPanel: 'editor' as const, bottomOpen: true } : {}) }),
   setBottom: (panel, open = true) => set({ bottomPanel: panel, bottomOpen: open }),
   toggleBottom: () => set((s) => ({ bottomOpen: !s.bottomOpen })),

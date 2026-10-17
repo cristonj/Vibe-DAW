@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { AnnotationDialog } from './components/Annotations';
+import { ChatContextMenu } from './components/ChatContextMenu';
+import { SavePresetDialog } from './components/SavePreset';
 import { TopBar } from './components/TopBar';
 import { Browser } from './components/Browser';
 import { Arrangement } from './components/Arrangement';
@@ -37,6 +40,12 @@ export function App() {
   // Only one drawer at a time; on wide screens both columns can stay open.
   useEffect(() => { if (narrow && browserOpen) setAgentOpen(false); }, [narrow, browserOpen]);
   useEffect(() => { if (narrow && agentOpen) setBrowserOpen(false); }, [narrow, agentOpen]);
+
+  useEffect(() => {
+    const open = () => { setAgentOpen(true); setFocusAgent((n) => n + 1); };
+    window.addEventListener('vibe:open-agent', open);
+    return () => window.removeEventListener('vibe:open-agent', open);
+  }, []);
 
   useEffect(() => {
     // The agent asks for a key the first time someone tries it, not on page load.
@@ -104,6 +113,9 @@ export function App() {
       {settings && <SettingsModal onClose={() => setSettings(false)} />}
       {projects && <ProjectsModal onClose={() => setProjects(false)} />}
       {help && <HelpModal onClose={() => setHelp(false)} />}
+      <SavePresetDialog />
+      <AnnotationDialog />
+      <ChatContextMenu />
       <Tooltips />
       <Toasts />
     </div>

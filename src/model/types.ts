@@ -98,6 +98,7 @@ export interface DrumLane {
 
 export type EffectType =
   | 'eq'
+  | 'parametric_eq'
   | 'filter'
   | 'compressor'
   | 'reverb'
@@ -145,6 +146,19 @@ export interface Section {
   length: number;
 }
 
+export interface Annotation {
+  id: string;
+  kind: 'note' | 'lyric';
+  text: string;
+  /** Song beats, independent of audio or vocal tracks. */
+  start: number;
+  length: number;
+  trackId?: string;
+  author: 'user' | 'producer';
+  resolved?: boolean;
+  aiPending?: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -156,6 +170,7 @@ export interface Project {
   swing: number;
   tracks: Track[];
   sections: Section[];
+  annotations?: Annotation[];
   loop: { enabled: boolean; start: number; end: number };
   master: { volumeDb: number; effects: Effect[] };
   /** Monotonic counter used to mint short, agent-friendly ids (t3, c12, fx4). */
@@ -164,7 +179,7 @@ export interface Project {
   updatedAt: number;
 }
 
-export type SampleSource = 'builtin' | 'user' | 'generated' | 'designed';
+export type SampleSource = 'builtin' | 'user' | 'generated' | 'designed' | 'online';
 
 export interface SampleMeta {
   id: string;
@@ -190,4 +205,5 @@ export interface SampleMeta {
   createdAt: number;
   /** Cloud storage path when synced. */
   storagePath?: string;
+  attribution?: { sourceUrl: string; license: string; licenseUrl: string; author: string };
 }

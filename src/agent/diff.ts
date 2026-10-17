@@ -63,6 +63,14 @@ export function diffProjects(before: Project, after: Project): ChangeSummary {
   for (const t of before.tracks) {
     if (!afterTracks.has(t.id)) { removed++; lines.push(`− ${t.name}`); }
   }
+  const oldAnnotations = new Map((before.annotations ?? []).map((a) => [a.id, a]));
+  for (const a of after.annotations ?? []) {
+    const old = oldAnnotations.get(a.id);
+    if (!old) { added++; lines.push(`+ ${a.kind === 'lyric' ? 'Lyrics' : 'Note'}: ${a.text.slice(0, 100)}`); }
+    else if (JSON.stringify({ ...old, aiPending: undefined }) !== JSON.stringify({ ...a, aiPending: undefined })) { modified++; lines.push(`~ ${a.kind === 'lyric' ? 'Lyrics' : 'Note'}: ${a.text.slice(0, 100)}`); }
+    oldAnnotations.delete(a.id);
+  }
+  for (const a of oldAnnotations.values()) { removed++; lines.push(`− ${a.kind === 'lyric' ? 'Lyrics' : 'Note'}: ${a.text.slice(0, 100)}`); }
   if (before.sections !== after.sections && after.sections.length) lines.push(`Sections: ${after.sections.map((s) => s.name).join(' → ')}`);
   if (before.master !== after.master) { lines.push('~ Master bus'); modified++; }
   return { lines, added, removed, modified };

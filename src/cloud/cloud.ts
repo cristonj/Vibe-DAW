@@ -79,7 +79,7 @@ export async function saveProjectToCloud(p: Project): Promise<void> {
     const { doc, setDoc } = await import('firebase/firestore');
     const data = JSON.stringify(p);
     if (data.length > 900_000) throw new Error('Project too large for cloud sync (over ~900 KB). It is still saved on this device.');
-    await syncProjectSamples(p);
+    await syncProjectSamples(p, false, uid);
     if (currentUser?.uid !== uid) throw new Error('Account changed while syncing. Please try again.');
     await setDoc(doc(await db(), 'users', uid, 'projects', p.id), { name: p.name, updatedAt: p.updatedAt, bpm: p.bpm, data, schemaVersion: p.schemaVersion });
     useAuth.setState({ lastSyncError: null });
@@ -179,12 +179,15 @@ function sampleSynced(id: string) {
   useAuth.setState({ sampleSyncError: sampleErrors.values().next().value ?? null });
 }
 
-export async function syncProjectSamples(p: Project, localOnly = false) {
+export async function syncProjectSamples(p: Project, localOnly = false, ownerUid?: string) {
+  if (ownerUid && currentUser?.uid !== ownerUid) throw new Error('Account changed while syncing audio');
   const ids = p.tracks.flatMap((t) => [
     ...t.clips.flatMap((c) => c.type === 'audio' ? [c.sampleId] : []),
     ...(t.drumLanes?.map((l) => l.sampleId) ?? []),
   ]);
-  await syncSamples(ids, localOnly);
+  if (ownerUid) await syncSamples(ids, localOnly, ownerUid);
+  else await syncSamples(ids, localOnly);
+  if (ownerUid && currentUser?.uid !== ownerUid) throw new Error('Account changed while syncing audio');
 }
 
 async function uploadSample(meta: SampleMeta, data: ArrayBuffer, mime: string): Promise<string | null> {
@@ -221,7 +224,7 @@ async function fetchSampleBytes(meta: SampleMeta | undefined, id: string): Promi
   const uid = currentUser.uid;
   const app = await getFirebaseApp();
   const { getStorage, ref, getBytes } = await import('firebase/storage');
-  const path = meta?.storagePath ?? `users/${uid}/samples/${id}`;
+  const path = meta?.storagePath?.startsWith(`users/${uid}/samples/`) ? meta.storagePath : `users/${uid}/samples/${id}`;
   try {
     const data = await getBytes(ref(getStorage(app!), path));
     if (currentUser?.uid === uid) sampleSynced(id);

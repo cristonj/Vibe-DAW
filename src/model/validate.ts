@@ -103,8 +103,24 @@ export function validateProject(value: unknown): Project {
       } else fail('clip.type');
     }
   }
+  if (p.annotations !== undefined) {
+    const annotations = array(p.annotations, 'annotations');
+    if (annotations.length > 5000) fail('too many annotations');
+    for (const item of annotations) {
+      const a = object(item, 'annotation');
+      id(a.id, 'annotation.id');
+      if (!['note', 'lyric'].includes(String(a.kind))) fail('annotation.kind');
+      string(a.text, 'annotation.text');
+      if (!(a.text as string).trim() || (a.text as string).length > 4000) fail('annotation.text');
+      number(a.start, 'annotation.start', 0, 1e7); number(a.length, 'annotation.length', Number.MIN_VALUE, 1e7);
+      if (!['user', 'producer'].includes(String(a.author))) fail('annotation.author');
+      if (a.trackId !== undefined) string(a.trackId, 'annotation.trackId');
+      if (a.resolved !== undefined) boolean(a.resolved, 'annotation.resolved');
+      if (a.aiPending !== undefined) boolean(a.aiPending, 'annotation.aiPending');
+    }
+  }
   // Imported counters must not collide with ids minted by later edits.
   let nextId = Number(p.nextId);
-  for (const value of ids) { const m = /^(?:t|c|fx|ln|s)(\d+)$/.exec(value); if (m) nextId = Math.max(nextId, Number(m[1])); }
+  for (const value of ids) { const m = /^(?:t|c|fx|ln|s|a)(\d+)$/.exec(value); if (m) nextId = Math.max(nextId, Number(m[1])); }
   return { ...(p as unknown as Project), nextId };
 }

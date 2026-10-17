@@ -1,4 +1,4 @@
-/* Vibe DAW — studio at night.
+/* Vibe — studio at night.
    Quiet ink-navy surfaces, colorful tracks, and one loud idea: everything the agent
    touches is drawn in lilac ink until you keep it. */
 
@@ -934,9 +934,9 @@ kbd {
   .inline-ai { top: calc(12px + env(safe-area-inset-top)); }
 }
 
-/* Too little timeline to hold the first-run card: show it over everything instead. */
+/* On small screens, keep setup scrollable inside the arrangement. */
 @media (max-width: 640px), (max-height: 600px) {
-  .empty-arrange { position: fixed; inset: 0; z-index: 30; padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom)); place-items: center; overflow-y: auto; background: rgba(8, 9, 16, 0.6); }
+  .empty-arrange { position: absolute; inset: 105px 8px 8px; z-index: 6; padding: 4px; place-items: center; background: transparent; }
   .hero-card { width: min(560px, 100%); }
 }
 
@@ -978,3 +978,81 @@ kbd {
   .dock-resize::after { content: ''; position: absolute; left: 50%; top: 5px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--line); }
   .msg-user .restore { opacity: 0.55; }
 }
+
+.selection-region { position: absolute; top: 0; bottom: 0; background: #b69cff30; border: 1px solid var(--agent); pointer-events: none; z-index: 4; }
+.selecting-range .lane, .selecting-range .steps { touch-action: none; cursor: crosshair; }
+.step.note-selected { outline: 2px solid #fff; outline-offset: -2px; }
+.online-caption { font-size: 12px; color: var(--muted); padding: 0 14px; line-height: 1.6; }
+.online-sound { padding: 14px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.online-sound small { color: var(--muted); }
+.online-sound a { color: var(--agent); font-size: 12px; }
+.browser > .tabs { flex-wrap: wrap; }
+.library-status { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); padding: 10px; }
+.library-item { border-bottom: 1px solid var(--line); padding: 12px 10px; }
+.library-item-title { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.library-item-title > b { flex: 1; min-width: 0; }
+.library-item-title > span { font-size: 10px; color: var(--faint); }
+.library-tags { display: block; color: var(--muted); margin: 6px 0; overflow-wrap: anywhere; }
+.library-item-actions, .library-save-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.library-item-actions { margin-top: 8px; }
+.library-save-actions { padding: 10px; border-top: 1px solid var(--line); }
+.library-rename { display: flex; gap: 5px; margin-top: 8px; }
+.library-rename input { min-width: 0; width: 100%; }
+.library-chain-save { grid-column: 1 / -1; }
+.save-preset h2 { display: flex; align-items: center; gap: 10px; }
+
+/* Timed writing cues stay independent of the audio graph. */
+.annotation-row { display: flex; height: 59px; border-bottom: 1px solid var(--line); }
+.annotation-head { position: sticky; left: 0; z-index: 5; flex: 0 0 var(--header-w); width: var(--header-w); padding: 4px 9px; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: flex-start; justify-content: center; font-size: 11px; color: var(--muted); }
+.annotation-head > div { display: flex; gap: 3px; }
+.annotation-head .btn { height: 23px; }
+.annotation-lane { position: relative; flex: none; background: var(--lane-a); }
+.annotation-cue { position: absolute; height: 23px; border-radius: 4px; padding: 3px 6px; background: var(--raised); color: var(--signal); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; text-align: left; font-size: 11px; }
+.annotation-cue.lyric { color: var(--ok); }
+.annotation-cue.pending { box-shadow: inset 0 0 0 1px var(--agent); }
+.resolved { opacity: 0.6; }
+.annotation-timing { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.annotations-panel { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.annotation-tools { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; padding: 7px; border-bottom: 1px solid var(--line); flex: none; }
+.annotation-tools input { flex: 1; min-width: 140px; }
+.annotation-list { padding: 10px; overflow-y: auto; min-height: 0; user-select: text; }
+.annotation-item { padding: 9px 12px; margin-bottom: 8px; background: var(--panel-2); border-radius: var(--radius-m); }
+.annotation-meta, .annotation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.annotation-text { white-space: pre-wrap; overflow-wrap: anywhere; text-align: left; width: 100%; padding: 7px 0; }
+.dock-head { overflow-x: auto; flex-shrink: 0; }
+.dock-head > .tab { flex-shrink: 0; }
+
+/* Feed children must retain their natural height so the feed can scroll. */
+.feed { min-height: 0; overflow-x: hidden; overscroll-behavior: contain; }
+.feed > * { flex-shrink: 0; min-width: 0; overflow-wrap: anywhere; }
+.listening-review { flex-shrink: 0; }
+.review-notes { max-height: 340px; overflow-y: auto; overscroll-behavior: contain; user-select: text; }
+.listening-review > header { flex-wrap: wrap; gap: 6px; }
+.listening-review > header > span { white-space: nowrap; }
+.agent-foot { flex-wrap: wrap; gap: 4px 10px; line-height: 1.5; }
+.inline-ai .hint, .editor-hint { line-height: 1.6; }
+.editor-hint { white-space: normal; flex-shrink: 0; padding: 6px 10px; }
+.tooltip { width: max-content; max-width: min(320px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: hidden; overflow-wrap: anywhere; }
+.tooltip kbd { flex-shrink: 0; }
+.composer-box { position: relative; }
+.composer-box > .composer-row:has(.attach-chip) { max-height: 100px; overflow-y: auto; }
+.attach-chip { max-width: 100%; }
+.attach-chip > span { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention-picker { max-height: min(300px, 35dvh); overflow-y: auto; border: 1px solid var(--agent-line); border-radius: 6px; background: var(--panel-2); flex: none; }
+.mention-heading { padding: 6px 9px; font-size: 10.5px; color: var(--faint); }
+.mention-picker button { width: 100%; padding: 7px 9px; display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.mention-picker button.active, .mention-picker button:hover { background: var(--agent-wash); }
+.mention-picker b { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.mention-picker small { color: var(--faint); font-size: 10.5px; }
+.mention-picker p { padding: 6px 9px; font-size: 12px; }
+.chat-context-menu { position: fixed; z-index: 110; border-radius: 6px; background: var(--panel); box-shadow: var(--shadow-pop); padding: 5px; min-width: 150px; }
+.chat-context-menu button { display: block; width: 100%; padding: 8px 10px; text-align: left; border-radius: 4px; }
+.chat-context-menu button:hover { background: var(--hover); }
+.clip-chat { position: absolute; right: 7px; top: 0; z-index: 2; background: var(--panel); border-radius: 4px; }
+.clip-chat .btn { width: 22px; height: 22px; }
+.track-head .tbtns .add-mini { width: 18px; }
+/* Keep first-run setup inside the arrangement, including short phone layouts. */
+.empty-arrange { min-height: 0; overflow: hidden; }
+.hero-card { max-height: calc(100% - 16px); overflow-y: auto; overscroll-behavior: contain; }
+
+.msg-add { height: 24px; padding: 0 5px; font-size: 11px; opacity: 0.75; }

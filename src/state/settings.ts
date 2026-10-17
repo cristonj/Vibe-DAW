@@ -24,6 +24,8 @@ interface SettingsState {
   thinking: Thinking;
   /** Let the agent bounce and listen to its own work without asking. */
   autoListen: boolean;
+  /** Producer preferences applied to Agent, Ask, and inline chats. */
+  customInstructions: string;
   /** Live output buffer: 'stable' (bigger, no crackles) or 'low' (snappier). */
   latency: 'stable' | 'low';
   listeningQuality: ListeningQuality;
@@ -46,6 +48,8 @@ function load(): Partial<SettingsState> {
 const envKey = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '';
 const THINKING: Thinking[] = ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'];
 
+export const MAX_CUSTOM_INSTRUCTIONS = 4000;
+
 export type SettingsValues = Omit<SettingsState, 'set'>;
 
 /** Fill defaults and drop invalid values, for localStorage and for settings synced from another device. */
@@ -56,6 +60,7 @@ export function sanitizeSettings(saved: Partial<Record<keyof SettingsValues, unk
     apiKey: typeof saved.apiKey === 'string' ? saved.apiKey : '',
     thinking: THINKING.includes(saved.thinking as Thinking) ? (saved.thinking as Thinking) : 'MEDIUM',
     autoListen: typeof saved.autoListen === 'boolean' ? saved.autoListen : true,
+    customInstructions: typeof saved.customInstructions === 'string' ? saved.customInstructions.slice(0, MAX_CUSTOM_INSTRUCTIONS) : '',
     latency: saved.latency === 'low' ? 'low' : 'stable',
     listeningQuality: saved.listeningQuality === 'balanced' || saved.listeningQuality === 'compact' ? saved.listeningQuality : 'full',
     listeningChannels: saved.listeningChannels === 'mono' ? 'mono' : 'stereo',
@@ -66,7 +71,7 @@ export function sanitizeSettings(saved: Partial<Record<keyof SettingsValues, unk
 export const useSettings = create<SettingsState>((set, get) => ({
   ...sanitizeSettings(load()),
   set: (patch) => {
-    set(patch);
+    set(sanitizeSettings({ ...get(), ...patch }));
     const { set: _s, ...rest } = { ...get() };
     void _s;
     try {
