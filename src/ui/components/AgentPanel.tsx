@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Square, Ear, Drum, Piano, Plus, SlidersHorizontal, Search, AudioLines, Gauge, Layers, Scissors, Play, Check,
-  RotateCcw, Paperclip, X, Brain, ListChecks, Trash, Pencil, Music, Repeat, CircleStop, Eye, Mic, LoaderCircle, Pause,
+  ArrowUp, Square, Ear, Plus, Play, Check, RotateCcw, Paperclip, X, Brain, ListChecks, Eye, Mic, LoaderCircle, Pause, Shuffle, AtSign, MessageSquarePlus, Wrench,
 } from 'lucide-react';
 import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } from '../../agent/agent';
 import { analyzeReference } from '../../agent/ears';
@@ -9,21 +8,12 @@ import { useSettings, MODELS, aiAvailable } from '../../state/settings';
 import { useDaw } from '../../state/store';
 import { Markdown } from '../Markdown';
 import { shuffledSuggestions } from '../../agent/suggestions';
-import { Shuffle } from 'lucide-react';
 import { useLibrary } from '../../samples/library';
 import { usePresets } from '../../state/presetLibrary';
+import { TOOL_ICONS } from '../toolIcons';
 import { attachChatReference, chatReferenceCatalog, resolveChatReferences, serializeChatReference, useChatReferences, type ChatReference } from '../chatReferences';
-import { AtSign, MessageSquarePlus } from 'lucide-react';
 import { toast } from '../toast';
 import { MAX_VOICE_SECONDS, useVoiceRecorder, voiceSupported, type VoiceClip } from '../voice';
-
-const TOOL_ICONS: Record<string, typeof Ear> = {
-  listen: Ear, audition_samples: Ear, write_drums: Drum, write_notes: Piano, create_track: Plus,
-  update_track: Pencil, delete_track: Trash, add_effect: SlidersHorizontal, update_effect: SlidersHorizontal, remove_effect: SlidersHorizontal,
-  search_samples: Search, design_sound: AudioLines, set_project: Gauge, copy_bars: Layers, clear_bars: Scissors, play: Play, stop: CircleStop,
-  set_drum_lane: Drum, add_audio_clip: AudioLines, edit_clip: Pencil, delete_clips: Trash, transform_notes: Music, set_sections: ListChecks,
-  bounce_to_sample: AudioLines, set_loop: Repeat, get_project_state: Eye, get_notes: Eye,
-};
 
 function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan' }>; pinned?: boolean }) {
   const done = item.steps.filter((s) => s.status === 'done').length;
@@ -40,12 +30,12 @@ function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan'
 }
 
 function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
-  const Icon = TOOL_ICONS[item.name];
+  const Icon = TOOL_ICONS[item.name] ?? Wrench;
   const { select, openEditor } = useDaw.getState();
   return (
     <>
       <div className={`tool-row ${item.status}`}>
-        <span className="ico">{Icon && <Icon size={12} />}</span>
+        <span className="ico"><Icon size={12} /></span>
         <div className="txt">
           {item.summary || <span style={{ color: 'var(--faint)' }}>{item.name.replace(/_/g, ' ')}…</span>}
         </div>

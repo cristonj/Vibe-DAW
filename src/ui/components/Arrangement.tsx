@@ -110,8 +110,7 @@ function ClipView({ clip, track, project, zoom, selected, onPointerDown, onDoubl
       onDoubleClick={onDoubleClick}
       title={`${clip.name}${clip.aiPending ? ' — made by the agent (not reviewed yet)' : ''} · drag to move, drag the right edge to resize (Shift = fine), double-click to edit`}
     >
-      <div className="cname">{clip.name}</div>
-      {selected && <div className="clip-chat"><AddToChat referenceId={`clip:${clip.id}`} label={clip.name} /></div>}
+      <div className="cname"><span>{clip.name}</span>{selected && <AddToChat referenceId={`clip:${clip.id}`} label={clip.name} mini />}</div>
       {clip.type === 'midi' ? <MidiBody clip={clip} track={track} /> : <AudioBody clip={clip} project={project} widthPx={w} />}
       <div className="resize" onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, 'resize'); }} />
     </div>
@@ -689,13 +688,15 @@ const TrackHeader = memo(function TrackHeader({ track, selected }: { track: Trac
       <div className="swatch" style={{ background: track.color }} />
       <input className="tname" value={track.name} aria-label="Track name" onChange={(e) => update('Rename track', (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) t.name = e.target.value; }, { coalesce: true })} />
       <div className="tbtns">
-        <AddToChat referenceId={`track:${track.id}`} label={track.name} mini />
         <button className={`ms m ${track.mute ? 'on' : ''}`} title="Mute this track" onClick={() => set('Mute', (t) => { t.mute = !t.mute; })}>M</button>
         <button className={`ms s ${track.solo ? 'on' : ''}`} title="Solo: hear only this track" onClick={() => set('Solo', (t) => { t.solo = !t.solo; })}>S</button>
       </div>
-      <div className="tsub" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>
-        <button className="btn icon danger" style={{ width: 18, height: 18, marginLeft: 'auto' }} title="Delete this track" onClick={(e) => { e.stopPropagation(); update(`Delete ${track.name}`, (d) => { d.tracks = d.tracks.filter((x) => x.id !== track.id); }); }}><Trash size={12} /></button>
+      <div className="tsub">
+        <span>{sub}</span>
+        <div className="tactions">
+          <AddToChat referenceId={`track:${track.id}`} label={track.name} mini />
+          <button className="add-mini danger" title="Delete this track" aria-label={`Delete ${track.name}`} onClick={(e) => { e.stopPropagation(); update(`Delete ${track.name}`, (d) => { d.tracks = d.tracks.filter((x) => x.id !== track.id); }); }}><Trash size={12} /></button>
+        </div>
       </div>
     </div>
   );

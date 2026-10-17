@@ -42,6 +42,8 @@ npm run build
 
 Vibe includes offline Analog Brass, FM Bass, Marimba, Kalimba, Chip Keys, and Glass Pad alongside the existing instruments. Use the four-band Parametric EQ for precise tone shaping; duplicate effects or move them through the chain. The Producer can reorder effects too.
 
+**Custom effects**: write your own DSP in JavaScript, with your own knobs, from **Add effect → Custom** (or ask the Producer to build one). Code is test-run in a sandbox before it reaches playback, then runs on the audio thread in an AudioWorklet and travels inside the project, so bounces and shared projects sound the same. **Save as plugin** keeps it in your library, synced to your account, under **Add effect → Your plugins**.
+
 The **Online** sound-browser tab and the Producer's `search_online_sounds` / `import_online_sound` tools search Wikimedia Commons without an API key. Imports retain authorship, license, and source, including in portable `.vibe` projects. Use **Export → Sound credits (.txt)** when sharing a song; check each source's license requirements. Online imports are limited to 16 MB / three minutes each.
 
 Save phrases, instrument/kit sounds, samples, effect profiles and full project templates in the **Library** tab. Device items work offline; signed-in libraries sync to the account, including audio. **Settings → AI → Custom instructions** applies your preferences across chats. Import standard MIDI files as editable tracks.

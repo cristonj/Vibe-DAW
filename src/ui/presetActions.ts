@@ -12,7 +12,7 @@ import { useAgent } from '../agent/agent';
 function sampleIds(p: Project) {
   return [...new Set(p.tracks.flatMap((t) => [...(t.drumLanes?.map((l) => l.sampleId) ?? []), ...t.clips.flatMap((c) => c.type === 'audio' ? [c.sampleId] : [])]))];
 }
-export async function saveToLibrary(kind: PresetKind, name: string, options: { trackId?: string; sampleId?: string; tags?: string[]; selection?: EditSelection } = {}) {
+export async function saveToLibrary(kind: PresetKind, name: string, options: { trackId?: string; effectId?: string; sampleId?: string; tags?: string[]; selection?: EditSelection } = {}) {
   const { project, selection } = useDaw.getState();
   const scope = usePresets.getState().scope;
   let captured: Project;
@@ -25,10 +25,19 @@ export async function saveToLibrary(kind: PresetKind, name: string, options: { t
     const t = createTrack(captured, 'audio', { name: sample.name });
     t.clips.push(createAudioClip(captured, sample.id, 0, Math.max(0.25, secondsToBeats(captured, sample.duration)), sample.name));
     captured.tracks.push(t); captured.master.effects = [];
-  } else captured = capturePreset(project, kind, { trackId: options.trackId ?? selection.trackId ?? undefined, selection: options.selection ?? selection, sampleBpm: (id) => getSampleMeta(id)?.bpm });
+  } else captured = capturePreset(project, kind, { trackId: options.trackId ?? selection.trackId ?? undefined, effectId: options.effectId, selection: options.selection ?? selection, sampleBpm: (id) => getSampleMeta(id)?.bpm });
   for (const id of sampleIds(captured)) if (!getSampleMeta(id)) throw new Error(`Sample metadata is missing for ${id}; load the sound before saving it`);
   const samples = sampleIds(captured).map((id) => getSampleMeta(id)).filter((m): m is NonNullable<typeof m> => !!m && m.source !== 'builtin');
-  return savePreset(name, kind, { project: captured, samples }, options.tags);
+  // A lone custom effect is a plugin: tagged so the Add effect menu can offer it.
+  const plugin = kind === 'effects' && captured.master.effects.length === 1 && captured.master.effects[0].type === 'custom';
+  return savePreset(name, kind, { project: captured, samples }, plugin ? [PLUGIN_TAG, ...(options.tags ?? []).filter((t) => t !== PLUGIN_TAG)] : options.tags);
+}
+
+export const PLUGIN_TAG = 'plugin';
+
+/** Saved plugins: library effect items holding exactly one custom effect. */
+export function libraryPlugins(records: Record<string, PresetRecord>): PresetRecord[] {
+  return Object.values(records).filter((r) => !r.deleted && r.kind === 'effects' && r.tags.includes(PLUGIN_TAG)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function loadFromLibrary(record: PresetRecord, options: { targetTrackId?: string; replaceEffects?: boolean; at?: number } = {}) {

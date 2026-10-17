@@ -112,13 +112,34 @@ export type EffectType =
   | 'widener'
   | 'lofi'
   | 'limiter'
-  | 'duck';
+  | 'duck'
+  | 'custom';
+
+/** One knob on a custom effect. Its value lives in Effect.params under `id`. */
+export interface CustomEffectParam {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  default: number;
+}
+
+/** A user- or Producer-written effect: DSP code that runs on the audio thread, plus its knobs. */
+export interface CustomEffectDef {
+  name: string;
+  description?: string;
+  /** Defines `function process(left, right, params, info)`; see model/customEffect.ts. */
+  code: string;
+  params: CustomEffectParam[];
+}
 
 export interface Effect {
   id: string;
   type: EffectType;
   enabled: boolean;
   params: Record<string, number | string>;
+  /** Only on type 'custom': travels with the project so it renders anywhere. */
+  custom?: CustomEffectDef;
 }
 
 export interface Track {

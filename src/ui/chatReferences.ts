@@ -5,6 +5,7 @@ import { usePresets, presetPayload } from '../state/presetLibrary';
 import { describeProject, describeSelection } from '../agent/context';
 import { annotationText } from '../model/annotations';
 import { cloneDeep } from '../model/project';
+import { effectName } from '../model/customEffect';
 import type { EditSelection } from '../model/selection';
 import { toast } from './toast';
 
@@ -20,9 +21,9 @@ export function chatReferenceCatalog(): Array<Omit<ChatReference, 'text'> & { te
   for (const t of p.tracks) {
     add(`track:${t.id}`, t.name, 'Track', () => describeProject({ ...p, tracks: [t], master: { ...p.master, effects: [] } }));
     for (const c of t.clips) add(`clip:${c.id}`, c.name, `Clip · ${t.name}`, () => describeSelection(p, { clipIds: [c.id] }).text, { clipIds: [c.id] });
-    for (const e of t.effects) add(`effect:${e.id}`, `${e.type} · ${t.name}`, 'Effect', () => JSON.stringify({ trackId: t.id, ...e }));
+    for (const e of t.effects) add(`effect:${e.id}`, `${effectName(e)} · ${t.name}`, 'Effect', () => JSON.stringify({ trackId: t.id, ...e }));
   }
-  for (const e of p.master.effects) add(`effect:${e.id}`, `${e.type} · Master`, 'Effect', () => JSON.stringify({ trackId: 'master', ...e }));
+  for (const e of p.master.effects) add(`effect:${e.id}`, `${effectName(e)} · Master`, 'Effect', () => JSON.stringify({ trackId: 'master', ...e }));
   for (const a of p.annotations ?? []) add(`annotation:${a.id}`, a.text.slice(0, 80), a.kind === 'lyric' ? 'Lyrics' : 'Note', () => annotationText(p, a), { clipIds: [], range: { start: a.start, end: a.start + a.length, trackIds: a.trackId ? [a.trackId] : p.tracks.map((t) => t.id) } });
   for (const s of p.sections) {
     const focus = { clipIds: [], range: { start: s.start, end: s.start + s.length, trackIds: p.tracks.map((t) => t.id) } };

@@ -3,6 +3,8 @@ import type { Effect } from '../model/types';
 import { defaultEffectParams } from '../model/catalog';
 import { reverbImpulse } from './reverb';
 import { lfoClock, type LfoClock } from './lfo';
+import { createCustomEffect } from './customFx';
+import { customFingerprint } from '../model/customEffect';
 
 // Effect units. Each wraps one or more Tone nodes behind input/output so the
 // channel strip can chain them, and supports live param updates without rebuilds.
@@ -25,6 +27,7 @@ const num = (v: unknown, d: number) => (typeof v === 'number' && isFinite(v) ? v
 export function structuralParams(e: Effect): string {
   if (e.type === 'delay') return `pp:${num(e.params.pingPong, 1) > 0.5}`;
   if (e.type === 'filter') return `mode:${e.params.mode}`;
+  if (e.type === 'custom') return `code:${customFingerprint(e.custom)}`;
   return '';
 }
 
@@ -98,6 +101,7 @@ function wetDry(insert: { input: Tone.ToneAudioNode; output: Tone.ToneAudioNode 
 }
 
 export function createEffect(effect: Effect): EffectUnit {
+  if (effect.type === 'custom') return createCustomEffect(effect);
   const p = { ...defaultEffectParams(effect.type), ...effect.params };
   switch (effect.type) {
     case 'eq': {

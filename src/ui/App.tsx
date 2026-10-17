@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AnnotationDialog } from './components/Annotations';
 import { ChatContextMenu } from './components/ChatContextMenu';
 import { SavePresetDialog } from './components/SavePreset';
+import { CustomEffectEditor } from './components/CustomEffectEditor';
 import { TopBar } from './components/TopBar';
 import { Browser } from './components/Browser';
 import { Arrangement } from './components/Arrangement';
@@ -114,6 +115,7 @@ export function App() {
       {projects && <ProjectsModal onClose={() => setProjects(false)} />}
       {help && <HelpModal onClose={() => setHelp(false)} />}
       <SavePresetDialog />
+      <CustomEffectEditor />
       <AnnotationDialog />
       <ChatContextMenu />
       <Tooltips />
