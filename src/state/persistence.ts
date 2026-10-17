@@ -3,7 +3,7 @@ import { del, get as idbGet, setMany, update as idbUpdate } from 'idb-keyval';
 import type { Project } from '../model/types';
 import { createProject } from '../model/project';
 import { useDaw } from './store';
-import { useAuth, saveProjectToCloud, listCloudProjects, loadCloudProject, deleteCloudProject, watchCloudProjects, cloudUpdatedAt, type CloudProjectChange } from '../cloud/cloud';
+import { useAuth, saveProjectToCloud, syncProjectSamples, listCloudProjects, loadCloudProject, deleteCloudProject, watchCloudProjects, cloudUpdatedAt, type CloudProjectChange } from '../cloud/cloud';
 import { startPrefsSync, trackLocalPrefChanges } from '../cloud/prefs';
 import { useAgent } from '../agent/agent';
 
@@ -282,6 +282,13 @@ async function applyCloudChanges(uid: string, changes: CloudProjectChange[], ini
     for (const e of index) {
       if (inCloud.has(e.id)) {
         if (e.updatedAt > (cloudUpdatedAt(e.id) ?? 0)) await uploadLocal(e.id, synced);
+        else {
+          // Older builds synced the composition without backfilling its audio.
+          // Only inspect projects already belonging to this account; never upload
+          // another signed-in account's unrelated sample library.
+          const p = e.id === current().id ? current() : await idbGet<Project>(key(e.id));
+          if (p) await syncProjectSamples(p, true).catch((err) => console.warn('Audio backfill failed', err));
+        }
       } else if (synced.has(e.id)) {
         if (e.id !== current().id) { synced.delete(e.id); await removeLocal(e.id); }
       } else if (!owners[e.id] || owners[e.id] === uid) {
