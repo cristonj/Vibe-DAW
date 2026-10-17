@@ -207,6 +207,40 @@ function synth(spec: InstrumentSpec): Instrument {
   const params = { ...defaultPresetParams(spec.preset), ...spec.params };
   const out = new Tone.Gain(1);
   switch (spec.preset) {
+    case 'analog_brass': {
+      const v = new Tone.PolySynth(Tone.MonoSynth, {
+        oscillator: { type: 'sawtooth' }, filter: { type: 'lowpass', Q: 1.2, rolloff: -24 },
+        envelope: { attack: 0.04, decay: 0.3, sustain: 0.65, release: 0.6 },
+        filterEnvelope: { attack: 0.06, decay: 0.4, sustain: 0.3, release: 0.5, baseFrequency: 300, octaves: 2.5 },
+      });
+      out.gain.value = 0.35;
+      return poly(v, [], out, (p) => v.set({ envelope: { attack: p.attack, release: p.release }, filter: { Q: p.resonance }, filterEnvelope: { baseFrequency: p.cutoff / 4, octaves: 2 } }), params);
+    }
+    case 'fm_bass':
+    case 'marimba':
+    case 'kalimba': {
+      const bass = spec.preset === 'fm_bass', kalimba = spec.preset === 'kalimba';
+      const v = new Tone.PolySynth(Tone.FMSynth, {
+        harmonicity: bass ? 1 : kalimba ? 6.5 : 4,
+        modulationIndex: params.bite,
+        oscillator: { type: 'sine' }, modulation: { type: 'sine' },
+        envelope: { attack: 0.002, decay: bass ? 0.4 : 0.7, sustain: bass ? 0.35 : 0, release: params.release },
+        modulationEnvelope: { attack: 0.001, decay: bass ? 0.16 : 0.09, sustain: 0, release: 0.08 },
+      });
+      out.gain.value = bass ? 0.7 : 0.6;
+      return poly(v, [], out, (p) => v.set({ modulationIndex: p.bite, envelope: { attack: p.attack ?? 0.002, release: p.release } }), params);
+    }
+    case 'chiptune': {
+      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'square' }, envelope: { attack: 0.002, decay: 0.1, sustain: 0.55, release: 0.12 } });
+      const filter = new Tone.Filter({ type: 'lowpass', frequency: params.cutoff, rolloff: -12 });
+      out.gain.value = 0.25;
+      return poly(v, [filter], out, (p) => { filter.frequency.value = p.cutoff; v.set({ envelope: { attack: p.attack, release: p.release } }); }, params);
+    }
+    case 'glass_pad': {
+      const v = new Tone.PolySynth(Tone.AMSynth, { harmonicity: params.shimmer, oscillator: { type: 'sine' }, modulation: { type: 'sine' }, envelope: { attack: 0.8, decay: 0.5, sustain: 0.8, release: 3 } });
+      out.gain.value = 0.65;
+      return poly(v, [], out, (p) => v.set({ harmonicity: p.shimmer, envelope: { attack: p.attack, release: p.release } }), params);
+    }
     case 'epiano': {
       const v = new Tone.PolySynth(Tone.FMSynth, {
         harmonicity: 1,

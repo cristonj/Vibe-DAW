@@ -153,6 +153,36 @@ export const PRESETS: PresetInfo[] = [
     description: 'Airy "aah" vowel pad. Ethereal hooks, dark trap, gothic.',
     params: { ...ENV, attack: { default: 0.4, min: 0, max: 3, label: 'Attack (s)' }, release: { default: 1.8, min: 0.1, max: 6, label: 'Release (s)' } },
   },
+  {
+    id: 'analog_brass', name: 'Analog Brass', family: 'synth', range: [43, 88],
+    description: 'Warm polyphonic saw brass with a blooming filter envelope. Funk stabs, synthwave and cinematic chords. Works offline.',
+    params: { ...ENV, cutoff: { default: 1800, min: 200, max: 10000, label: 'Cutoff (Hz)' }, resonance: { default: 1.2, min: 0.1, max: 8, label: 'Resonance' } },
+  },
+  {
+    id: 'fm_bass', name: 'FM Bass', family: 'bass', range: [24, 60],
+    description: 'Percussive FM bass with a controllable metallic bite. UK garage, funk and digital house. Works offline.',
+    params: { ...ENV, release: { default: 0.15, min: 0.01, max: 3, label: 'Release (s)' }, bite: { default: 4, min: 0, max: 16, label: 'FM bite' } },
+  },
+  {
+    id: 'marimba', name: 'Marimba', family: 'mallet', range: [48, 96],
+    description: 'Round woody FM mallet. Interlocking percussion melodies, tropical hooks and minimalism. Works offline.',
+    params: { release: { default: 0.8, min: 0.05, max: 4, label: 'Release (s)' }, bite: { default: 2.5, min: 0, max: 12, label: 'FM bite' } },
+  },
+  {
+    id: 'kalimba', name: 'Kalimba', family: 'mallet', range: [55, 96],
+    description: 'Bright tine pluck with a soft body. Organic arpeggios, Afrobeat and intimate melodies. Works offline.',
+    params: { release: { default: 1.2, min: 0.05, max: 5, label: 'Release (s)' }, bite: { default: 5, min: 0, max: 12, label: 'FM bite' } },
+  },
+  {
+    id: 'chiptune', name: 'Chip Keys', family: 'keys', range: [36, 96],
+    description: 'Crisp square-wave keys. Retro games, playful hooks and hyperpop. Works offline.',
+    params: { ...ENV, release: { default: 0.12, min: 0.01, max: 3, label: 'Release (s)' }, cutoff: { default: 7000, min: 300, max: 14000, label: 'Cutoff (Hz)' } },
+  },
+  {
+    id: 'glass_pad', name: 'Glass Pad', family: 'pad', range: [48, 96],
+    description: 'Slow AM sine pad with a crystalline shimmer. Ambient beds, sci-fi and spacious chords. Works offline.',
+    params: { ...ENV, attack: { default: 0.8, min: 0.01, max: 4, label: 'Attack (s)' }, release: { default: 3, min: 0.1, max: 8, label: 'Release (s)' }, shimmer: { default: 2.01, min: 0.5, max: 6, label: 'Shimmer ratio' } },
+  },
 ];
 
 export const PRESET_BY_ID = Object.fromEntries(PRESETS.map((p) => [p.id, p])) as Record<string, PresetInfo>;
@@ -176,6 +206,14 @@ export const EFFECTS: EffectInfo[] = [
       lowFrequency: { default: 250, min: 40, max: 1000, label: 'Low/mid split (Hz)' },
       highFrequency: { default: 3500, min: 1000, max: 12000, label: 'Mid/high split (Hz)' },
     },
+  },
+  {
+    type: 'parametric_eq', name: 'Parametric EQ', description: 'Four fully adjustable bell bands: frequency, gain and Q for precise cuts or boosts. Stack with a filter for high/low cuts.',
+    params: Object.fromEntries([100, 400, 2000, 8000].flatMap((frequency, i) => [
+      [`freq${i + 1}`, { default: frequency, min: 20, max: 20000, label: `Band ${i + 1} (Hz)` }],
+      [`gain${i + 1}`, { default: 0, min: -24, max: 18, label: `Band ${i + 1} (dB)` }],
+      [`q${i + 1}`, { default: 1, min: 0.1, max: 18, label: `Band ${i + 1} Q` }],
+    ])),
   },
   {
     type: 'filter', name: 'Filter', description: 'Resonant filter. Lowpass for muffled/underwater intros, highpass to clear low end.',

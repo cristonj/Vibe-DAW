@@ -4,11 +4,14 @@ import { beatsToSeconds, projectLength } from '../model/project';
 import { EngineGraph, preloadProject } from './graph';
 import type { InstrumentAssets } from './instruments';
 import { contextLock } from './lock';
-import { encodeWav, resample, type PcmData } from './wav';
+import { resample, type PcmData } from './wav';
 import type { ExportFormat } from './exportFormats';
 import { activeSpan, audibleTracks, effectTail, trackTail } from './renderPlan';
 import { frozenFor, playbackSampleRate, type Frozen } from './freeze';
 import { planMp3Chunks } from './mp3frames';
+import { audioBudget, renderWorkers } from './budget';
+import { encodeWavOffThread } from './wavEncode';
+import { withRenderSlot } from './renderQueue';
 
 // Offline bounce. Used for exports and — more importantly — for the agent's ears:
 // it renders exactly what the user would hear and hands it to Gemini.
@@ -72,7 +75,11 @@ interface PassSpec {
  * global context is swapped during construction); the lock is released before the
  * audio thread starts, so several passes can render at once.
  */
-async function renderPass(spec: PassSpec): Promise<Float32Array[]> {
+function renderPass(spec: PassSpec): Promise<Float32Array[]> {
+  return withRenderSlot(() => nativeRenderPass(spec));
+}
+
+async function nativeRenderPass(spec: PassSpec): Promise<Float32Array[]> {
   const { project: p, sampleRate } = spec;
   const prerollFrames = Math.round(PREROLL_SEC * sampleRate / 128) * 128;
   const preroll = prerollFrames / sampleRate;
@@ -174,11 +181,14 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
     const span = activeSpan(t, 0, Infinity);
     if (f && (tail === 0 || !span || end >= span[1])) frozenTracks.set(t.id, f);
   }
-  const assets = await preloadProject({ ...p, tracks: audible.filter((t) => !frozenTracks.has(t.id)) });
   const total = Math.ceil((beatsToSeconds(p, end - start) + tail) * sampleRate);
+  const outputBytes = total * 2 * Float32Array.BYTES_PER_ELEMENT;
+  if (outputBytes > audioBudget().maxOutputBytes) throw new RangeError('This bounce exceeds this device’s audio memory budget. Export a shorter section or use a lower sample rate.');
+  const workers = renderWorkers(outputBytes);
+  const assets = await preloadProject({ ...p, tracks: audible.filter((t) => !frozenTracks.has(t.id)) });
   // Frozen tracks only stream their buffers, so parallel stems buy nothing for them
   // and each extra pass costs a full-length run of Tone's clock on the main thread.
-  if (opts.stems === false || audible.length <= 1 || audible.every((t) => frozenTracks.has(t.id))) {
+  if (opts.stems === false || workers === 1 || audible.length <= 1 || audible.every((t) => frozenTracks.has(t.id))) {
     const one = await renderPass({ project: p, assets, startBeat: start, endBeat: end, tail, sampleRate, onlyTracks: opts.onlyTracks ?? null, bypassMaster: opts.master === false, onProgress: opts.onProgress, frozenTracks });
     return { sampleRate, channels: one };
   }
@@ -196,7 +206,6 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
   const weight = stems.reduce((s, x) => s + (x.span[1] - x.span[0]), 0) || 1;
   const done = new Map<string, number>();
   const report = () => opts.onProgress?.(0.92 * [...done.values()].reduce((a, b) => a + b, 0) / weight);
-  const workers = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 2) - 1));
   await pool(stems, workers, async ({ tracks, span }) => {
     const len = span[1] - span[0];
     const key = tracks[0].id;
@@ -230,7 +239,7 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
  */
 function encodeMp3(pcm: PcmData, kbps: number, onProgress?: (f: number) => void): Promise<Blob> {
   const [left, right = left] = pcm.channels;
-  const parts = Math.max(1, Math.min(4, globalThis.navigator?.hardwareConcurrency || 2));
+  const parts = renderWorkers(left.byteLength + right.byteLength);
   const chunks = planMp3Chunks(left.length, pcm.sampleRate, kbps, parts);
   const done = chunks.map(() => 0);
   const workers: Worker[] = [];
@@ -271,7 +280,8 @@ export async function exportAudio(project: Project, format: ExportFormat, onProg
     }
     return encodeMp3(pcm, 320, (f) => onProgress?.(renderShare + f * (1 - renderShare), 'encode'));
   }
-  const blob = new Blob([encodeWav(pcm, format === 'wav24' ? 24 : 16)], { type: 'audio/wav' });
+  onProgress?.(renderShare, 'encode');
+  const blob = await encodeWavOffThread(pcm, format === 'wav24' ? 24 : 16);
   onProgress?.(1, 'encode');
   return blob;
 }

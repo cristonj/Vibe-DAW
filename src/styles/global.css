@@ -1,4 +1,4 @@
-/* Vibe DAW — studio at night.
+/* Vibe — studio at night.
    Quiet ink-navy surfaces, colorful tracks, and one loud idea: everything the agent
    touches is drawn in lilac ink until you keep it. */
 
@@ -978,3 +978,11 @@ kbd {
   .dock-resize::after { content: ''; position: absolute; left: 50%; top: 5px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--line); }
   .msg-user .restore { opacity: 0.55; }
 }
+
+.selection-region { position: absolute; top: 0; bottom: 0; background: #b69cff30; border: 1px solid var(--agent); pointer-events: none; z-index: 4; }
+.selecting-range .lane, .selecting-range .steps { touch-action: none; cursor: crosshair; }
+.step.note-selected { outline: 2px solid #fff; outline-offset: -2px; }
+.online-caption { font-size: 12px; color: var(--muted); padding: 0 14px; line-height: 1.6; }
+.online-sound { padding: 14px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.online-sound small { color: var(--muted); }
+.online-sound a { color: var(--agent); font-size: 12px; }

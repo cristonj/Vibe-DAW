@@ -47,7 +47,11 @@ export function parseProjectFile(text: string): ProjectFile {
   const ids = new Set<string>();
   for (const entry of file.samples) {
     const s = entry as PackedSample | null;
-    if (!s || !s.meta || typeof s.meta.id !== 'string' || typeof s.meta.name !== 'string' || typeof s.meta.category !== 'string' || !Array.isArray(s.meta.tags) || !s.meta.tags.every((t) => typeof t === 'string') || !['user', 'generated', 'designed'].includes(s.meta.source) || !['loop', 'oneshot'].includes(s.meta.kind) || typeof s.mime !== 'string' || typeof s.data !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(s.data) || s.data.length % 4 !== 0 || ids.has(s.meta.id)) throw new Error('Invalid sample in project file.');
+    if (!s || !s.meta || typeof s.meta.id !== 'string' || typeof s.meta.name !== 'string' || typeof s.meta.category !== 'string' || !Array.isArray(s.meta.tags) || !s.meta.tags.every((t) => typeof t === 'string') || !['user', 'generated', 'designed', 'online'].includes(s.meta.source) || !['loop', 'oneshot'].includes(s.meta.kind) || typeof s.mime !== 'string' || typeof s.data !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(s.data) || s.data.length % 4 !== 0 || ids.has(s.meta.id)) throw new Error('Invalid sample in project file.');
+    if (s.meta.attribution) {
+      const a = s.meta.attribution;
+      if (typeof a.author !== 'string' || typeof a.license !== 'string' || ![a.sourceUrl, a.licenseUrl].every((url) => { try { return new URL(url).protocol === 'https:'; } catch { return false; } })) throw new Error('Invalid sample attribution.');
+    }
     for (const k of ['bpm', 'rootNote', 'duration'] as const) if (s.meta[k] !== undefined && (typeof s.meta[k] !== 'number' || !Number.isFinite(s.meta[k]))) throw new Error(`Invalid sample ${k}.`);
     ids.add(s.meta.id);
   }

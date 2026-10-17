@@ -274,3 +274,21 @@ describe('background freezing', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('edited freeze cache', () => {
+  it('releases invalid buffers before reserving new mobile freezes', async () => {
+    vi.stubGlobal('navigator', { hardwareConcurrency: 8, userAgent: 'Android Chrome/140 Mobile AppleWebKit/537.36' });
+    const p = fixture([120, 120, 120]);
+    freeze.scheduleFreeze(p); await vi.advanceTimersByTimeAsync(1200);
+    const frames = Math.ceil((120 * 60 / p.bpm + 1.5) * 48000);
+    for (let i = 0; i < 3; i++) {
+      jobs[i].settled = true; jobs[i].resolve({ sampleRate: 48000, channels: [new Float32Array(frames), new Float32Array(frames)] });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(jobs).toHaveLength(3);
+    const next = { ...p, bpm: p.bpm + 1 };
+    freeze.scheduleFreeze(next); await vi.advanceTimersByTimeAsync(1200);
+    expect(jobs).toHaveLength(4);
+    expect(freeze.frozenFor(next, next.tracks[0])).toBeNull();
+  });
+});

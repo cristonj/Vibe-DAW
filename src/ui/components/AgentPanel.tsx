@@ -8,6 +8,8 @@ import { analyzeReference } from '../../agent/ears';
 import { useSettings, MODELS, aiAvailable } from '../../state/settings';
 import { useDaw } from '../../state/store';
 import { Markdown } from '../Markdown';
+import { shuffledSuggestions } from '../../agent/suggestions';
+import { Shuffle } from 'lucide-react';
 import { toast } from '../toast';
 import { MAX_VOICE_SECONDS, useVoiceRecorder, voiceSupported, type VoiceClip } from '../voice';
 
@@ -18,13 +20,6 @@ const TOOL_ICONS: Record<string, typeof Ear> = {
   set_drum_lane: Drum, add_audio_clip: AudioLines, edit_clip: Pencil, delete_clips: Trash, transform_notes: Music, set_sections: ListChecks,
   bounce_to_sample: AudioLines, set_loop: Repeat, get_project_state: Eye, get_notes: Eye,
 };
-
-const SUGGESTIONS = [
-  'Make a Lil Peep type beat',
-  'Listen to my mix and tell me what to fix',
-  'Turn this loop into a full 2-minute arrangement',
-  'Make the drums hit harder and add hat rolls',
-];
 
 function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan' }>; pinned?: boolean }) {
   const done = item.steps.filter((s) => s.status === 'done').length;
@@ -143,6 +138,8 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   const context = useAgent((s) => s.context);
   const model = useSettings((s) => s.model);
   const [text, setText] = useState('');
+  const [suggestions, setSuggestions] = useState(() => shuffledSuggestions('song'));
+  useEffect(() => { setSuggestions(shuffledSuggestions(mode === 'ask' ? 'ask' : 'song')); }, [mode]);
   const [attachments, setAttachments] = useState<Array<{ name: string; text: string }>>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -225,7 +222,8 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
           <div className="agent-empty">
             <h3>Your co-producer</h3>
             <p>It edits the session like you would, listens to every sound it picks, and checks the mix by ear. Everything it does is one undo away.</p>
-            {SUGGESTIONS.map((s) => <button key={s} className="suggestion" onClick={() => send(s)}>{s}</button>)}
+            {suggestions.map((s) => <button key={s} className="suggestion" onClick={() => send(s)}>{s}</button>)}
+            <button className="btn" onClick={() => setSuggestions(shuffledSuggestions(mode === 'ask' ? 'ask' : 'song'))}><Shuffle size={13} /> More ideas</button>
           </div>
         ) : items.filter((it) => it.id !== latestPlan?.id).map((it) => <Item key={it.id} item={it} />)}
       </div>
@@ -292,7 +290,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
           </div>
         </div>
         <div className="agent-foot">
-          <span className="hide-touch">Ctrl+K edits a selected clip</span>
+          <span className="hide-touch">Shift-drag a region · Ctrl+K to edit</span>
           {context.compactions > 0 && <span title="Older exchanges are summarized automatically. The agent can also manage its own working memory.">Memory compacted {context.compactions}×</span>}
           {tokens.input + tokens.output > 0 && <span>{Math.round((tokens.input + tokens.output) / 1000)}k tokens</span>}
         </div>

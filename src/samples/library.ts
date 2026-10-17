@@ -208,6 +208,7 @@ export interface AddSampleInput {
   kind?: 'oneshot' | 'loop';
   tags?: string[];
   source: SampleMeta['source'];
+  attribution?: SampleMeta['attribution'];
   prompt?: string;
   bpm?: number;
   key?: string;
@@ -238,6 +239,7 @@ export async function addSample(input: AddSampleInput, audio: AudioBuffer | { da
     bpm: input.bpm,
     key: input.key,
     prompt: input.prompt,
+    attribution: input.attribution,
     createdAt: Date.now(),
   };
   if (!input.skipAnalysis) Object.assign(meta, analyzeForMeta(buffer, meta));

@@ -123,6 +123,23 @@ export function createEffect(effect: Effect): EffectUnit {
         dispose: () => { low.dispose(); mid.dispose(); high.dispose(); },
       };
     }
+    case 'parametric_eq': {
+      const defaults = [100, 400, 2000, 8000];
+      const bands = defaults.map((freq, i) => new Tone.Filter({ type: 'peaking', frequency: num(p[`freq${i + 1}`], freq), gain: num(p[`gain${i + 1}`], 0), Q: num(p[`q${i + 1}`], 1), rolloff: -12 }));
+      bands[0].chain(...bands.slice(1));
+      return {
+        input: bands[0], output: bands[3], ready: Promise.resolve(),
+        update: (q) => {
+          Object.assign(p, q);
+          bands.forEach((band, i) => {
+            band.frequency.value = num(p[`freq${i + 1}`], defaults[i]);
+            band.gain.value = num(p[`gain${i + 1}`], 0);
+            band.Q.value = num(p[`q${i + 1}`], 1);
+          });
+        },
+        dispose: () => bands.forEach((b) => b.dispose()),
+      };
+    }
     case 'filter': {
       const mode = (['lowpass', 'highpass', 'bandpass'].includes(String(p.mode)) ? p.mode : 'lowpass') as BiquadFilterType;
       const f = new Tone.Filter({ type: mode, frequency: num(p.frequency, 1200), Q: num(p.q, 1), rolloff: -24 });

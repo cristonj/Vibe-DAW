@@ -9,6 +9,9 @@ import { getSampleMeta } from '../../samples/library';
 import { audioClipRate, repeatNotes } from '../../model/edit';
 import { PHONE, uiZoom, usePeaks, useMediaQuery } from '../hooks';
 import { keepAllPending } from '../../agent/agent';
+import { openInlineAI } from './InlineAI';
+import { selectedNotes } from '../../model/selection';
+import { MousePointer2, Sparkles } from 'lucide-react';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
 import { toast } from '../toast';
@@ -309,6 +312,7 @@ export function Arrangement() {
   headerRef.current = headerW;
   // Cancels an in-progress touch drag (and undoes it) when a pinch starts.
   const abortTouchDrag = useRef<(() => void) | null>(null);
+  const [rangeMode, setRangeMode] = useState(false);
   const [dropTrack, setDropTrack] = useState<string | null>(null);
   const bpb = beatsPerBar(project);
   const totalBeats = projectLength(project) + bpb * 16;
@@ -388,6 +392,39 @@ export function Arrangement() {
       el.removeEventListener('touchcancel', onTouchEnd);
     };
   }, []);
+
+  const startRange = (e: RPointerEvent) => {
+    if (e.button !== 0 || (!e.shiftKey && !rangeMode) || !(e.target as HTMLElement).closest('.track-row > .lane')) return;
+    e.preventDefault(); e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const point = (ev: { clientX: number; clientY: number }) => {
+      const rect = el.getBoundingClientRect();
+      return { beat: Math.max(0, snapBeat(((ev.clientX - rect.left) / uiZoom() - headerW) / zoom, snap, bpb)), y: ev.clientY };
+    };
+    const first = point(e);
+    const move = (ev: PointerEvent | RPointerEvent) => {
+      const last = point(ev);
+      const start = Math.min(first.beat, last.beat);
+      const end = Math.max(first.beat, last.beat, start + (snap > 0 ? snap : 0.25));
+      const rows = [...el.querySelectorAll<HTMLElement>('.track-row > .lane')];
+      const trackIds = project.tracks.filter((_, i) => {
+        const rect = rows[i].getBoundingClientRect();
+        return rect.bottom >= Math.min(first.y, last.y) && rect.top <= Math.max(first.y, last.y);
+      }).map((t) => t.id);
+      const clipIds = project.tracks.filter((t) => trackIds.includes(t.id)).flatMap((t) => t.clips.filter((c) => c.start < end && c.start + c.length > start).map((c) => c.id));
+      select({ clipIds, trackId: trackIds[0] ?? null, range: { start, end, trackIds } });
+    };
+    const done = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', done);
+      el.removeEventListener('pointercancel', done);
+    };
+    move(e);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', done);
+    el.addEventListener('pointercancel', done);
+  };
 
   const startDrag = (e: RPointerEvent, clip: Clip, track: Track, mode: 'move' | 'resize') => {
     if (e.button !== 0) return;
@@ -548,6 +585,8 @@ export function Arrangement() {
         <AddTrackMenu />
         <div className="tool-divider" />
         <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')} aria-label="New clip"><Plus size={14} /> <span className="btn-label">New clip</span></button>
+        <button className={`btn ${rangeMode ? 'active' : ''}`} aria-pressed={rangeMode} onClick={() => setRangeMode((v) => !v)} title="Drag across tracks to select a time range. Shift-drag also works."><MousePointer2 size={14} /> Range</button>
+        <button className="btn" onClick={() => openInlineAI()} disabled={!selection.clipIds.length} title="Edit the selected notes or region with AI (Ctrl+K)"><Sparkles size={14} /> Edit selection{selection.range ? ` · ${selection.clipIds.reduce((n, id) => n + selectedNotes(project, selection, id).length, 0)} notes` : ''}</button>
         <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title={tip('Copy selected clips', 'copy')}><Copy size={14} /></button>
         <button className="btn icon" onClick={() => pasteClips()} title={tip('Paste clips at the playhead', 'paste')}><ClipboardPaste size={14} /></button>
         <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title={tip('Duplicate selected clips', 'duplicate')}><CopyPlus size={14} /></button>
@@ -570,7 +609,7 @@ export function Arrangement() {
         )}
       </div>
       <div className="scroller" ref={scrollRef} onPointerDown={(e) => { if (e.target === e.currentTarget) select({ clipIds: [] }); }}>
-        <div className="timeline" style={{ width: headerW + width }}>
+        <div className={`timeline ${rangeMode ? 'selecting-range' : ''}`} style={{ width: headerW + width }} onPointerDownCapture={startRange}>
           <Ruler project={project} zoom={zoom} width={width} />
           {project.tracks.map((t, i) => (
             <div className="track-row" key={t.id}>
@@ -590,6 +629,7 @@ export function Arrangement() {
                     <span className="only-touch">{t.kind === 'audio' ? 'Tap + next to a sound in the browser to add it' : 'Tap New clip to draw a pattern'}</span>
                   </div>
                 )}
+                {selection.range?.trackIds.includes(t.id) && <div className="selection-region" style={{ left: selection.range.start * zoom, width: (selection.range.end - selection.range.start) * zoom }} />}
                 {t.clips.map((c) => (
                   <ClipView
                     key={c.id}

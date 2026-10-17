@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Play, Trash, Plus, Power, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Play, Trash, Plus, Power, CopyPlus, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { useDaw } from '../../state/store';
 import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams } from '../../model/catalog';
 import type { Effect, EffectType, Project, Track } from '../../model/types';
@@ -20,9 +20,13 @@ function formatValue(label: string, v: number): string {
 /** Slider plus an exact-value box. Double-click the slider to reset to the default. */
 export function ParamSlider({ label, value, min, max, step, onChange, format, defaultValue }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; format?: (v: number) => string; defaultValue?: number }) {
   const s = step ?? (max - min > 200 ? 1 : max - min > 20 ? 0.1 : 0.01);
-  const [draft, setDraft] = useState<string | null>(null);
+  const [draft, setDraftValue] = useState<string | null>(null);
+  const draftRef = useRef<string | null>(null);
+  // Blur can follow input/Escape before React commits another render.
+  const setDraft = (text: string | null) => { draftRef.current = text; setDraftValue(text); };
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
   const commit = () => {
+    const draft = draftRef.current;
     if (draft === null) return;
     const v = Number(draft.replace(/[^\d.+-]/g, ''));
     if (draft.trim() !== '' && isFinite(v)) {
@@ -48,7 +52,12 @@ export function ParamSlider({ label, value, min, max, step, onChange, format, de
       <input
         className="val-input"
         value={draft ?? shown}
-        onFocus={(e) => { setDraft(String(Math.round(value * 1000) / 1000)); requestAnimationFrame(() => e.target.select()); }}
+        onFocus={(e) => {
+          const raw = String(Math.round(value * 1000) / 1000);
+          // Keep the DOM and draft aligned before selecting; a delayed value rewrite
+          // can otherwise move the caret and prepend the old value to fast input.
+          e.currentTarget.value = raw; setDraft(raw); e.currentTarget.select();
+        }}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -81,14 +90,14 @@ const FX_PRESETS: Partial<Record<EffectType, Record<string, Record<string, numbe
 };
 
 const FX_GROUPS: Array<[string, EffectType[]]> = [
-  ['Tone', ['eq', 'filter']],
+  ['Tone', ['eq', 'parametric_eq', 'filter']],
   ['Dynamics', ['compressor', 'limiter', 'duck']],
   ['Space', ['reverb', 'delay', 'widener']],
   ['Color', ['saturation', 'distortion', 'bitcrusher', 'lofi']],
   ['Modulation', ['chorus', 'phaser', 'tremolo']],
 ];
 
-function EffectCard({ fx, index, count, onChange, onRemove, onMove, project }: { fx: Effect; index: number; count: number; onChange: (fn: (e: Effect) => void) => void; onRemove: () => void; onMove: (dir: -1 | 1) => void; project: Project }) {
+function EffectCard({ fx, index, count, onChange, onRemove, onMove, onDuplicate, project }: { fx: Effect; index: number; count: number; onChange: (fn: (e: Effect) => void) => void; onRemove: () => void; onMove: (dir: -1 | 1) => void; onDuplicate: () => void; project: Project }) {
   const info = EFFECT_BY_TYPE[fx.type];
   const presets = FX_PRESETS[fx.type];
   return (
@@ -114,6 +123,7 @@ function EffectCard({ fx, index, count, onChange, onRemove, onMove, project }: {
         <button className="btn icon" disabled={index === 0} onClick={() => onMove(-1)} title="Move earlier in the chain" aria-label="Move up"><ChevronUp size={13} /></button>
         <button className="btn icon" disabled={index === count - 1} onClick={() => onMove(1)} title="Move later in the chain" aria-label="Move down"><ChevronDown size={13} /></button>
         <button className="btn icon" onClick={() => onChange((x) => { x.params = { ...defaultEffectParams(x.type), ...(x.type === 'duck' ? { source: x.params.source } : {}) }; })} title="Reset all settings" aria-label="Reset"><RotateCcw size={12} /></button>
+        <button className="btn icon" onClick={onDuplicate} title="Duplicate effect with its settings" aria-label={`Duplicate ${info.name}`}><CopyPlus size={13} /></button>
         <button className="btn icon danger" onClick={onRemove} title="Remove this effect" aria-label={`Remove ${info.name}`}><Trash size={13} /></button>
       </div>
       {Object.entries(info.params).map(([k, spec]) => {
@@ -160,6 +170,10 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
           count={effects.length}
           project={project}
           onChange={(fn) => update(`Edit ${EFFECT_BY_TYPE[fx.type].name}`, (d) => { const e = list(d).find((x) => x.id === fx.id); if (e) fn(e); }, { coalesce: true })}
+          onDuplicate={() => update('Duplicate effect', (d) => {
+            const l = list(d); const at = l.findIndex((x) => x.id === fx.id);
+            if (at >= 0) l.splice(at + 1, 0, { ...l[at], id: mintId(d, 'fx'), params: { ...l[at].params } });
+          })}
           onRemove={() => update('Remove effect', (d) => { const l = list(d); l.splice(l.findIndex((x) => x.id === fx.id), 1); })}
           onMove={(dir) => update('Reorder effects', (d) => {
             const l = list(d);

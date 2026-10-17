@@ -8,6 +8,7 @@ import { beatsPerBar, createTrack } from '../../model/project';
 import type { SampleMeta } from '../../model/types';
 import { toast } from '../toast';
 import { placeSample } from '../actions';
+import { OnlineSounds } from './OnlineSounds';
 
 const CATS: Array<[label: string, value: string | undefined, filter?: (m: SampleMeta) => boolean]> = [
   ['All', undefined],
@@ -16,6 +17,7 @@ const CATS: Array<[label: string, value: string | undefined, filter?: (m: Sample
   ['FX', 'fx'],
   ['Loops', undefined, (m) => m.kind === 'loop'],
   ['AI made', undefined, (m) => m.source === 'generated' || m.source === 'designed'],
+  ['Online', undefined, (m) => m.source === 'online'],
   ['Yours', undefined, (m) => m.source === 'user'],
 ];
 
@@ -69,13 +71,14 @@ function SampleRow({ m, playing, onPlay }: { m: SampleMeta; playing: boolean; on
       <span className="name">{m.name}</span>
       <span className="meta">{bits}</span>
       <button className="add-mini" onClick={() => addSampleToTimeline(m)} aria-label={`Add ${m.name} to the timeline`} title="Add to the selected audio track at the playhead, or a new track"><Plus size={13} /></button>
+      {m.attribution && <a className="heard" href={m.attribution.sourceUrl} target="_blank" rel="noreferrer">{m.attribution.author} · {m.attribution.license}</a>}
       {m.aiDescription && <span className="heard">{m.aiDescription}</span>}
     </div>
   );
 }
 
 export function Browser({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<'sounds' | 'instruments'>('sounds');
+  const [tab, setTab] = useState<'sounds' | 'instruments' | 'online'>('sounds');
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState(0);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -116,9 +119,10 @@ export function Browser({ open, onClose }: { open: boolean; onClose: () => void 
       <div className="tabs" role="tablist">
         <button className={`tab ${tab === 'sounds' ? 'active' : ''}`} onClick={() => setTab('sounds')} role="tab">Sounds</button>
         <button className={`tab ${tab === 'instruments' ? 'active' : ''}`} onClick={() => setTab('instruments')} role="tab">Instruments</button>
+        <button className={`tab ${tab === 'online' ? 'active' : ''}`} onClick={() => setTab('online')} role="tab">Online</button>
         <button className="btn icon drawer-close" onClick={onClose} aria-label="Close browser"><X size={16} /></button>
       </div>
-      {tab === 'sounds' ? (
+      {tab === 'online' ? <OnlineSounds /> : tab === 'sounds' ? (
         <>
           <div className="browser-search">
             <input type="search" placeholder="Search sounds" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search sounds" />

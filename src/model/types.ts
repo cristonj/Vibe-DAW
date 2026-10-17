@@ -98,6 +98,7 @@ export interface DrumLane {
 
 export type EffectType =
   | 'eq'
+  | 'parametric_eq'
   | 'filter'
   | 'compressor'
   | 'reverb'
@@ -164,7 +165,7 @@ export interface Project {
   updatedAt: number;
 }
 
-export type SampleSource = 'builtin' | 'user' | 'generated' | 'designed';
+export type SampleSource = 'builtin' | 'user' | 'generated' | 'designed' | 'online';
 
 export interface SampleMeta {
   id: string;
@@ -190,4 +191,5 @@ export interface SampleMeta {
   createdAt: number;
   /** Cloud storage path when synced. */
   storagePath?: string;
+  attribution?: { sourceUrl: string; license: string; licenseUrl: string; author: string };
 }
