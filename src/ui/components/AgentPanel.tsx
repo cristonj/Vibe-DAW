@@ -158,7 +158,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   // A stopped recording waits here so it can be heard back before it is sent.
   const [draft, setDraft] = useState<VoiceClip | null>(null);
   const recorder = useVoiceRecorder(setDraft, (message) => toast(message, 'error'));
-  const discardDraft = () => { if (draft) URL.revokeObjectURL(draft.url); setDraft(null); };
+  const discardDraft = () => setDraft((d) => { if (d) URL.revokeObjectURL(d.url); return null; });
   const recording = recorder.state === 'recording';
   const latestPlan = items.findLast((it): it is Extract<ChatItem, { kind: 'plan' }> => it.kind === 'plan');
 
@@ -172,7 +172,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
     });
     useChatReferences.setState({ extras: [...extras, ...recentReferences] });
   }, [items, recentReferences]);
-  useEffect(() => { useChatReferences.setState({ pending: [] }); setAttachments([]); setRecentReferences([]); setDraft(null); }, [project.id]);
+  useEffect(() => { useChatReferences.setState({ pending: [] }); setAttachments([]); setRecentReferences([]); discardDraft(); }, [project.id]);
 
   useEffect(() => { if (focusSignal) taRef.current?.focus(); }, [focusSignal]);
 
@@ -181,9 +181,10 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [items]);
 
-  const dispatch = (t: string, voice?: VoiceClip) => {
+  /** Returns false when the message could not be sent, so the caller keeps its inputs. */
+  const dispatch = (t: string, voice?: VoiceClip): boolean => {
     const avail = aiAvailable();
-    if (!avail.ok) { toast(avail.reason!, 'error'); window.dispatchEvent(new Event('vibe:open-settings')); return; }
+    if (!avail.ok) { toast(avail.reason!, 'error'); window.dispatchEvent(new Event('vibe:open-settings')); return false; }
     const references = resolveChatReferences();
     const att = [...attachments.map((a) => `<reference_track>\n${JSON.stringify(a)}\n</reference_track>`), ...references.map(serializeChatReference)];
     const focusSelection = references.findLast((r) => r.selection)?.selection;
@@ -193,16 +194,18 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
     setText('');
     setAttachments([]);
     stick.current = true;
+    return true;
   };
 
   const send = async (t = text) => {
     if (analyzing || recorder.state === 'encoding') return;
     if (recording) {
       const clip = await recorder.stop();
-      if (clip) dispatch(textRef.current, clip);
+      // If it can't be sent now, keep it to listen back and send later.
+      if (clip && !dispatch(textRef.current, clip)) setDraft(clip);
       return;
     }
-    if (draft) { dispatch(t, draft); setDraft(null); return; }
+    if (draft) { if (dispatch(t, draft)) setDraft(null); return; }
     if (!t.trim() && !pending.length && !attachments.length) return;
     dispatch(t);
   };
@@ -247,7 +250,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
           <button className={mode === 'agent' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('agent')} role="radio" aria-checked={mode === 'agent'} title="The agent edits your project">Agent</button>
           <button className={mode === 'ask' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('ask')} role="radio" aria-checked={mode === 'ask'} title="Read-only: questions and feedback">Ask</button>
         </div>
-        <button className="btn icon" title="New chat" disabled={running} onClick={() => { useAgent.getState().clear(); useChatReferences.setState({ pending: [] }); setText(''); setAttachments([]); setRecentReferences([]); }}><Plus size={15} /></button>
+        <button className="btn icon" title="New chat" disabled={running} onClick={() => { useAgent.getState().clear(); useChatReferences.setState({ pending: [] }); setText(''); setAttachments([]); setRecentReferences([]); discardDraft(); }}><Plus size={15} /></button>
         <button className="btn icon drawer-close" onClick={onClose} aria-label="Close Producer panel"><X size={16} /></button>
       </div>
 
