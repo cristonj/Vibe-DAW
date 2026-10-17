@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Square, Ear, Sparkles, Drum, Piano, Plus, SlidersHorizontal, Search, AudioLines, Gauge, Layers, Scissors, Play, Check,
+  ArrowUp, Square, Ear, Drum, Piano, Plus, SlidersHorizontal, Search, AudioLines, Gauge, Layers, Scissors, Play, Check,
   RotateCcw, Paperclip, X, Brain, ListChecks, Trash, Pencil, Music, Repeat, CircleStop, Eye, Mic, LoaderCircle, Pause,
 } from 'lucide-react';
 import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } from '../../agent/agent';
@@ -40,12 +40,12 @@ function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan'
 }
 
 function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
-  const Icon = TOOL_ICONS[item.name] ?? Sparkles;
+  const Icon = TOOL_ICONS[item.name];
   const { select, openEditor } = useDaw.getState();
   return (
     <>
       <div className={`tool-row ${item.status}`}>
-        <span className="ico"><Icon size={12} /></span>
+        <span className="ico">{Icon && <Icon size={12} />}</span>
         <div className="txt">
           {item.summary || <span style={{ color: 'var(--faint)' }}>{item.name.replace(/_/g, ' ')}…</span>}
         </div>
@@ -118,7 +118,6 @@ function Item({ item }: { item: ChatItem }) {
       return (
         <div className={`changes ${item.state}`}>
           <div className="changes-head">
-            <Sparkles size={13} color="var(--agent)" />
             {item.state === 'pending' ? 'Changes to review' : item.state === 'kept' ? 'Changes kept' : 'Changes undone'}
           </div>
           <ul>{item.lines.slice(0, 14).map((l, i) => <li key={i}>{l}</li>)}{item.lines.length > 14 && <li>…and {item.lines.length - 14} more</li>}</ul>

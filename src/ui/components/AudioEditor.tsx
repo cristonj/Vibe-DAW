@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { Sparkles, Ear } from 'lucide-react';
+import { Ear } from 'lucide-react';
 import { useDaw } from '../../state/store';
 import type { AudioClip, Project, Track, WarpMode } from '../../model/types';
 import { beatsPerBar } from '../../model/project';
@@ -46,7 +46,7 @@ export function AudioEditor({ clip, track, project }: { clip: AudioClip; track: 
           {meta?.bpm && <span className="chip">{meta.bpm} BPM</span>}
           {meta?.key && <span className="chip">{meta.key}</span>}
           <div className="spacer" />
-          <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}><Sparkles size={14} /> Edit with AI</button>
+          <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}>Edit with AI</button>
         </div>
         <Wave sampleId={clip.sampleId} reverse={clip.reverse} color={track.color} />
         {meta?.aiDescription && <div className="heard" style={{ margin: 0 }}><div className="heard-label"><Ear size={12} /> What the agent heard</div>{meta.aiDescription}</div>}
