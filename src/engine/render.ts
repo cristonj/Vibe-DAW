@@ -8,6 +8,7 @@ import { encodeWav, resample, type PcmData } from './wav';
 import type { ExportFormat } from './exportFormats';
 import { activeSpan, audibleTracks, effectTail, trackTail } from './renderPlan';
 import { frozenFor, playbackSampleRate, type Frozen } from './freeze';
+import { planMp3Chunks } from './mp3frames';
 
 // Offline bounce. Used for exports and — more importantly — for the agent's ears:
 // it renders exactly what the user would hear and hands it to Gemini.
@@ -175,28 +176,35 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
   }
   const assets = await preloadProject({ ...p, tracks: audible.filter((t) => !frozenTracks.has(t.id)) });
   const total = Math.ceil((beatsToSeconds(p, end - start) + tail) * sampleRate);
-  if (opts.stems === false || audible.length <= 1) {
+  // Frozen tracks only stream their buffers, so parallel stems buy nothing for them
+  // and each extra pass costs a full-length run of Tone's clock on the main thread.
+  if (opts.stems === false || audible.length <= 1 || audible.every((t) => frozenTracks.has(t.id))) {
     const one = await renderPass({ project: p, assets, startBeat: start, endBeat: end, tail, sampleRate, onlyTracks: opts.onlyTracks ?? null, bypassMaster: opts.master === false, onProgress: opts.onProgress, frozenTracks });
     return { sampleRate, channels: one };
   }
   const mix = [new Float32Array(total), new Float32Array(total)];
 
-  // Stems, in parallel. Longest first so the pool finishes evenly.
-  const stems = audible
-    .map((t) => ({ t, span: activeSpan(t, start, end) }))
-    .filter((x): x is { t: Track; span: [number, number] } => !!x.span)
-    .sort((a, b) => (b.span[1] - b.span[0]) - (a.span[1] - a.span[0]));
+  // Stems, in parallel: one per live track, plus one shared by all frozen tracks.
+  // Longest first so the pool finishes evenly.
+  const spans = audible
+    .map((t) => ({ tracks: [t], span: activeSpan(t, start, end) }))
+    .filter((x): x is { tracks: Track[]; span: [number, number] } => !!x.span);
+  const frozen = spans.filter((x) => frozenTracks.has(x.tracks[0].id));
+  const stems = spans.filter((x) => !frozenTracks.has(x.tracks[0].id));
+  if (frozen.length) stems.push({ tracks: frozen.flatMap((x) => x.tracks), span: [Math.min(...frozen.map((x) => x.span[0])), Math.max(...frozen.map((x) => x.span[1]))] });
+  stems.sort((a, b) => (b.span[1] - b.span[0]) - (a.span[1] - a.span[0]));
   const weight = stems.reduce((s, x) => s + (x.span[1] - x.span[0]), 0) || 1;
   const done = new Map<string, number>();
   const report = () => opts.onProgress?.(0.92 * [...done.values()].reduce((a, b) => a + b, 0) / weight);
   const workers = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 2) - 1));
-  await pool(stems, workers, async ({ t, span }) => {
+  await pool(stems, workers, async ({ tracks, span }) => {
     const len = span[1] - span[0];
+    const key = tracks[0].id;
     const stem = await renderPass({
-      project: p, assets, startBeat: span[0], endBeat: span[1], tail: Math.max(tail, trackTail(t, p.bpm)), sampleRate,
-      onlyTracks: [t.id], bypassMaster: true,
+      project: p, assets, startBeat: span[0], endBeat: span[1], tail: Math.max(tail, ...tracks.map((t) => trackTail(t, p.bpm))), sampleRate,
+      onlyTracks: tracks.map((t) => t.id), bypassMaster: true,
       frozenTracks,
-      onProgress: (f) => { done.set(t.id, f * len); report(); },
+      onProgress: (f) => { done.set(key, f * len); report(); },
     });
     const offset = Math.round(beatsToSeconds(p, span[0] - start) * sampleRate);
     for (let c = 0; c < 2; c++) {
@@ -216,20 +224,38 @@ export async function renderProject(project: Project, opts: RenderOptions = {}):
   return { sampleRate, channels: out };
 }
 
-/** Encode PCM to MP3 in a worker so the UI stays responsive. */
+/**
+ * Encode PCM to MP3 off the main thread. Long exports are split across several
+ * workers (one core each) and joined frame by frame; see mp3frames.ts.
+ */
 function encodeMp3(pcm: PcmData, kbps: number, onProgress?: (f: number) => void): Promise<Blob> {
-  return new Promise((resolve, reject) => {
+  const [left, right = left] = pcm.channels;
+  const parts = Math.max(1, Math.min(4, globalThis.navigator?.hardwareConcurrency || 2));
+  const chunks = planMp3Chunks(left.length, pcm.sampleRate, kbps, parts);
+  const done = chunks.map(() => 0);
+  const workers: Worker[] = [];
+  const stopAll = () => workers.forEach((w) => w.terminate());
+  return Promise.all(chunks.map((chunk, i) => new Promise<Uint8Array>((resolve, reject) => {
     const worker = new Worker(new URL('./mp3.worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (e: MessageEvent<{ progress?: number; data?: Uint8Array[]; error?: string }>) => {
-      if (e.data.progress !== undefined) onProgress?.(e.data.progress);
-      if (e.data.error) { worker.terminate(); reject(new Error(e.data.error)); }
-      if (e.data.data) { worker.terminate(); resolve(new Blob(e.data.data as BlobPart[], { type: 'audio/mpeg' })); }
+    workers.push(worker);
+    worker.onmessage = (e: MessageEvent<{ progress?: number; data?: Uint8Array; error?: string }>) => {
+      if (e.data.progress !== undefined) {
+        done[i] = e.data.progress * (chunk.to - chunk.from);
+        onProgress?.(done.reduce((a, b) => a + b, 0) / chunks.reduce((n, c) => n + c.to - c.from, 0));
+      }
+      if (e.data.error) reject(new Error(e.data.error));
+      if (e.data.data) { worker.terminate(); resolve(e.data.data); }
     };
-    worker.onerror = (e) => { worker.terminate(); reject(new Error(e.message || 'MP3 encoder failed')); };
-    const [left, right] = pcm.channels;
-    try { worker.postMessage({ left, right: right ?? left, sampleRate: pcm.sampleRate, kbps }, [...new Set([left.buffer, ...(right ? [right.buffer] : [])])]); }
-    catch (e) { worker.terminate(); reject(e); }
-  });
+    worker.onerror = (e) => reject(new Error(e.message || 'MP3 encoder failed'));
+    // A single chunk takes the whole buffers (no copy); split encodes get slices.
+    const whole = chunks.length === 1;
+    const l = whole ? left : left.slice(chunk.from, chunk.to);
+    const r = whole ? right : right.slice(chunk.from, chunk.to);
+    worker.postMessage({ left: l, right: r, sampleRate: pcm.sampleRate, kbps, skip: chunk.skip, keep: chunk.keep }, [...new Set([l.buffer, r.buffer])]);
+  }))).then(
+    (data) => new Blob(data as BlobPart[], { type: 'audio/mpeg' }),
+    (e) => { stopAll(); throw e; },
+  );
 }
 
 /** Bounce and encode. Progress covers rendering (first 80%) then encoding. */
