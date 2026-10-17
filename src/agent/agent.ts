@@ -93,7 +93,7 @@ const VOICE_TAG = /<voice_message id="([^"]+)">[\s\S]*?<\/voice_message>/g;
 function registerVoice(voice: NonNullable<RunOptions['voice']>): string {
   const id = `v${nid()}`;
   runVoices.set(id, { inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(voice.wav) } });
-  return `<voice_message id="${id}">The user spoke this message (${Math.round(voice.seconds)} s recording attached just before this text). Listen to it: it is their request, in their own words and tone.</voice_message>`;
+  return `<voice_message id="${id}">The user spoke this message (${Math.round(voice.seconds)} s recording attached just before this text). Listen to it: it is their request, in their own words and tone. If they hum or sing a tune, treat it as the melody or rhythm they want.</voice_message>`;
 }
 
 function withVoices(history: Content[]): Content[] {

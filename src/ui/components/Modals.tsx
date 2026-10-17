@@ -115,6 +115,10 @@ function AiSettings() {
         </select>
         <small>Applies to the next mix review, sample audition or reference track.</small>
       </label>
+      <label className="toggle">
+        <input type="checkbox" checked={s.micNoiseSuppression} onChange={(e) => s.set({ micNoiseSuppression: e.target.checked })} />
+        <span>Mic noise suppression<small>Cleans up background noise in voice messages. Turn it off to hum or sing a tune: suppression can mute or warble held notes.</small></span>
+      </label>
       {firebaseConfigured && (
         <div className="field">
           <span>Account</span>
