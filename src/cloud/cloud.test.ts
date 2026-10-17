@@ -47,7 +47,7 @@ describe('project and audio cloud sync', () => {
     t.clips.push(createAudioClip(p, 's1', 0, 4));
     p.tracks.push(t);
     await cloud.saveProjectToCloud(p);
-    expect(mocks.syncSamples).toHaveBeenCalledWith(['s1'], false);
+    expect(mocks.syncSamples).toHaveBeenCalledWith(['s1'], false, 'a');
     expect(mocks.syncSamples.mock.invocationCallOrder[0]).toBeLessThan(mocks.setDoc.mock.invocationCallOrder[0]);
   });
 

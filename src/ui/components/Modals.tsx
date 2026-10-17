@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from 'lucide-react';
-import { useSettings, MODELS, type Thinking } from '../../state/settings';
+import { useSettings, MODELS, MAX_CUSTOM_INSTRUCTIONS, type Thinking } from '../../state/settings';
 import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
 import { useAuth, signIn, signOut } from '../../cloud/cloud';
 import { usePersist, openProject, newProject, deleteProject, duplicateProject, syncNow } from '../../state/persistence';
@@ -9,6 +9,8 @@ import { relativeTime } from '../hooks';
 import { toast } from '../toast';
 import { ACTIONS, bindings, comboFromEvent, useKeymap, type ActionId } from '../../state/keymap';
 import { ACCENTS, THEMES, useTheme, type ThemeId } from '../../state/theme';
+import { importMidiFile } from '../midiActions';
+import { openSavePreset } from './SavePreset';
 import { importProjectFile } from '../../state/projectFile';
 
 function Modal({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
@@ -94,6 +96,11 @@ function AiSettings() {
           <option value="HIGH">High — best musical decisions, slower</option>
         </select>
       </label>
+      <label className="field">
+        <span>Custom instructions</span>
+        <textarea rows={5} maxLength={MAX_CUSTOM_INSTRUCTIONS} value={s.customInstructions} onChange={(e) => s.set({ customInstructions: e.target.value })} placeholder="My usual style is warm, sparse neo-soul. Keep drums human. Explain your edits briefly." aria-label="Custom instructions" />
+        <small>Applies to every Agent, Ask and Ctrl+K chat. {user ? 'Synced to your account.' : 'Saved on this device.'} {s.customInstructions.length}/{MAX_CUSTOM_INSTRUCTIONS}</small>
+      </label>
       <label className="toggle">
         <input type="checkbox" checked={s.autoListen} onChange={(e) => s.set({ autoListen: e.target.checked })} />
         <span>Let the agent listen<small>It bounces audio and sends it to Gemini to audition samples and check the mix.</small></span>
@@ -131,7 +138,7 @@ function AiSettings() {
           ) : (
             <>
               <button className="btn solid" onClick={() => signIn().catch((e) => toast(e.message, 'error'))}>Sign in with Google to sync</button>
-              <small>Syncs projects, your API key, AI settings, theme and keyboard shortcuts across devices. Interface size and output latency stay per device.</small>
+              <small>Syncs projects, your library, API key, custom instructions, AI settings, theme and keyboard shortcuts across devices. Interface size and output latency stay per device.</small>
             </>
           )}
         </div>
@@ -291,14 +298,15 @@ export function ProjectsModal({ onClose }: { onClose: () => void }) {
         {!projects.length && <div className="dock-empty">No saved projects yet.</div>}
       </div>
       <div className="modal-actions">
-        <input ref={fileRef} type="file" accept=".vibe,application/json" hidden onChange={(e) => {
+        <input ref={fileRef} type="file" accept=".vibe,.mid,.midi,application/json,audio/midi" hidden onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = '';
           if (!file) return;
           setImporting(true);
-          void file.text().then(importProjectFile).then(() => { toast('Project imported'); onClose(); }).catch((e) => toast(`Import failed: ${(e as Error).message}`, 'error')).finally(() => setImporting(false));
+          void (/\.midi?$/i.test(file.name) ? importMidiFile(file).then((result) => { toast(`Imported ${result.tracks} MIDI tracks`); if (result.warnings.length) toast(result.warnings.join(' ')); }) : file.text().then(importProjectFile).then(() => toast('Project imported'))).then(() => onClose()).catch((e) => toast(`Import failed: ${(e as Error).message}`, 'error')).finally(() => setImporting(false));
         }} />
-        <button className="btn" disabled={importing} onClick={() => fileRef.current?.click()}>{importing ? 'Importing…' : 'Import .vibe project'}</button>
+        <button className="btn" disabled={importing} onClick={() => fileRef.current?.click()}>{importing ? 'Importing…' : 'Import .vibe / MIDI'}</button>
+        <button className="btn" onClick={() => openSavePreset({ kind: 'template', name: useDaw.getState().project.name })}>Save as template</button>
         <button className="btn" onClick={() => void duplicateProject().then(onClose)}><Copy size={14} /> Duplicate current</button>
         <button className="btn primary" onClick={() => void newProject().then(onClose)}><Plus size={14} /> New project</button>
       </div>

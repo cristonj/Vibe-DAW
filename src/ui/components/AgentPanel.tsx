@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Square, Ear, Sparkles, Drum, Piano, Plus, SlidersHorizontal, Search, AudioLines, Gauge, Layers, Scissors, Play, Check,
   RotateCcw, Paperclip, X, Brain, ListChecks, Trash, Pencil, Music, Repeat, CircleStop, Eye, Mic, LoaderCircle, Pause,
@@ -10,6 +10,10 @@ import { useDaw } from '../../state/store';
 import { Markdown } from '../Markdown';
 import { shuffledSuggestions } from '../../agent/suggestions';
 import { Shuffle } from 'lucide-react';
+import { useLibrary } from '../../samples/library';
+import { usePresets } from '../../state/presetLibrary';
+import { attachChatReference, chatReferenceCatalog, resolveChatReferences, serializeChatReference, useChatReferences, type ChatReference } from '../chatReferences';
+import { AtSign, MessageSquarePlus } from 'lucide-react';
 import { toast } from '../toast';
 import { MAX_VOICE_SECONDS, useVoiceRecorder, voiceSupported, type VoiceClip } from '../voice';
 
@@ -23,7 +27,7 @@ const TOOL_ICONS: Record<string, typeof Ear> = {
 
 function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan' }>; pinned?: boolean }) {
   const done = item.steps.filter((s) => s.status === 'done').length;
-  return <details className={`plan ${pinned ? 'pinned-plan' : ''}`} open>
+  return <details data-chat-ref={`chat:${item.id}`} className={`plan ${pinned ? 'pinned-plan' : ''}`} open>
     <summary className="plan-title"><ListChecks size={14} /><b>Checklist</b><span>{done}/{item.steps.length}</span></summary>
     <div className="plan-steps">{item.steps.map((s, i) => (
       <div key={i} className={`plan-step ${s.status}`}>
@@ -31,6 +35,7 @@ function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan'
         {s.title}
       </div>
     ))}</div>
+    <button className="btn" onClick={() => attachChatReference(`chat:${item.id}`)}><MessageSquarePlus size={12} /> Add checklist to chat</button>
   </details>;
 }
 
@@ -51,9 +56,9 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
         </div>
       </div>
       {item.heard && (
-        <section className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
-          <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b><span>Producer notes</span></header>
-          <div className="review-notes"><Markdown text={item.heard} /></div>
+        <section data-chat-ref={`review:${item.id}`} className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
+          <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b><span>Producer notes</span><button className="btn icon" onClick={() => attachChatReference(`review:${item.id}`)} aria-label="Add Producer notes to chat" title="Add these Producer notes to chat"><MessageSquarePlus size={13} /></button></header>
+          <div className="review-notes" tabIndex={0} aria-label="Producer review notes"><Markdown text={item.heard} /></div>
         </section>
       )}
     </>
@@ -94,7 +99,7 @@ function Item({ item }: { item: ChatItem }) {
       );
     case 'assistant':
       return (
-        <div className="msg-ai">
+        <div className="msg-ai" data-chat-ref={`chat:${item.id}`}>
           {item.thinking && (
             <details className="thinking">
               <summary><Brain size={12} /> {item.streaming && !item.text ? 'Thinking…' : 'Thought process'}</summary>
@@ -102,6 +107,7 @@ function Item({ item }: { item: ChatItem }) {
             </details>
           )}
           {item.text && <div className={item.streaming ? 'cursor-blink' : ''}><Markdown text={item.text} /></div>}
+          {!item.streaming && item.text && <button className="btn msg-add" onClick={() => attachChatReference(`chat:${item.id}`)} aria-label="Add message to chat"><MessageSquarePlus size={12} /> Add to chat</button>}
         </div>
       );
     case 'tool':
@@ -140,6 +146,17 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   const [text, setText] = useState('');
   const [suggestions, setSuggestions] = useState(() => shuffledSuggestions('song'));
   useEffect(() => { setSuggestions(shuffledSuggestions(mode === 'ask' ? 'ask' : 'song')); }, [mode]);
+  const project = useDaw((s) => s.project);
+  const selection = useDaw((s) => s.selection);
+  const samples = useLibrary((s) => s.samples), presets = usePresets((s) => s.records);
+  const pending = useChatReferences((s) => s.pending);
+  const extras = useChatReferences((s) => s.extras);
+  const [caret, setCaret] = useState(0), [mentionIndex, setMentionIndex] = useState(0);
+  const [recentReferences, setRecentReferences] = useState<ChatReference[]>([]);
+  const mention = text.slice(0, caret).match(/(?:^|\s)@([^\n@]*)$/);
+  const mentionQuery = mention?.[1].toLowerCase();
+  const catalog = useMemo(() => mention ? chatReferenceCatalog() : [], [mentionQuery, project, selection, samples, presets, items, recentReferences, extras]);
+  const choices = catalog.filter((r) => `${r.label} ${r.kind} ${r.id}`.toLowerCase().includes(mentionQuery ?? '')).slice(0, 12);
   const [attachments, setAttachments] = useState<Array<{ name: string; text: string }>>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -156,6 +173,18 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   const recording = recorder.state === 'recording';
   const latestPlan = items.findLast((it): it is Extract<ChatItem, { kind: 'plan' }> => it.kind === 'plan');
 
+  useEffect(() => { setMentionIndex(0); }, [mentionQuery]);
+  useEffect(() => {
+    const extras: ChatReference[] = items.flatMap((item) => {
+      if (item.kind === 'tool' && item.heard) return [{ id: `review:${item.id}`, label: item.summary || 'Producer notes', kind: 'Producer review', text: item.heard }];
+      if (item.kind === 'plan') return [{ id: `chat:${item.id}`, label: 'Producer checklist', kind: 'Checklist', text: item.steps.map((s) => `${s.status}: ${s.title}`).join('\n') }];
+      if (item.kind === 'assistant' && item.text) return [{ id: `chat:${item.id}`, label: item.text.slice(0, 80), kind: 'Chat message', text: item.text }];
+      return [];
+    });
+    useChatReferences.setState({ extras: [...extras, ...recentReferences] });
+  }, [items, recentReferences]);
+  useEffect(() => { useChatReferences.setState({ pending: [] }); setAttachments([]); setRecentReferences([]); }, [project.id]);
+
   useEffect(() => { if (focusSignal) taRef.current?.focus(); }, [focusSignal]);
 
   useEffect(() => {
@@ -164,8 +193,13 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   }, [items]);
 
   const dispatch = (t: string, voice?: VoiceClip) => {
-    const att = attachments.map((a) => `<reference_track name="${a.name}">\n${a.text}\n</reference_track>`);
-    void runAgent(t, { attachments: att, voice });
+    const avail = aiAvailable();
+    if (!avail.ok) { toast(avail.reason!, 'error'); window.dispatchEvent(new Event('vibe:open-settings')); return; }
+    const references = resolveChatReferences();
+    const att = [...attachments.map((a) => `<reference_track>\n${JSON.stringify(a)}\n</reference_track>`), ...references.map(serializeChatReference)];
+    const focusSelection = references.findLast((r) => r.selection)?.selection;
+    void runAgent(t || 'Please review the attached references.', { attachments: att, focusSelection, voice });
+    useChatReferences.setState({ pending: [] });
     setText('');
     setAttachments([]);
     stick.current = true;
@@ -178,8 +212,17 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
       if (clip) dispatch(textRef.current, clip);
       return;
     }
-    if (!t.trim()) return;
+    if (!t.trim() && !pending.length && !attachments.length) return;
     dispatch(t);
+  };
+
+  const pickMention = (id: string) => {
+    if (!mention) return;
+    attachChatReference(id);
+    const at = caret - mention[1].length - 1;
+    const next = text.slice(0, at) + text.slice(caret);
+    setText(next); setCaret(at);
+    requestAnimationFrame(() => { taRef.current?.focus(); taRef.current?.setSelectionRange(at, at); });
   };
 
   const startVoice = () => {
@@ -195,6 +238,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
     try {
       const breakdown = await analyzeReference(await file.arrayBuffer(), file.name);
       setAttachments((a) => [...a, { name: file.name, text: breakdown }]);
+      setRecentReferences((refs) => [...refs, { id: `reference:${Date.now()}`, label: file.name, kind: 'Reference track', text: breakdown }]);
       toast(`Listened to ${file.name}`);
     } catch (e) {
       toast(`Couldn't analyze ${file.name}: ${(e as Error).message}`, 'error');
@@ -211,7 +255,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
           <button className={mode === 'agent' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('agent')} role="radio" aria-checked={mode === 'agent'} title="The agent edits your project">Agent</button>
           <button className={mode === 'ask' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('ask')} role="radio" aria-checked={mode === 'ask'} title="Read-only: questions and feedback">Ask</button>
         </div>
-        <button className="btn icon" title="New chat" disabled={running} onClick={() => useAgent.getState().clear()}><Plus size={15} /></button>
+        <button className="btn icon" title="New chat" disabled={running} onClick={() => { useAgent.getState().clear(); useChatReferences.setState({ pending: [] }); setText(''); setAttachments([]); setRecentReferences([]); }}><Plus size={15} /></button>
         <button className="btn icon drawer-close" onClick={onClose} aria-label="Close Producer panel"><X size={16} /></button>
       </div>
 
@@ -240,8 +284,9 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
               {recording && <button className="btn" onClick={recorder.cancel} aria-label="Discard voice message"><X size={13} /> Discard</button>}
             </div>
           )}
-          {(attachments.length > 0 || analyzing) && (
+          {(attachments.length > 0 || pending.length > 0 || analyzing) && (
             <div className="composer-row" style={{ flexWrap: 'wrap' }}>
+              {pending.map((r) => <span className="attach-chip" key={r.id}><AtSign size={11} /><span>{r.label}</span><button onClick={() => useChatReferences.setState((s) => ({ pending: s.pending.filter((p) => p.id !== r.id) }))} aria-label={`Remove ${r.label}`}><X size={11} /></button></span>)}
               {attachments.map((a, i) => (
                 <span className="attach-chip" key={i} title={a.text}>
                   <Ear size={11} /> {a.name}
@@ -251,16 +296,33 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
               {analyzing && <span className="attach-chip"><Ear size={11} /> Listening to reference…</span>}
             </div>
           )}
+          {mention && <div className="mention-picker" role="listbox" aria-label="Add a project reference">
+            <div className="mention-heading">Add to chat · ↑↓ choose · Enter to attach</div>
+            {choices.map((r, i) => <button type="button" role="option" aria-selected={i === mentionIndex} className={i === mentionIndex ? 'active' : ''} key={r.id} onPointerDown={(e) => e.preventDefault()} onClick={() => pickMention(r.id)}><b>{r.label}</b><small>{r.kind} · {r.id}</small></button>)}
+            {!choices.length && <p>No matching references. Try a track, clip, effect, section, sound, saved item, note or review.</p>}
+          </div>}
           <textarea
             ref={taRef}
             value={text}
             rows={2}
             placeholder={recording ? 'Talk now. Tap send when you’re done (you can add a typed note too).' : running ? 'Steer the agent while it works…' : mode === 'agent' ? 'Describe what to make or change…' : 'Ask about your track…'}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
+            onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart); }}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+            onKeyDown={(e) => {
+              if (mention && !e.nativeEvent.isComposing) {
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCaret(0); return; }
+                if (choices.length && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(e.key) && !e.shiftKey) {
+                  e.preventDefault(); e.stopPropagation();
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') setMentionIndex((i) => (i + (e.key === 'ArrowDown' ? 1 : choices.length - 1)) % choices.length);
+                  else pickMention(choices[Math.min(mentionIndex, choices.length - 1)].id);
+                  return;
+                }
+              }
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
             aria-label="Message the agent"
           />
           <div className="composer-row">
+            <button className="btn icon" aria-label="Mention a project item" title="Attach tracks, clips, effects, sounds, notes and Producer reviews (@)" onClick={() => { const next = text + (text && !/\s$/.test(text) ? ' ' : '') + '@'; setText(next); setCaret(next.length); requestAnimationFrame(() => { taRef.current?.focus(); taRef.current?.setSelectionRange(next.length, next.length); }); }}><AtSign size={15} /></button>
             <button className="btn icon" title="Attach a reference track — the agent listens and matches its style" onClick={() => fileRef.current?.click()} disabled={analyzing}><Paperclip size={15} /></button>
             <input ref={fileRef} type="file" accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = ''; }} />
             <select
@@ -286,11 +348,11 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
             {running && (
               <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} fill="currentColor" /></button>
             )}
-            <button className={`send ${recording ? 'recording' : ''}`} onClick={() => void send()} disabled={(!text.trim() && !recording) || analyzing || recorder.state === 'encoding'} title={recording ? 'Send voice message (Enter)' : running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={recording ? 'Send voice message' : running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
+            <button className={`send ${recording ? 'recording' : ''}`} onClick={() => void send()} disabled={(!text.trim() && !recording && !pending.length && !attachments.length) || analyzing || recorder.state === 'encoding'} title={recording ? 'Send voice message (Enter)' : running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={recording ? 'Send voice message' : running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
           </div>
         </div>
         <div className="agent-foot">
-          <span className="hide-touch">Shift-drag a region · Ctrl+K to edit</span>
+          <span className="hide-touch">Type @ to attach · Shift-drag + Ctrl+K to edit</span>
           {context.compactions > 0 && <span title="Older exchanges are summarized automatically. The agent can also manage its own working memory.">Memory compacted {context.compactions}×</span>}
           {tokens.input + tokens.output > 0 && <span>{Math.round((tokens.input + tokens.output) / 1000)}k tokens</span>}
         </div>

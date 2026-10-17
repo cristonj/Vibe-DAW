@@ -146,6 +146,19 @@ export interface Section {
   length: number;
 }
 
+export interface Annotation {
+  id: string;
+  kind: 'note' | 'lyric';
+  text: string;
+  /** Song beats, independent of audio or vocal tracks. */
+  start: number;
+  length: number;
+  trackId?: string;
+  author: 'user' | 'producer';
+  resolved?: boolean;
+  aiPending?: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -157,6 +170,7 @@ export interface Project {
   swing: number;
   tracks: Track[];
   sections: Section[];
+  annotations?: Annotation[];
   loop: { enabled: boolean; start: number; end: number };
   master: { volumeDb: number; effects: Effect[] };
   /** Monotonic counter used to mint short, agent-friendly ids (t3, c12, fx4). */

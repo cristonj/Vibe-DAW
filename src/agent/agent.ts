@@ -331,7 +331,7 @@ export function stopAgent() {
 /** Accept: clear the "unreviewed" highlight on AI-made clips. */
 export function keepChanges(itemId: string) {
   useDaw.setState((s) => {
-    const next = produce(s.project, (d) => { for (const t of d.tracks) for (const c of t.clips) if (c.aiPending) delete c.aiPending; });
+    const next = produce(s.project, (d) => { for (const t of d.tracks) for (const c of t.clips) if (c.aiPending) delete c.aiPending; for (const a of d.annotations ?? []) delete a.aiPending; });
     // A new version, so other signed-in devices pick up the acceptance too.
     return { project: next === s.project ? next : { ...next, updatedAt: Date.now() } };
   });

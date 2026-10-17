@@ -11,7 +11,7 @@ It's Cursor for music: the agent edits your session the way Cursor edits your co
 ## What makes it agent-native
 
 - **Ears, not just eyes.** Gemini is multimodal, so the agent auditions samples and critiques real offline bounces of your song (rendered by the same engine you hear), paired with measured loudness, spectrum balance, and stereo data.
-- **A DAW API built for a model.** ~30 tools speak producer: step-string drum patterns with trap rolls (`x.x.3.4.`), chord symbols with strum/arpeggio/voice-leading, 1-based bars, `copy_bars`/`clear_bars` arrangement moves, sidechain ducking, sound design, resampling.
+- **A DAW API built for a model.** Tools speak producer: step-string drum patterns with trap rolls (`x.x.3.4.`), chord symbols with strum/arpeggio/voice-leading, 1-based bars, `copy_bars`/`clear_bars` arrangement moves, sidechain ducking, sound design, resampling.
 - **No generated audio.** Every sound is a real instrument, your own samples, or something synthesized from parameters. The agent composes and produces; it never prints audio from a text prompt.
 - **Review like code.** Agent-made clips are drawn in lilac until you **Keep** them. Each run ends with a change summary and **Undo all**; every message has a checkpoint you can restore.
 - **Ctrl+K inline edits.** Shift-drag a region across tracks or select notes, then press Ctrl+K, say "add hi-hat rolls" or "make it sadder" — the agent receives exact note IDs and timing and can rewrite just that phrase. Touch screens have Range / Select controls and an Edit selection button.
@@ -26,7 +26,7 @@ cp .env.example .env.local   # optional: set VITE_GEMINI_API_KEY for local dev
 npm run dev                  # landing: http://localhost:5173; studio: /studio
 ```
 
-No key in the env? The first time you message the agent it asks for a Gemini API key from [AI Studio](https://aistudio.google.com/apikey) (free tier available). The key is stored only in your browser and sent only to Google.
+No key in the env? The first time you message the agent it asks for a Gemini API key from [AI Studio](https://aistudio.google.com/apikey) (free tier available). The key is saved in your browser and used for requests to Google; when signed in, AI settings also sync through your private account preferences.
 
 By default every build is **bring-your-own-key**, so a public deployment costs the host nothing for AI. Set `VITE_HOSTED_AI=true` to instead route Gemini through Firebase AI Logic on the host's project.
 
@@ -43,6 +43,10 @@ npm run build
 Vibe includes offline Analog Brass, FM Bass, Marimba, Kalimba, Chip Keys, and Glass Pad alongside the existing instruments. Use the four-band Parametric EQ for precise tone shaping; duplicate effects or move them through the chain. The Producer can reorder effects too.
 
 The **Online** sound-browser tab and the Producer's `search_online_sounds` / `import_online_sound` tools search Wikimedia Commons without an API key. Imports retain authorship, license, and source, including in portable `.vibe` projects. Use **Export → Sound credits (.txt)** when sharing a song; check each source's license requirements. Online imports are limited to 16 MB / three minutes each.
+
+Save phrases, instrument/kit sounds, samples, effect profiles and full project templates in the **Library** tab. Device items work offline; signed-in libraries sync to the account, including audio. **Settings → AI → Custom instructions** applies your preferences across chats. Import standard MIDI files as editable tracks.
+
+Use **Notes & lyrics** to place production notes and timed lyrics anywhere in the arrangement, even without a vocal track. The Producer can read and edit them; export lyrics as LRC. Type **@** in chat or use **Add to chat** / right-click to reference tracks, clips, effects, sounds, cues, library items and Producer reviews. See [studio workflows and remaining production gaps](docs/studio-workflows.md).
 
 Producer and inline suggestions draw from a varied shuffled pool. **More ideas** refreshes the choices without changing your typed request.
 

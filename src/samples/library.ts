@@ -137,11 +137,12 @@ export function mergeRemoteSamples(samples: SampleMeta[]) {
 }
 
 /** Upload referenced local audio before the project is reported as synced. */
-export async function syncSamples(ids: Iterable<string>, localOnly = false): Promise<void> {
+export async function syncSamples(ids: Iterable<string>, localOnly = false, ownerUid?: string): Promise<void> {
   if (!remoteUploader) return;
   for (const id of new Set(ids)) {
     const meta = getSampleMeta(id);
-    if (meta?.source === 'builtin' || meta?.storagePath || id.startsWith('b-')) continue;
+    const owned = meta?.storagePath && (!ownerUid || meta.storagePath.startsWith(`users/${ownerUid}/samples/`));
+    if (meta?.source === 'builtin' || owned || id.startsWith('b-')) continue;
     if (!meta) {
       if (localOnly) continue;
       throw new Error(`Audio file ${id} is missing on this device. Sync the song from the original computer.`);

@@ -105,3 +105,14 @@ describe('sample transfer between devices', () => {
     await expect(lib.syncSamples(['s-local'])).rejects.toThrow('original computer');
   });
 });
+
+
+it('uploads an explicitly reused sound into the current account even if another account owns its previous cloud path', async () => {
+  lib.useLibrary.getState().upsert({ ...meta(), storagePath: 'users/alice/samples/s-local' });
+  mocks.data.set('vibe:sample:s-local', audio());
+  const upload = vi.fn(async () => 'users/bob/samples/s-local'); lib.setRemoteSampleUploader(upload);
+  await lib.syncSamples(['s-local'], false, 'bob');
+  expect(upload).toHaveBeenCalledTimes(1);
+  expect(lib.getSampleMeta('s-local')?.storagePath).toBe('users/bob/samples/s-local');
+  await lib.syncSamples(['s-local'], false, 'bob'); expect(upload).toHaveBeenCalledTimes(1);
+});

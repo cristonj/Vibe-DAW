@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useDaw } from '../../state/store';
 import { findClip, findTrack } from '../../model/project';
+import { AnnotationsPanel } from './Annotations';
 import { PianoRoll } from './PianoRoll';
 import { DrumEditor } from './DrumEditor';
 import { AudioEditor } from './AudioEditor';
@@ -63,12 +64,14 @@ export function Dock() {
         <button className={`tab ${panel === 'editor' ? 'active' : ''}`} onClick={() => setBottom('editor')} title="Edit the notes, drum steps, or audio of the selected clip">Clip editor{found && <span className="tab-detail"> · {found.clip.name}</span>}</button>
         <button className={`tab ${panel === 'mixer' ? 'active' : ''}`} onClick={() => setBottom('mixer')} title="Volume, pan, mute and solo for every track">Mixer</button>
         <button className={`tab ${panel === 'track' ? 'active' : ''}`} onClick={() => setBottom('track')} title="Change the selected track's instrument and effects">{inspectTrack ? <>Sound &amp; FX<span className="tab-detail"> · {inspectTrack.name}</span></> : 'Master FX'}</button>
+        <button className={`tab ${panel === 'notes' ? 'active' : ''}`} onClick={() => setBottom('notes')}>Notes &amp; lyrics</button>
         <div className="spacer" />
         <button className="btn icon" onClick={toggleBottom} aria-label={open ? 'Collapse dock' : 'Expand dock'} style={{ transform: open ? 'none' : 'rotate(180deg)' }}><ChevronDown size={16} /></button>
       </div>
       {open && (
         <div className="dock-body">
           {panel === 'editor' && editor}
+          {panel === 'notes' && <AnnotationsPanel />}
           {panel === 'mixer' && <Mixer />}
           {panel === 'track' && <TrackInspector track={inspectTrack} project={project} />}
         </div>

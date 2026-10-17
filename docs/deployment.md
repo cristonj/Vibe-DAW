@@ -35,3 +35,9 @@ Authentication uses GitHub OIDC and Google Workload Identity Federation with sho
 The workflow validates that the three variables exist before authenticating. Its actions are pinned to commit SHAs and Firebase CLI is pinned to `15.34.0`. Deployment runs are serialized without cancelling an in-progress rules update. Keep environment approval settings consistent with your desired automatic deployment policy.
 
 No live Firebase deployment is performed when developing or testing this PR. The actual project/provider/account must be configured by an administrator before the workflow can deploy.
+
+## Library rules and local verification
+
+Account library records live under `users/{uid}/library/{itemId}` and use the existing owner-only sample metadata and Storage paths. Deploy the rules before testing account library sync on a hosted build; otherwise the UI retains local saves and reports the permission error. Custom instructions use the existing owner-only `prefs/main` AI section. No additional index is needed for the library listener.
+
+`npm run test:rules` runs owner/isolation/payload/tombstone/preferences checks against the local Firestore emulator using the pinned Firebase CLI. Install Java 21 first. The CI rules job installs Java and runs these tests independently of browser checks. The `demo-vibe-tests` emulator project never accesses a live Firebase project.

@@ -48,3 +48,34 @@ describe('checklist tool', () => {
     expect(out.result.error).toContain('Create a checklist');
   });
 });
+
+import { createProject } from '../model/project';
+import { useDaw } from '../state/store';
+
+describe('annotation tools', () => {
+  it('writes timed lyrics with no audio track, supports editing/resolve/delete and one-step undo', async () => {
+    useDaw.getState().replaceProject(createProject());
+    useDaw.getState().beginTransaction('Producer writing cues');
+    const added = await runTool('add_annotation', { text: 'Under the city lights', kind: 'lyric', start_bar: 3, end_bar: 5 }, context(), 'agent');
+    const id = added.result.annotation_id;
+    expect(useDaw.getState().project.annotations?.[0]).toMatchObject({ id, start: 8, length: 8, author: 'producer', aiPending: true });
+    await runTool('edit_annotation', { annotation_id: id, text: 'Under neon skies', end_bar: 4 }, context(), 'agent');
+    const read = await runTool('list_annotations', { start_bar: 3, end_bar: 5 }, context(), 'ask');
+    expect(read.result.annotations).toMatchObject([{ text: 'Under neon skies', length: 4 }]);
+    const blocked = await runTool('delete_annotation', { annotation_id: id }, context(), 'ask');
+    expect(blocked.result.error).toContain('read-only');
+    useDaw.getState().endTransaction(); useDaw.getState().undo();
+    expect(useDaw.getState().project.annotations).toEqual([]);
+    useDaw.getState().redo();
+    await runTool('delete_annotation', { annotation_id: id }, context(), 'agent');
+    expect(useDaw.getState().project.annotations).toEqual([]);
+  });
+  it('rejects invalid text, timing, association or kind without partial writes', async () => {
+    useDaw.getState().replaceProject(createProject());
+    for (const patch of [{ text: ' ' }, { end_bar: 1 }, { start_bar: -1 }, { kind: 'vocal' }, { track_id: 'missing' }, { text: 'x'.repeat(4001) }]) {
+      const result = await runTool('add_annotation', { text: 'note', kind: 'note', start_bar: 1, end_bar: 2, ...patch }, context(), 'agent');
+      expect(result.result).toHaveProperty('error');
+    }
+    expect(useDaw.getState().project.annotations).toEqual([]);
+  });
+});

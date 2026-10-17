@@ -59,7 +59,9 @@ export function initEngine() {
   useDaw.subscribe((s, prev) => {
     if (s.project !== prev.project) {
       if (s.project.id !== prev.project.id) stop(true);
-      queueSync(s.project);
+      const p = s.project, old = prev.project;
+      // Text-only cues, section names and project metadata do not touch playback.
+      if (p.id !== old.id || p.bpm !== old.bpm || p.swing !== old.swing || p.timeSignature !== old.timeSignature || p.tracks !== old.tracks || p.master !== old.master || p.loop !== old.loop) queueSync(p);
     }
   });
   useTransport.subscribe((s, prev) => {

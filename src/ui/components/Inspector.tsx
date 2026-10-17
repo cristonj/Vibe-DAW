@@ -1,5 +1,7 @@
+import { AddToChat } from './AddToChat';
 import { useMemo, useRef, useState } from 'react';
-import { Play, Trash, Plus, Power, CopyPlus, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { Play, Trash, Plus, Power, CopyPlus, Bookmark, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { openSavePreset } from './SavePreset';
 import { useDaw } from '../../state/store';
 import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams } from '../../model/catalog';
 import type { Effect, EffectType, Project, Track } from '../../model/types';
@@ -101,12 +103,13 @@ function EffectCard({ fx, index, count, onChange, onRemove, onMove, onDuplicate,
   const info = EFFECT_BY_TYPE[fx.type];
   const presets = FX_PRESETS[fx.type];
   return (
-    <div className={`card fx-card ${fx.enabled ? '' : 'bypassed'}`}>
+    <div data-chat-ref={`effect:${fx.id}`} className={`card fx-card ${fx.enabled ? '' : 'bypassed'}`}>
       <div className="card-head">
         <button className={`fx-power ${fx.enabled ? 'on' : ''}`} onClick={() => onChange((x) => { x.enabled = !x.enabled; })} title={fx.enabled ? 'Bypass this effect' : 'Turn this effect back on'} aria-pressed={fx.enabled}>
           <Power size={12} />
         </button>
         <span className="fx-name" title={info.description}>{info.name}</span>
+        <AddToChat referenceId={`effect:${fx.id}`} label={info.name} />
         <div className="spacer" />
         {presets && (
           <select
@@ -162,6 +165,7 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
   const list = (d: Project) => (ownerId === 'master' ? d.master.effects : d.tracks.find((t) => t.id === ownerId)!.effects);
   return (
     <>
+      <div className="library-chain-save"><button className="btn" disabled={!effects.length} onClick={() => openSavePreset({ kind: 'effects', name: `${ownerId === 'master' ? 'Master' : project.tracks.find((t) => t.id === ownerId)?.name ?? 'Track'} effects`, trackId: ownerId })}><Bookmark size={13} /> Save effect profile</button></div>
       {effects.map((fx, i) => (
         <EffectCard
           key={fx.id}
@@ -256,6 +260,7 @@ export function TrackInspector({ track, project }: { track: Track | null; projec
   const setTrack = (label: string, fn: (t: Track) => void) => update(label, (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) fn(t); }, { coalesce: true });
   return (
     <div className="inspector">
+      <div className="library-chain-save"><button className="btn" onClick={() => openSavePreset({ kind: 'sound', name: track.name, trackId: track.id })}><Bookmark size={13} /> Save track sound</button></div>
       {track.kind === 'instrument' && track.instrument && (
         <div className="card">
           <div className="card-head">Instrument</div>

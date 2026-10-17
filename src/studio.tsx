@@ -6,6 +6,8 @@ import { loadEngineOnFirstGesture } from './engine/api';
 import { useDaw } from './state/store';
 import { loadInitialProject, startAutosave, startCloudSync } from './state/persistence';
 import { initCloud } from './cloud/cloud';
+import { switchPresetAccount } from './state/presetLibrary';
+import { startPresetSync } from './cloud/presetSync';
 import { applyTheme } from './state/theme';
 
 let bootPromise: Promise<void> | null = null;
@@ -14,11 +16,12 @@ function boot() { return bootPromise ??= initialize(); }
 async function initialize() {
   applyTheme();
   await initLibrary();
+  await switchPresetAccount(null);
   const project = await loadInitialProject();
   useDaw.getState().replaceProject(project);
   loadEngineOnFirstGesture();
   startAutosave();
-  void initCloud().then(startCloudSync);
+  void initCloud().then(() => { startCloudSync(); startPresetSync(); });
   if (import.meta.env.DEV) {
     // Dev-only handle for automated smoke tests: drive tools and renders without the LLM.
     // Audio modules (render/engine) go through the lazy facade so dev also stays gesture-clean.

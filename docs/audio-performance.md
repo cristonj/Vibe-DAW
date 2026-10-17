@@ -13,6 +13,7 @@ Vibe uses the same Web Audio / Tone graph for playback and offline export. Exist
 - Freeze jobs check memory before allocating native contexts, retain the existing 64 MiB in-flight ceiling, and release invalid cached audio before reserving replacements.
 - Very large offline outputs fail with an actionable memory-budget error before allocation (128 MiB output on constrained devices, 512 MiB on desktop). Long arrangements still play live if they cannot be frozen. These are conservative application limits, not guarantees about a browser's available memory.
 - WAV 16/24-bit conversion runs in a dedicated worker with transferable PCM buffers. MP3 already uses workers and now shares the device concurrency policy.
+- Annotation/lyric edits bypass graph synchronization; they do not interrupt playback or invalidate freezes.
 - The landing page lazily loads the workstation; it never initializes audio, Firebase, AI, or project storage.
 - Drum-editor hit lookup is indexed once per edit/resolution rather than scanning every note for every visible step.
 
@@ -34,3 +35,5 @@ For a system Chromium installation, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/pa
 The browser suite covers desktop and mobile-sized Chromium, the landing route's lazy-loading boundary, Shift-drag selection inside a clip, touch Select/Range controls, piano/drum selection, six new offline instruments through Parametric EQ, WAV encoding/decoding, and playback during edits. It also automates the existing freeze-buffer and live/frozen export parity fixtures. Tests use real browser audio APIs without AI keys.
 
 Mobile emulation exercises touch layout, UA resource policy and browser behavior; it is not a hardware benchmark or a substitute for physical iOS/Android testing. Large projects, sample downloads, browser thermal throttling and available memory can dominate real-world results. The manual DSP fixtures remain under `tests/browser/` for profiling on target hardware.
+
+The studio suite also covers library persistence/reuse/templates, custom instructions, MIDI file import, timed writing cues without vocal tracks, Producer review scrolling, equivalent click/right-click/mention attachments, and measured tooltip bounds at interface zoom. Firestore ownership and library sync conflicts have separate emulator/unit coverage; no live account or Gemini requests are needed.

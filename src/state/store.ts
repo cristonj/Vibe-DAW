@@ -10,7 +10,7 @@ import type { EditSelection } from '../model/selection';
 const HISTORY_LIMIT = 200;
 const COALESCE_MS = 600;
 
-export type BottomPanel = 'editor' | 'mixer' | 'track';
+export type BottomPanel = 'editor' | 'mixer' | 'track' | 'notes';
 
 export interface Selection extends EditSelection {
   trackId: string | null;

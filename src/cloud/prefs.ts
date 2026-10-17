@@ -121,7 +121,7 @@ function adoptAccount(uid: string) {
   try { owner = localStorage.getItem(OWNER); } catch { /* storage off */ }
   if (owner && owner !== uid) {
     applyingRemote = true;
-    try { useSettings.getState().set({ apiKey: '' }); } finally { applyingRemote = false; }
+    try { useSettings.getState().set({ apiKey: '', customInstructions: '' }); } finally { applyingRemote = false; }
     last = readSections();
     stamps = { ai: 0, appearance: 0, keymap: 0 };
     saveStamps();

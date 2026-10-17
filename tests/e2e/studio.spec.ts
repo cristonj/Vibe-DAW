@@ -166,3 +166,167 @@ test('effects can be duplicated with unique IDs and edited independently', async
   await amount.fill('-12'); await expect(amount).toHaveValue('-12'); await amount.press('Escape');
   expect(await page.evaluate(() => (window as any).__vibe.useDaw.getState().project.tracks[0].effects[1].params.gain1)).toBe(-6);
 });
+
+async function openLibrary(page: Page) {
+  const tab = page.getByRole('tab', { name: 'Library', exact: true });
+  if (!await tab.isVisible()) await page.getByRole('button', { name: /Show or hide the sound browser/ }).click();
+  await tab.click();
+}
+
+test('saved phrases survive reload and can be reused in another project with undo', async ({ page }) => {
+  await fixture(page);
+  await page.getByRole('button', { name: 'Save selected clips to library', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save to library' });
+  await dialog.getByRole('textbox', { name: 'Library item name' }).fill('My intro');
+  await dialog.getByRole('textbox', { name: 'Library item tags' }).fill('intro, warm');
+  await dialog.getByRole('button', { name: 'Save to library', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await page.reload(); await page.waitForFunction(() => !!(window as any).__vibe);
+  await openLibrary(page);
+  const item = page.getByRole('article', { name: 'Clip: My intro', exact: true });
+  await expect(item).toContainText('intro · warm');
+  await page.evaluate(async () => { const { createProject } = await import('/src/model/project.ts'); (window as any).__vibe.useDaw.getState().replaceProject(createProject('Different song')); });
+  await item.getByRole('button', { name: 'Add as new track', exact: true }).click();
+  await item.getByRole('button', { name: 'Add as new track', exact: true }).click();
+  const loaded = await page.evaluate(() => (window as any).__vibe.useDaw.getState().project);
+  expect(loaded.tracks).toHaveLength(2); expect(loaded.tracks[0].clips[0].notes).toHaveLength(8);
+  expect(loaded.tracks[0].id).not.toBe(loaded.tracks[1].id);
+  expect(loaded.tracks[0].clips[0].id).not.toBe(loaded.tracks[1].clips[0].id);
+  await page.evaluate(() => (window as any).__vibe.useDaw.getState().undo());
+  expect(await page.evaluate(() => (window as any).__vibe.useDaw.getState().project.tracks.length)).toBe(1);
+});
+
+test('effect profiles and project templates are reusable without overwriting the source', async ({ page }) => {
+  await fixture(page);
+  await page.locator('.dock-head').getByRole('button', { name: /Sound & FX/ }).click();
+  await page.getByRole('combobox', { name: 'Add effect', exact: true }).selectOption('reverb');
+  await page.getByRole('button', { name: 'Save effect profile', exact: true }).click();
+  let dialog = page.getByRole('dialog', { name: 'Save to library' });
+  await dialog.getByRole('textbox', { name: 'Library item name' }).fill('Room chain');
+  await dialog.getByRole('button', { name: 'Save to library', exact: true }).click(); await expect(dialog).not.toBeVisible();
+  await openLibrary(page);
+  const effects = page.getByRole('article', { name: 'Effects: Room chain', exact: true });
+  await effects.getByRole('button', { name: 'Add FX to track', exact: true }).click();
+  expect(await page.evaluate(() => (window as any).__vibe.useDaw.getState().project.tracks[0].effects.length)).toBe(2);
+  const originalId = await page.evaluate(() => (window as any).__vibe.useDaw.getState().project.id);
+  await page.getByRole('button', { name: 'Save project template', exact: true }).click();
+  dialog = page.getByRole('dialog', { name: 'Save to library' });
+  await dialog.getByRole('textbox', { name: 'Library item name' }).fill('Starting palette');
+  await dialog.getByRole('button', { name: 'Save to library', exact: true }).click(); await expect(dialog).not.toBeVisible();
+  await page.getByRole('article', { name: 'Template: Starting palette', exact: true }).getByRole('button', { name: 'New project', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__vibe.useDaw.getState().project.name)).toBe('Starting palette');
+  const project = await page.evaluate(() => (window as any).__vibe.useDaw.getState().project);
+  expect(project.id).not.toBe(originalId); expect(project.tracks[0].effects).toHaveLength(2); expect(project.tracks[0].clips[0].notes).toHaveLength(8);
+});
+
+test('custom instructions persist and apply to every Producer mode', async ({ page }) => {
+  await fixture(page);
+  await openSettings(page);
+  await page.getByRole('textbox', { name: 'Custom instructions', exact: true }).fill('Keep drums sparse and use warm keys.');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.reload(); await page.waitForFunction(() => !!(window as any).__vibe);
+  const prompts = await page.evaluate(async () => { const { systemPrompt } = await import('/src/agent/prompts.ts'); return ['agent', 'ask'].map((mode) => systemPrompt(mode as any)); });
+  for (const prompt of prompts) expect(prompt).toContain('Keep drums sparse and use warm keys.');
+  await openSettings(page);
+  await expect(page.getByRole('textbox', { name: 'Custom instructions', exact: true })).toHaveValue('Keep drums sparse and use warm keys.');
+});
+
+test('MIDI files import as editable tracks through the sound browser', async ({ page }) => {
+  await fixture(page);
+  const events = [0,0x90,64,100,0x83,0x60,0x80,64,0,0,0xff,0x2f,0];
+  const bytes = Buffer.from([77,84,104,100,0,0,0,6,0,0,0,1,1,224,77,84,114,107,0,0,0,events.length,...events]);
+  await page.locator('.browser input[type=file]').setInputFiles({ name: 'melody.mid', mimeType: 'audio/midi', buffer: bytes });
+  await expect.poll(() => page.evaluate(() => (window as any).__vibe.useDaw.getState().project.tracks.length)).toBe(2);
+  const imported = await page.evaluate(() => (window as any).__vibe.useDaw.getState().project.tracks[1]);
+  expect(imported.clips[0].notes[0]).toMatchObject({ pitch: 64, start: 0, duration: 1 });
+  await page.evaluate(() => (window as any).__vibe.useDaw.getState().undo());
+  expect(await page.evaluate(() => (window as any).__vibe.useDaw.getState().project.tracks.length)).toBe(1);
+});
+
+async function openSettings(page: Page) {
+  const settings = page.getByRole('button', { name: 'Settings: Gemini key, model, account', exact: true });
+  if (await settings.isVisible()) await settings.click();
+  else { await page.getByRole('button', { name: 'More', exact: true }).click(); await page.getByRole('menuitem', { name: /Settings/ }).click(); }
+}
+
+test('timed notes and lyrics work without a vocal track, persist and export as LRC', async ({ page }) => {
+  await fixture(page);
+  await page.evaluate(() => (window as any).__vibe.useDaw.getState().update('Empty arrangement', (p: any) => { p.tracks = []; }));
+  await page.getByRole('button', { name: 'Add lyrics', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Timed note or lyrics', exact: true });
+  await dialog.getByRole('textbox', { name: 'Annotation text' }).fill('We find our way home');
+  await dialog.getByRole('spinbutton', { name: 'Annotation start bar' }).fill('3');
+  await dialog.getByRole('spinbutton', { name: 'Annotation length bars' }).fill('2');
+  await dialog.getByRole('button', { name: 'Save cue' }).click();
+  await page.getByRole('button', { name: 'Add production note', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Annotation text' }).fill('Leave space for the first lyric');
+  await dialog.getByRole('button', { name: 'Save cue' }).click();
+  await page.locator('.dock-head').getByRole('button', { name: 'Notes & lyrics', exact: true }).click();
+  await expect(page.locator('.annotation-item')).toHaveCount(2);
+  await page.locator('.annotation-item').filter({ hasText: 'Leave space' }).getByRole('button', { name: 'Resolve', exact: true }).click();
+  const lrc = await page.evaluate(async () => { const { exportLyrics } = await import('/src/model/annotations.ts'); return exportLyrics((window as any).__vibe.useDaw.getState().project); });
+  expect(lrc).toContain('[00:03.43]'); // Eight beats at the default 140 BPM.
+  expect(lrc).toContain('We find our way home');
+  await expect.poll(() => page.evaluate(async () => { const { usePersist } = await import('/src/state/persistence.ts'); return usePersist.getState().saveState; })).toBe('saved');
+  await page.reload(); await page.waitForFunction(() => !!(window as any).__vibe);
+  const p = await page.evaluate(() => (window as any).__vibe.useDaw.getState().project);
+  expect(p.tracks).toHaveLength(0); expect(p.annotations).toHaveLength(2); expect(p.annotations[1].resolved).toBe(true);
+});
+
+test('click, right-click and @ mentions attach the same current project context', async ({ page }) => {
+  await fixture(page);
+  await page.getByRole('button', { name: 'Add selection to chat', exact: true }).click();
+  await expect(page.locator('.composer .attach-chip')).toContainText('Current selection');
+  const message = page.getByRole('textbox', { name: 'Message the agent' });
+  await message.fill('@Intro');
+  await page.getByRole('option', { name: /Intro phrase/ }).click();
+  await expect(page.locator('.composer .attach-chip')).toHaveCount(2);
+  await page.evaluate(() => (window as any).__vibe.useDaw.getState().update('Adjust phrase', (p: any) => { p.tracks[0].clips[0].notes[0].pitch = 67; }));
+  const references = await page.evaluate(async () => { const { resolveChatReferences } = await import('/src/ui/chatReferences.ts'); return resolveChatReferences(); });
+  expect(references[1].text).toContain('(67)');
+  await page.getByRole('button', { name: 'Remove Intro phrase', exact: true }).click();
+  // Close mobile drawer to reach the underlying timeline.
+  const close = page.getByRole('button', { name: 'Close Producer panel', exact: true });
+  if (await close.isVisible()) await close.click();
+  await page.locator('.clip').first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Add to chat', exact: true }).click();
+  await expect(page.locator('.composer .attach-chip')).toHaveCount(2);
+  await message.fill('@track');
+  await expect(page.getByRole('listbox', { name: 'Add a project reference' })).toBeVisible();
+  await message.press('ArrowDown'); await message.press('Enter');
+  await expect(page.getByRole('listbox', { name: 'Add a project reference' })).not.toBeVisible();
+});
+
+test('Producer reviews remain scrollable and can be attached using their button or mention', async ({ page }) => {
+  await fixture(page);
+  await page.evaluate(async () => {
+    const { useAgent } = await import('/src/agent/agent.ts');
+    useAgent.setState({ items: [{ id: 'review-test', kind: 'tool', name: 'listen', status: 'done', args: {}, summary: 'Reviewed the intro', heard: Array.from({ length: 60 }, (_, i) => `- Note ${i + 1}: let the kick breathe and leave space for the melody.`).join('\n') }] });
+    window.dispatchEvent(new Event('vibe:open-agent'));
+  });
+  const notes = page.getByLabel('Producer review notes', { exact: true });
+  await expect(notes).toBeVisible();
+  const box = await notes.boundingBox(); expect(box!.height).toBeGreaterThan(200);
+  expect(await notes.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await notes.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  expect(await notes.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'Add Producer notes to chat', exact: true }).click();
+  await expect(page.locator('.composer .attach-chip')).toContainText('Reviewed the intro');
+  await page.getByRole('button', { name: 'Remove Reviewed the intro' }).click();
+  const message = page.getByRole('textbox', { name: 'Message the agent' });
+  await message.fill('@Reviewed'); await page.getByRole('option', { name: /Reviewed the intro/ }).click();
+  await expect(page.locator('.composer .attach-chip')).toContainText('Reviewed the intro');
+});
+
+test('tooltips stay inside viewport edges with a zoomed interface and disappear on leave', async ({ page }, info) => {
+  test.skip(info.project.name === 'mobile', 'Hover placement is a desktop interaction');
+  await fixture(page);
+  await page.evaluate(() => { document.getElementById('root')!.style.zoom = '1.25'; });
+  const button = page.getByRole('button', { name: 'Mention a project item', exact: true });
+  await button.hover();
+  const tip = page.getByRole('tooltip'); await expect(tip).toBeVisible();
+  const bounds = (await tip.boundingBox())!, viewport = page.viewportSize()!;
+  expect(bounds.x).toBeGreaterThanOrEqual(7); expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width - 7);
+  expect(bounds.y).toBeGreaterThanOrEqual(7); expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height - 7);
+  await page.mouse.move(0, 0); await expect(tip).not.toBeVisible();
+});
