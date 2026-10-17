@@ -79,3 +79,38 @@ describe('annotation tools', () => {
     expect(useDaw.getState().project.annotations).toEqual([]);
   });
 });
+
+describe('custom effect tools', () => {
+  const custom = { name: 'Gain', code: 'function process(l, r, p) { for (let i = 0; i < l.length; i++) { l[i] *= p.g; r[i] *= p.g; } }', params: [{ id: 'g', label: 'Gain', min: 0, max: 2, default: 1 }] };
+  const setup = () => { useDaw.getState().replaceProject(createProject()); return useDaw.getState().project; };
+
+  it('adds a tested custom effect with its definition and knob values', async () => {
+    setup();
+    const out = await runTool('add_effect', { track_id: 'master', type: 'custom', custom, knobs: [{ id: 'g', value: 1.5 }] }, context(), 'agent');
+    expect(out.summary).toBe('Gain on master');
+    const fx = useDaw.getState().project.master.effects.find((e) => e.type === 'custom')!;
+    expect(fx).toMatchObject({ params: { g: 1.5 }, custom: { name: 'Gain', params: custom.params } });
+    expect(useDaw.getState().project.master.effects.at(-1)!.type).toBe('limiter');
+    const read = await runTool('get_custom_effect', { effect_id: fx.id }, context(), 'ask');
+    expect(read.result).toMatchObject({ code: custom.code, values: { g: 1.5 } });
+  });
+
+  it('returns code errors to the agent without changing the project', async () => {
+    const before = setup();
+    const out = await runTool('add_effect', { track_id: 'master', type: 'custom', custom: { ...custom, code: 'function process(l) { l.nope(); }' } }, context(), 'agent');
+    expect(out.result.error).toMatch(/failed its test run: TypeError/);
+    expect(useDaw.getState().project).toBe(before);
+    expect((await runTool('add_effect', { track_id: 'master', type: 'custom', custom: { ...custom, params: [{ id: 'g g', min: 0, max: 1, default: 0 }] } }, context(), 'agent')).result.error).toMatch(/identifier/);
+    expect((await runTool('add_effect', { track_id: 'master', type: 'reverb', custom }, context(), 'agent')).result.error).toMatch(/only for type "custom"/);
+  });
+
+  it('rewrites code and keeps surviving knob values', async () => {
+    setup();
+    const id = (await runTool('add_effect', { track_id: 'master', type: 'custom', custom, knobs: [{ id: 'g', value: 0.5 }] }, context(), 'agent')).result.effect_id as string;
+    const out = await runTool('update_effect', { effect_id: id, custom: { name: 'Gain 2', params: [...custom.params, { id: 'mix', label: 'Mix', min: 0, max: 1, default: 1 }] } }, context(), 'agent');
+    expect(out.summary).toMatch(/^Gain 2: new code/);
+    const fx = useDaw.getState().project.master.effects.find((e) => e.id === id)!;
+    expect(fx.params).toEqual({ g: 0.5, mix: 1 });
+    expect((await runTool('update_effect', { effect_id: id, knobs: [{ id: 'nope', value: 1 }] }, context(), 'agent')).result.error).toMatch(/no knob "nope"/);
+  });
+});

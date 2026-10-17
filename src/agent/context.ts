@@ -18,7 +18,7 @@ function barRange(p: Project, start: number, length: number): string {
 
 function fxSummary(t: { effects: Project['master']['effects'] }): string {
   if (!t.effects.length) return '';
-  return ' fx[' + t.effects.map((e) => `${e.id}:${e.type}${e.enabled ? '' : '(off)'} ${Object.entries(e.params).map(([k, v]) => `${k}=${typeof v === 'number' ? r2(v) : v}`).join(' ')}`).join('; ') + ']';
+  return ' fx[' + t.effects.map((e) => `${e.id}:${e.type === 'custom' ? `custom(${JSON.stringify(e.custom?.name ?? '')})` : e.type}${e.enabled ? '' : '(off)'} ${Object.entries(e.params).map(([k, v]) => `${k}=${typeof v === 'number' ? r2(v) : v}`).join(' ')}`).join('; ') + ']';
 }
 
 function midiSummary(t: Track, c: MidiClip): string {

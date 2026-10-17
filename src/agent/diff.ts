@@ -1,6 +1,6 @@
 import type { Clip, Project } from '../model/types';
 import { formatKey } from '../model/theory';
-import { EFFECT_BY_TYPE } from '../model/catalog';
+import { effectName } from '../model/customEffect';
 
 // Human-readable summary of what changed between two project versions —
 // the DAW equivalent of a code diff, shown under every agent run.
@@ -31,7 +31,7 @@ export function diffProjects(before: Project, after: Project): ChangeSummary {
     const old = beforeTracks.get(t.id);
     if (!old) {
       added++;
-      lines.push(`+ ${t.name} (${t.instrument?.preset ?? t.kind}) with ${t.clips.length} clip${t.clips.length === 1 ? '' : 's'}${t.effects.length ? `, ${t.effects.map((e) => EFFECT_BY_TYPE[e.type].name).join(', ')}` : ''}`);
+      lines.push(`+ ${t.name} (${t.instrument?.preset ?? t.kind}) with ${t.clips.length} clip${t.clips.length === 1 ? '' : 's'}${t.effects.length ? `, ${t.effects.map((e) => effectName(e)).join(', ')}` : ''}`);
       continue;
     }
     if (old === t) continue;
@@ -45,9 +45,9 @@ export function diffProjects(before: Project, after: Project): ChangeSummary {
     if (old.drumLanes !== t.drumLanes) bits.push('kit changed');
     const oldFx = new Set(old.effects.map((e) => e.id));
     const newFx = t.effects.filter((e) => !oldFx.has(e.id));
-    if (newFx.length) bits.push(`+${newFx.map((e) => EFFECT_BY_TYPE[e.type].name).join(', ')}`);
+    if (newFx.length) bits.push(`+${newFx.map((e) => effectName(e)).join(', ')}`);
     const goneFx = old.effects.filter((e) => !t.effects.some((x) => x.id === e.id));
-    if (goneFx.length) bits.push(`−${goneFx.map((e) => EFFECT_BY_TYPE[e.type].name).join(', ')}`);
+    if (goneFx.length) bits.push(`−${goneFx.map((e) => effectName(e)).join(', ')}`);
     else if (!newFx.length && old.effects !== t.effects) bits.push('effects tweaked');
     if (old.clips !== t.clips) {
       const oldClips = new Map(old.clips.map((c) => [c.id, clipSig(c)]));

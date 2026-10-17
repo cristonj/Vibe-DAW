@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { capturePreset, insertPreset } from './presets';
-import { createMidiClip, createProject, createTrack } from './project';
+import { createMidiClip, createProject, createTrack, mintId } from './project';
+import { CUSTOM_STARTERS, newCustomEffect } from './customEffect';
 import { validateProject } from './validate';
 function fixture() {
   const p = createProject(); const t = createTrack(p, 'instrument', { preset: 'epiano' });
@@ -38,5 +39,20 @@ describe('reusable preset snapshots', () => {
     expect(dest.master.effects.map((e) => e.type)).toEqual(['reverb', 'limiter']);
     insertPreset(dest, saved, 'effects', { targetTrackId: 'master', replaceEffects: true });
     expect(dest.master.effects.map((e) => e.type)).toEqual(['reverb']); validateProject(dest);
+  });
+});
+
+describe('plugin presets', () => {
+  it('captures one effect, with its custom definition, and inserts a fresh copy', () => {
+    const p = createProject();
+    const fx = newCustomEffect(mintId(p, 'fx'), CUSTOM_STARTERS[1].def);
+    p.master.effects.unshift(fx);
+    const saved = capturePreset(p, 'effects', { effectId: fx.id });
+    expect(saved.master.effects).toEqual([fx]);
+    const target = createProject();
+    insertPreset(target, saved, 'effects', { targetTrackId: 'master' });
+    const added = target.master.effects.find((e) => e.type === 'custom')!;
+    expect(added.custom).toEqual(fx.custom);
+    expect(() => capturePreset(p, 'effects', { effectId: 'missing' })).toThrow(/no longer exists/);
   });
 });

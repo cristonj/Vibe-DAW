@@ -2,20 +2,24 @@ import { selectionAnnotations } from './annotations';
 import type { Effect, Project, Track } from './types';
 import type { EditSelection } from './selection';
 import { selectedNotes, selectionClips } from './selection';
-import { cloneDeep, createProject, mintId, uid } from './project';
+import { cloneDeep, createProject, findEffect, mintId, uid } from './project';
 import { sliceClip } from './edit';
 
 export const PRESET_KINDS = ['clip', 'sound', 'effects', 'template'] as const;
 export type PresetKind = typeof PRESET_KINDS[number];
 
 /** Small project documents reuse the normal validation and audio dependency model. */
-export function capturePreset(project: Project, kind: PresetKind, options: { trackId?: string; selection?: EditSelection; sampleBpm?: (id: string) => number | undefined } = {}): Project {
+export function capturePreset(project: Project, kind: PresetKind, options: { trackId?: string; effectId?: string; selection?: EditSelection; sampleBpm?: (id: string) => number | undefined } = {}): Project {
   const result = createProject();
   result.bpm = project.bpm; result.key = { ...project.key }; result.timeSignature = [...project.timeSignature]; result.swing = project.swing;
   result.nextId = project.nextId; result.master.effects = [];
   const source = project.tracks.find((t) => t.id === options.trackId);
   if (kind === 'template') return clean(cloneDeep(project));
-  if (kind === 'effects') {
+  if (kind === 'effects' && options.effectId) {
+    const found = findEffect(project, options.effectId);
+    if (!found) throw new Error('That effect no longer exists');
+    result.master.effects = [cloneDeep(found.effect)];
+  } else if (kind === 'effects') {
     const effects = options.trackId === 'master' ? project.master.effects : source?.effects;
     if (!effects?.length) throw new Error('Choose a track or master with effects to save');
     result.master.effects = cloneDeep(effects);

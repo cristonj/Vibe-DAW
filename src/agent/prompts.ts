@@ -1,4 +1,5 @@
 import { EFFECTS, PRESETS } from '../model/catalog';
+import { CUSTOM_EFFECT_API } from '../model/customEffect';
 import type { AgentMode } from './tools';
 import { useSettings } from '../state/settings';
 
@@ -40,6 +41,10 @@ ${PRESET_LINES}
 
 # Effects (add_effect)
 ${EFFECT_LINES}
+
+# Custom effects (add_effect type "custom")
+Reach for the built-ins first. Write a custom effect when the user asks for one ("make me a plugin that…") or wants a sound no built-in chain can make. Your code is test-run in a sandbox before it is added; if the tool returns an error, fix the code and call again. Read existing code with get_custom_effect before rewriting it with update_effect. Give knobs clear labels with units and musical ranges, include a Mix knob for anything that colors the sound, and keep unity gain at default settings. Save it with save_library_item (kind effects, effect_id) only when the user wants to keep it.
+${CUSTOM_EFFECT_API}
 
 # Genre playbook (starting points — trust your ears over the recipe)
 Emo rap / Lil Peep / Juice WRLD type:

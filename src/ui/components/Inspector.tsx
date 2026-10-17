@@ -1,13 +1,19 @@
 import { AddToChat } from './AddToChat';
 import { useMemo, useRef, useState } from 'react';
-import { Play, Trash, Plus, Power, CopyPlus, Bookmark, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { Play, Trash, Plus, Power, CopyPlus, Bookmark, ChevronUp, ChevronDown, RotateCcw, Code, CircleAlert } from 'lucide-react';
 import { openSavePreset } from './SavePreset';
 import { useDaw } from '../../state/store';
-import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams } from '../../model/catalog';
+import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams, type EffectInfo } from '../../model/catalog';
 import type { Effect, EffectType, Project, Track } from '../../model/types';
 import { mintId } from '../../model/project';
 import { useLibrary } from '../../samples/library';
 import { previewNote } from '../../engine/api';
+import { CUSTOM_BLANK, CUSTOM_STARTERS, customDefaults, effectName, newCustomEffect } from '../../model/customEffect';
+import { useCustomFxErrors } from '../../engine/customFx';
+import { usePresets } from '../../state/presetLibrary';
+import { libraryPlugins, loadFromLibrary } from '../presetActions';
+import { openCustomEffectEditor } from './CustomEffectEditor';
+import { toast } from '../toast';
 
 /** Unit-aware display for a param label like "Cutoff (Hz)" or "Mix". */
 function formatValue(label: string, v: number): string {
@@ -101,15 +107,19 @@ const FX_GROUPS: Array<[string, EffectType[]]> = [
 
 function EffectCard({ fx, index, count, onChange, onRemove, onMove, onDuplicate, project }: { fx: Effect; index: number; count: number; onChange: (fn: (e: Effect) => void) => void; onRemove: () => void; onMove: (dir: -1 | 1) => void; onDuplicate: () => void; project: Project }) {
   const info = EFFECT_BY_TYPE[fx.type];
+  const name = effectName(fx);
   const presets = FX_PRESETS[fx.type];
+  const custom = fx.type === 'custom' ? fx.custom : undefined;
+  const liveError = useCustomFxErrors((s) => s[fx.id]);
+  const knobs: EffectInfo['params'] = custom ? Object.fromEntries(custom.params.map((k) => [k.id, { default: k.default, min: k.min, max: k.max, label: k.label }])) : info.params;
   return (
     <div data-chat-ref={`effect:${fx.id}`} className={`card fx-card ${fx.enabled ? '' : 'bypassed'}`}>
       <div className="card-head">
         <button className={`fx-power ${fx.enabled ? 'on' : ''}`} onClick={() => onChange((x) => { x.enabled = !x.enabled; })} title={fx.enabled ? 'Bypass this effect' : 'Turn this effect back on'} aria-pressed={fx.enabled}>
           <Power size={12} />
         </button>
-        <span className="fx-name" title={info.description}>{info.name}</span>
-        <AddToChat referenceId={`effect:${fx.id}`} label={info.name} />
+        <span className="fx-name" title={custom?.description ?? info.description}>{name}</span>
+        <AddToChat referenceId={`effect:${fx.id}`} label={name} />
         <div className="spacer" />
         {presets && (
           <select
@@ -125,11 +135,17 @@ function EffectCard({ fx, index, count, onChange, onRemove, onMove, onDuplicate,
         )}
         <button className="btn icon" disabled={index === 0} onClick={() => onMove(-1)} title="Move earlier in the chain" aria-label="Move up"><ChevronUp size={13} /></button>
         <button className="btn icon" disabled={index === count - 1} onClick={() => onMove(1)} title="Move later in the chain" aria-label="Move down"><ChevronDown size={13} /></button>
-        <button className="btn icon" onClick={() => onChange((x) => { x.params = { ...defaultEffectParams(x.type), ...(x.type === 'duck' ? { source: x.params.source } : {}) }; })} title="Reset all settings" aria-label="Reset"><RotateCcw size={12} /></button>
-        <button className="btn icon" onClick={onDuplicate} title="Duplicate effect with its settings" aria-label={`Duplicate ${info.name}`}><CopyPlus size={13} /></button>
-        <button className="btn icon danger" onClick={onRemove} title="Remove this effect" aria-label={`Remove ${info.name}`}><Trash size={13} /></button>
+        <button className="btn icon" onClick={() => onChange((x) => { x.params = x.custom ? customDefaults(x.custom) : { ...defaultEffectParams(x.type), ...(x.type === 'duck' ? { source: x.params.source } : {}) }; })} title="Reset all settings" aria-label="Reset"><RotateCcw size={12} /></button>
+        <button className="btn icon" onClick={onDuplicate} title="Duplicate effect with its settings" aria-label={`Duplicate ${name}`}><CopyPlus size={13} /></button>
+        <button className="btn icon danger" onClick={onRemove} title="Remove this effect" aria-label={`Remove ${name}`}><Trash size={13} /></button>
       </div>
-      {Object.entries(info.params).map(([k, spec]) => {
+      {custom && <div className="fx-custom-row">
+        <button className="btn solid" onClick={() => openCustomEffectEditor(fx.id)}><Code size={13} /> Edit code</button>
+        <button className="btn" onClick={() => openSavePreset({ kind: 'effects', name: custom.name, effectId: fx.id })}><Bookmark size={13} /> Save as plugin</button>
+      </div>}
+      {custom && liveError && <div className="fx-error" role="alert"><CircleAlert size={13} /><span>{liveError}<small>Bypassed until the code is fixed.</small></span></div>}
+      {custom && !custom.params.length && <small className="fx-hint">No knobs. Add some in the editor.</small>}
+      {Object.entries(knobs).map(([k, spec]) => {
         const v = fx.params[k] ?? spec.default;
         if (k === 'source') {
           return (
@@ -162,7 +178,20 @@ function EffectCard({ fx, index, count, onChange, onRemove, onMove, onDuplicate,
 
 export function EffectChain({ ownerId, effects, project }: { ownerId: string | 'master'; effects: Effect[]; project: Project }) {
   const update = useDaw((s) => s.update);
+  const records = usePresets((s) => s.records);
+  const plugins = useMemo(() => libraryPlugins(records), [records]);
   const list = (d: Project) => (ownerId === 'master' ? d.master.effects : d.tracks.find((t) => t.id === ownerId)!.effects);
+  /** Append, keeping a master limiter last. Returns the new effect's id. */
+  const insert = (label: string, make: (d: Project) => Effect) => {
+    let id = '';
+    update(label, (d) => {
+      const l = list(d), fx = make(d);
+      id = fx.id;
+      if (ownerId === 'master' && l.length && l[l.length - 1].type === 'limiter' && fx.type !== 'limiter') l.splice(l.length - 1, 0, fx);
+      else l.push(fx);
+    });
+    return id;
+  };
   return (
     <>
       <div className="library-chain-save"><button className="btn" disabled={!effects.length} onClick={() => openSavePreset({ kind: 'effects', name: `${ownerId === 'master' ? 'Master' : project.tracks.find((t) => t.id === ownerId)?.name ?? 'Track'} effects`, trackId: ownerId })}><Bookmark size={13} /> Save effect profile</button></div>
@@ -173,10 +202,10 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
           index={i}
           count={effects.length}
           project={project}
-          onChange={(fn) => update(`Edit ${EFFECT_BY_TYPE[fx.type].name}`, (d) => { const e = list(d).find((x) => x.id === fx.id); if (e) fn(e); }, { coalesce: true })}
+          onChange={(fn) => update(`Edit ${effectName(fx)}`, (d) => { const e = list(d).find((x) => x.id === fx.id); if (e) fn(e); }, { coalesce: true })}
           onDuplicate={() => update('Duplicate effect', (d) => {
             const l = list(d); const at = l.findIndex((x) => x.id === fx.id);
-            if (at >= 0) l.splice(at + 1, 0, { ...l[at], id: mintId(d, 'fx'), params: { ...l[at].params } });
+            if (at >= 0) l.splice(at + 1, 0, { ...structuredClone(l[at]), id: mintId(d, 'fx') });
           })}
           onRemove={() => update('Remove effect', (d) => { const l = list(d); l.splice(l.findIndex((x) => x.id === fx.id), 1); })}
           onMove={(dir) => update('Reorder effects', (d) => {
@@ -193,14 +222,20 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
         <select
           value=""
           onChange={(e) => {
-            const type = e.target.value as EffectType;
-            if (!type) return;
-            update(`Add ${EFFECT_BY_TYPE[type].name}`, (d) => {
-              const l = list(d);
-              const fx = { id: mintId(d, 'fx'), type, enabled: true, params: defaultEffectParams(type) };
-              if (ownerId === 'master' && l.length && l[l.length - 1].type === 'limiter' && type !== 'limiter') l.splice(l.length - 1, 0, fx);
-              else l.push(fx);
-            });
+            const value = e.target.value;
+            const [kind, id] = value.split(':');
+            if (Object.hasOwn(EFFECT_BY_TYPE, value)) {
+              const type = value as EffectType;
+              insert(`Add ${EFFECT_BY_TYPE[type].name}`, (d) => ({ id: mintId(d, 'fx'), type, enabled: true, params: defaultEffectParams(type) }));
+            } else if (kind === 'custom') {
+              const def = id === 'new' ? CUSTOM_BLANK : CUSTOM_STARTERS.find((s) => s.id === id)?.def;
+              if (!def) return;
+              const fxId = insert(`Add ${def.name}`, (d) => newCustomEffect(mintId(d, 'fx'), def));
+              if (id === 'new' && fxId) openCustomEffectEditor(fxId);
+            } else if (kind === 'plugin') {
+              const record = usePresets.getState().records[id];
+              if (record) void loadFromLibrary(record, { targetTrackId: ownerId }).then(() => toast(`Added ${record.name}`)).catch((err) => toast((err as Error).message, 'error'));
+            }
           }}
           aria-label="Add effect"
         >
@@ -210,6 +245,13 @@ export function EffectChain({ ownerId, effects, project }: { ownerId: string | '
               {types.map((t) => <option key={t} value={t}>{EFFECT_BY_TYPE[t].name}</option>)}
             </optgroup>
           ))}
+          <optgroup label="Custom">
+            <option value="custom:new">New custom effect…</option>
+            {CUSTOM_STARTERS.map((s) => <option key={s.id} value={`custom:${s.id}`}>{s.def.name}</option>)}
+          </optgroup>
+          {plugins.length > 0 && <optgroup label="Your plugins">
+            {plugins.map((r) => <option key={r.id} value={`plugin:${r.id}`}>{r.name}</option>)}
+          </optgroup>}
         </select>
         <small style={{ color: 'var(--faint)' }}>Effects run top to bottom. Use the arrows to reorder.</small>
       </div>

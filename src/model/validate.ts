@@ -1,5 +1,6 @@
 import type { Project } from './types';
 import { EFFECT_BY_TYPE } from './catalog';
+import { validateCustomEffect } from './customEffect';
 import { PITCH_CLASSES, SCALES } from './theory';
 
 type Obj = Record<string, unknown>;
@@ -52,6 +53,9 @@ export function validateProject(value: unknown): Project {
       if (!Object.hasOwn(EFFECT_BY_TYPE, String(e.type))) fail(`${path}.type`);
       boolean(e.enabled, `${path}.enabled`);
       params(e.params, `${path}.params`, true);
+      if (e.type === 'custom') {
+        try { validateCustomEffect(e.custom); } catch (error) { fail(`${path}.custom: ${(error as Error).message}`); }
+      } else if (e.custom !== undefined) fail(`${path}.custom`);
     }
   };
   const master = object(p.master, 'master');

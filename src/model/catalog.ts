@@ -304,6 +304,10 @@ export const EFFECTS: EffectInfo[] = [
       release: { default: 0.18, min: 0.02, max: 1, label: 'Release (s)' },
     },
   },
+  {
+    type: 'custom', name: 'Custom Effect', description: 'Your own DSP written in JavaScript, with its own knobs. Anything the built-ins cannot do: special saturators, resonators, glitches, tempo tricks.',
+    params: {},
+  },
 ];
 
 export const EFFECT_BY_TYPE = Object.fromEntries(EFFECTS.map((e) => [e.type, e])) as Record<EffectType, EffectInfo>;

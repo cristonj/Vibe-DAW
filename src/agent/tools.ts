@@ -1,5 +1,7 @@
 import { sortedAnnotations } from '../model/annotations';
-import type { Annotation, AudioClip, Clip, EffectType, MidiClip, Project, Track, TrackKind, WarpMode } from '../model/types';
+import type { Annotation, AudioClip, Clip, CustomEffectDef, EffectType, MidiClip, Project, Track, TrackKind, WarpMode } from '../model/types';
+import { effectName, rebaseCustomValues, validateCustomEffect } from '../model/customEffect';
+import { checkCustomEffect } from '../engine/customCheck';
 import { EFFECTS, EFFECT_BY_TYPE, PRESET_BY_ID, DRUM_LANE_NOTES, defaultEffectParams, defaultPresetParams } from '../model/catalog';
 import { barToBeat, beatToBar, beatsPerBar, createAudioClip, createMidiClip, createTrack, findClip, findEffect, findTrack, mintId, secondsToBeats } from '../model/project';
 import { buildNotes, clearRange, copyRange, parseSteps, repeatNotes, transformNotes, type ChordInput, type NoteInput, type NoteOp } from '../model/edit';
@@ -156,6 +158,37 @@ function unionSchema(groups: Array<[owner: string, params: Record<string, { labe
 
 const PRESET_PARAMS_SCHEMA = unionSchema(Object.entries(PRESET_BY_ID).map(([id, p]) => [id, p.params]), 'Instrument params (only those of the current preset apply)');
 const EFFECT_PARAMS_SCHEMA = unionSchema(EFFECTS.map((e) => [e.type, e.params]), 'Effect params (only those of this effect type apply)');
+const CUSTOM_PROPS = {
+  name: S('Short name shown on the effect card'),
+  description: S('One line: what it does'),
+  code: S('JavaScript defining function process(left, right, params, info); see "Custom effects" in the system prompt'),
+  params: A(obj({ id: S('JavaScript identifier, read as params.<id>'), label: S('Knob label; put units in parentheses, e.g. "Cutoff (Hz)"'), min: N('Minimum'), max: N('Maximum'), default: N('Default value') }, ['id', 'min', 'max', 'default']), 'Knobs, up to 12'),
+};
+const KNOBS_SCHEMA = A(obj({ id: S('Knob id'), value: N('New value') }, ['id', 'value']), 'Custom effects only: knob values to set');
+
+/** Validate, then run the code in the sandbox so the agent gets real errors to fix. */
+async function checkedCustom(raw: unknown, values: Record<string, number | string>): Promise<{ def: CustomEffectDef; params: Record<string, number>; warnings: string[] }> {
+  let def: CustomEffectDef;
+  try { def = validateCustomEffect(raw); } catch (e) { throw new ToolError(`Invalid custom effect: ${(e as Error).message}`); }
+  const params = rebaseCustomValues(def, values);
+  const check = await checkCustomEffect(def, params, getProject().bpm);
+  if (!check.ok) throw new ToolError(`The effect code failed its test run: ${check.error?.replace(/\.$/, '')}. Nothing was changed; fix the code and call again.`);
+  return { def, params, warnings: check.warnings };
+}
+
+function knobValues(def: CustomEffectDef, raw: unknown): Record<string, number> {
+  if (raw === undefined) return {};
+  if (!Array.isArray(raw)) throw new ToolError('knobs must be a list of { id, value }');
+  const out: Record<string, number> = {};
+  for (const k of raw as Array<{ id?: unknown; value?: unknown }>) {
+    const spec = def.params.find((x) => x.id === k?.id);
+    if (!spec) throw new ToolError(`${def.name} has no knob "${String(k?.id)}". Knobs: ${def.params.map((x) => x.id).join(', ') || 'none'}`);
+    const n = Number(k.value);
+    if (!Number.isFinite(n)) throw new ToolError(`${spec.id} must be a number`);
+    out[spec.id] = Math.max(spec.min, Math.min(spec.max, n));
+  }
+  return out;
+}
 const DESIGN_PARAMS_SCHEMA = {
   type: 'object',
   description: 'Synthesis params (see tool description for which apply to each kind)',
@@ -822,58 +855,87 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
   {
     decl: {
       name: 'add_effect',
-      description: `Insert an effect on a track or the master ("master"). Types: ${EFFECTS.map((e) => `${e.type} (${Object.keys(e.params).join(', ')})`).join('; ')}.`,
+      description: `Insert an effect on a track or the master ("master"). Types: ${EFFECTS.filter((e) => e.type !== 'custom').map((e) => `${e.type} (${Object.keys(e.params).join(', ')})`).join('; ')}; custom (write your own DSP: pass custom = { name, code, params }, optional knobs).`,
       parameters: obj({
         track_id: S('Track id or "master"'),
         type: S('Effect type', { enum: EFFECT_TYPES }),
         params: EFFECT_PARAMS_SCHEMA,
+        custom: obj(CUSTOM_PROPS, ['name', 'code', 'params']),
+        knobs: KNOBS_SCHEMA,
         position: N('Insert index in the chain (default end)'),
       }, ['track_id', 'type']),
     },
-    run: (a) => {
+    run: async (a) => {
       const type = String(a.type) as EffectType;
       const info = EFFECT_BY_TYPE[type];
       if (!info) throw new ToolError(`Unknown effect. Types: ${EFFECT_TYPES.join(', ')}`);
+      if (type !== 'custom' && a.custom !== undefined) throw new ToolError('custom is only for type "custom"');
       const p = getProject();
       const isMaster = String(a.track_id).toLowerCase() === 'master';
       const t = isMaster ? null : needTrack(p, a.track_id);
-      const params = { ...defaultEffectParams(type), ...validateFxParams(type, a.params) };
+      let custom: Awaited<ReturnType<typeof checkedCustom>> | undefined;
+      if (type === 'custom') {
+        if (a.custom === undefined) throw new ToolError('type "custom" needs custom = { name, code, params }');
+        let def: CustomEffectDef;
+        try { def = validateCustomEffect(a.custom); } catch (e) { throw new ToolError(`Invalid custom effect: ${(e as Error).message}`); }
+        custom = await checkedCustom(def, knobValues(def, a.knobs));
+      }
+      const params = custom ? custom.params : { ...defaultEffectParams(type), ...validateFxParams(type, a.params) };
       if (type === 'duck') {
         if (!params.source || !findTrack(p, String(params.source))) throw new ToolError('duck needs params.source = the trigger track id (usually the kick/drums)');
       }
       let id = '';
-      edit(`Agent: add ${info.name}`, (d) => {
+      const name = custom?.def.name ?? info.name;
+      edit(`Agent: add ${name}`, (d) => {
         const list = isMaster ? d.master.effects : needTrack(d, t!.id).effects;
         id = mintId(d, 'fx');
         const pos = num(a.position, 'position', { min: 0, optional: true });
-        const fx = { id, type, enabled: true, params };
+        const fx = { id, type, enabled: true, params: { ...params }, ...(custom ? { custom: structuredClone(custom.def) } : {}) };
         if (pos !== undefined && pos < list.length) list.splice(pos, 0, fx);
         else if (isMaster && list.length && list[list.length - 1].type === 'limiter' && type !== 'limiter') list.splice(list.length - 1, 0, fx); // keep limiter last
         else list.push(fx);
       });
-      return { result: { effect_id: id, params }, summary: `${info.name} on ${isMaster ? 'master' : t!.name}` };
+      return { result: { effect_id: id, params, ...(custom?.warnings.length ? { warnings: custom.warnings } : {}) }, summary: `${name} on ${isMaster ? 'master' : t!.name}` };
     },
   },
   {
     decl: {
       name: 'update_effect',
-      description: 'Change effect params, bypass it, or move it within its chain (position is a 0-based integer).',
-      parameters: obj({ effect_id: S('Effect id'), params: EFFECT_PARAMS_SCHEMA, enabled: B('false = bypass'), position: N('New index in the chain, 0-based') }, ['effect_id']),
+      description: 'Change effect params, bypass it, or move it within its chain (position is a 0-based integer). For custom effects, set knobs, or pass custom with any of name/description/code/params to rewrite it (the new code is test-run first).',
+      parameters: obj({ effect_id: S('Effect id'), params: EFFECT_PARAMS_SCHEMA, knobs: KNOBS_SCHEMA, custom: obj(CUSTOM_PROPS), enabled: B('false = bypass'), position: N('New index in the chain, 0-based') }, ['effect_id']),
     },
-    run: (a) => {
+    run: async (a) => {
       const p = getProject();
       const f = findEffect(p, String(a.effect_id));
       if (!f) throw new ToolError(`No effect "${a.effect_id}"`);
-      const params = validateFxParams(f.effect.type, a.params);
+      const isCustom = f.effect.type === 'custom' && !!f.effect.custom;
+      if (!isCustom && (a.custom !== undefined || a.knobs !== undefined)) throw new ToolError('custom and knobs only apply to custom effects');
+      let custom: Awaited<ReturnType<typeof checkedCustom>> | undefined;
+      if (isCustom && a.custom !== undefined) custom = await checkedCustom({ ...f.effect.custom, ...(a.custom as object) }, f.effect.params);
+      const def = custom?.def ?? f.effect.custom;
+      const params = isCustom ? { ...(custom?.params ?? {}), ...knobValues(def!, a.knobs) } : validateFxParams(f.effect.type, a.params);
       const position = num(a.position, 'position', { min: 0, max: f.list.length - 1, optional: true });
       if (position !== undefined && !Number.isInteger(position)) throw new ToolError('position must be an integer');
-      edit(`Agent: tweak ${EFFECT_BY_TYPE[f.effect.type].name}`, (d) => {
+      const name = def?.name ?? effectName(f.effect);
+      if (!findEffect(getProject(), f.effect.id)) throw new ToolError(`Effect "${a.effect_id}" was removed while its code was being tested`);
+      edit(`Agent: ${custom ? 'rewrite' : 'tweak'} ${name}`, (d) => {
         const e = findEffect(d, f.effect.id)!.effect;
+        if (custom) { e.custom = structuredClone(custom.def); e.params = { ...custom.params }; }
         e.params = { ...e.params, ...params };
         if (typeof a.enabled === 'boolean') e.enabled = a.enabled;
         if (position !== undefined) { const { list } = findEffect(d, e.id)!; list.splice(list.indexOf(e), 1); list.splice(position, 0, e); }
       });
-      return { result: { ok: true }, summary: `${EFFECT_BY_TYPE[f.effect.type].name}: ${Object.entries(params).map(([k, v]) => `${k} ${v}`).join(', ')}${a.enabled === false ? ' (bypassed)' : ''}` };
+      const changes = Object.entries(params).map(([k, v]) => `${k} ${v}`).join(', ');
+      return { result: { ok: true, ...(custom?.warnings.length ? { warnings: custom.warnings } : {}) }, summary: `${name}: ${custom ? `new code${changes ? `, ${changes}` : ''}` : changes}${a.enabled === false ? ' (bypassed)' : ''}` };
+    },
+  },
+  {
+    readOnly: true,
+    decl: { name: 'get_custom_effect', description: 'Read a custom effect’s code and knob definitions before changing it.', parameters: obj({ effect_id: S('Custom effect id') }, ['effect_id']) },
+    run: (a) => {
+      const f = findEffect(getProject(), String(a.effect_id));
+      if (!f?.effect.custom) throw new ToolError(`No custom effect "${a.effect_id}"`);
+      return { result: { effect_id: f.effect.id, ...f.effect.custom, values: f.effect.params }, summary: `Read ${f.effect.custom.name}` };
     },
   },
   {
@@ -885,7 +947,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
         const ff = findEffect(d, f.effect.id)!;
         ff.list.splice(ff.list.indexOf(ff.effect), 1);
       });
-      return { result: { ok: true }, summary: `Removed ${EFFECT_BY_TYPE[f.effect.type].name}` };
+      return { result: { ok: true }, summary: `Removed ${effectName(f.effect)}` };
     },
   },
   {
@@ -900,14 +962,14 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
     },
   },
   {
-    decl: { name: 'save_library_item', description: 'Save a reusable clip/phrase, track sound, sample, effect profile, or full project template to the user’s library. Only do this when the user asks to save/reuse something. References audio in their account too. For clips, use clip_ids or the active selection; sound/effects use track_id (master is allowed for effects).', parameters: obj({ name: S('Library name'), kind: S('What to save', { enum: [...PRESET_KINDS] }), track_id: S('Source track id, or master for an effects profile'), sample_id: S('Optional source sample for a sound'), clip_ids: A(S('Clip id'), 'Clips to save as a phrase'), tags: A(S('Tag'), 'Up to 12 tags') }, ['name', 'kind']) },
+    decl: { name: 'save_library_item', description: 'Save a reusable clip/phrase, track sound, sample, effect profile, or full project template to the user’s library. Only do this when the user asks to save/reuse something. References audio in their account too. For clips, use clip_ids or the active selection; sound/effects use track_id (master is allowed for effects). To keep one custom effect as a reusable plugin, use kind effects with effect_id.', parameters: obj({ name: S('Library name'), kind: S('What to save', { enum: [...PRESET_KINDS] }), track_id: S('Source track id, or master for an effects profile'), effect_id: S('Effects only: save just this one effect (a custom effect becomes a plugin)'), sample_id: S('Optional source sample for a sound'), clip_ids: A(S('Clip id'), 'Clips to save as a phrase'), tags: A(S('Tag'), 'Up to 12 tags') }, ['name', 'kind']) },
     run: async (a, ctx) => {
       const kind = String(a.kind) as PresetKind;
       if (!PRESET_KINDS.includes(kind)) throw new ToolError('Unknown library kind');
       let selection = ctx.selection ?? useDaw.getState().selection;
       if (Array.isArray(a.clip_ids)) selection = { clipIds: a.clip_ids.map(String) };
       else if (kind === 'clip' && a.track_id && !selection.clipIds.length) selection = { clipIds: needTrack(getProject(), a.track_id).clips.map((c) => c.id) };
-      const saved = await saveToLibrary(kind, str(a.name, 'name')!, { trackId: a.track_id ? String(a.track_id) : undefined, sampleId: a.sample_id ? String(a.sample_id) : undefined, selection, tags: Array.isArray(a.tags) ? a.tags.map(String) : [] });
+      const saved = await saveToLibrary(kind, str(a.name, 'name')!, { trackId: a.track_id ? String(a.track_id) : undefined, effectId: a.effect_id ? String(a.effect_id) : undefined, sampleId: a.sample_id ? String(a.sample_id) : undefined, selection, tags: Array.isArray(a.tags) ? a.tags.map(String) : [] });
       return { result: { library_id: saved.id, kind }, summary: `Saved “${saved.name}” to your library` };
     },
   },

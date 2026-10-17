@@ -11,6 +11,7 @@ const HOW_TO: Array<[string, string]> = [
   ['Find audio online', 'Open Online in the sound browser, or ask the Producer to search. Import a result to use it like any sample. Author, license, and source stay attached; download Sound credits from Export when sharing a song.'],
   ['Lengthen a pattern', 'Drag its right edge on the timeline. It snaps to whole bars and repeats what is inside (hold Shift for fine steps).'],
   ['Change a sound or add effects', 'Select a track and open the Sound & FX tab at the bottom.'],
+  ['Build your own effect', 'Add effect → Custom. Write the DSP in JavaScript, Test & apply, then Save as plugin to reuse it everywhere.'],
   ['Balance levels', 'Open the Mixer tab at the bottom.'],
   ['Use your own samples', 'Click Import audio at the bottom of the left panel, then drag the sample onto the timeline.'],
   ['Save a song', 'Projects save automatically. Use Export (top right) to download an MP3 or WAV.'],
