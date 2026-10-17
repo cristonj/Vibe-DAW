@@ -133,4 +133,15 @@ How a run works: the user's message plus a compact text snapshot of the session 
 - Guitars, bass, strings, flute, harp, organ, xylophone: [tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments) by Nicholaus Brosowsky (CC-BY 3.0).
 - All drums, 808s, effects, and textures are synthesized in the browser by Vibe — royalty-free.
 
+## Support Vibe
+
+Vibe is free and always will be. If it helps you make something, you can support it with a donation. Donations are optional. Send only the matching coin to each address.
+
+| Coin | Address |
+| --- | --- |
+| Bitcoin (BTC) | `bc1qgsc2jtrqs2l6ssujsvdzeuhz90tlhgdkvx2pw6` |
+| Monero (XMR) | `86Cd2nebXGacoZboCPD9LUdC3BQvJZS4ADoHC4g32Yj82jrJYGqBQ6cFSWj3fnLESV13Tf8FEG5fwBc67jfdoQ1MTrGpu2u` |
+
+A star or a pull request helps too.
+
 MIT licensed. See [LICENSE](LICENSE).
