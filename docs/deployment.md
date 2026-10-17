@@ -4,15 +4,16 @@ The public site is https://vibedaw.org. `/` is the landing page and `/studio` is
 
 ## Optional donations
 
-Set any of these **public receiving addresses** in Netlify's build environment, then rebuild:
+The landing page shows the project's Bitcoin and Monero addresses by default. To use your own, or to add more, set any of these **public receiving addresses** in Netlify's build environment, then rebuild:
 
 | Variable | Network shown on the page |
 | --- | --- |
-| `VITE_DONATION_BTC_ADDRESS` | Bitcoin |
+| `VITE_DONATION_BTC_ADDRESS` | Bitcoin (defaults to the project's address) |
+| `VITE_DONATION_XMR_ADDRESS` | Monero (defaults to the project's address) |
 | `VITE_DONATION_ETH_ADDRESS` | Ethereum mainnet |
 | `VITE_DONATION_SOL_ADDRESS` | Solana |
 
-Only configured addresses appear. Each has a copy button and wallet link. With no addresses, the support section links to GitHub. Never put private keys, recovery phrases, or credentials in `VITE_*` variables: they are public build inputs.
+Only configured addresses appear. Each has a copy button and wallet link. Never put private keys, recovery phrases, or credentials in `VITE_*` variables: they are public build inputs.
 
 ## Automatic Firebase rules deployments
 
