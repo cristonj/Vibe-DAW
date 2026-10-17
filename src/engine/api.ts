@@ -4,7 +4,7 @@ import type { RenderOptions } from './render';
 import type { ExportFormat } from './exportFormats';
 import type { PcmData } from './wav';
 import { contextLock } from './lock';
-import { unlockAudioOnGestures } from './unlock';
+import { unlockAudio, unlockAudioOnGestures } from './unlock';
 
 // Everything outside src/engine talks to audio through this file. It never imports
 // Tone directly: Tone creates an AudioContext the moment it's imported, and browsers
@@ -14,6 +14,7 @@ import { unlockAudioOnGestures } from './unlock';
 type EngineModule = typeof import('./engine');
 let engine: EngineModule | null = null;
 let loading: Promise<EngineModule> | null = null;
+let playRequest = 0;
 
 export function loadEngine(): Promise<EngineModule> {
   // initEngine captures Tone's global context, so it must not run while an offline
@@ -22,26 +23,37 @@ export function loadEngine(): Promise<EngineModule> {
     m.initEngine();
     engine = m;
     return m;
-  }));
+  })).catch((e) => { loading = null; throw e; });
   return loading;
 }
 
 /** Unlock audio on every user interaction, and load the engine on the first one. */
 export function loadEngineOnFirstGesture() {
-  unlockAudioOnGestures(() => void loadEngine());
+  unlockAudioOnGestures(() => void loadEngine().catch((e) => console.warn('Audio engine could not load', e)));
 }
 
 export async function play(fromBeat?: number) {
-  await (await loadEngine()).play(fromBeat);
+  const request = ++playRequest;
+  useTransport.getState().setStarting(true);
+  try {
+    unlockAudio(); // Before the lazy import/lock can consume the browser gesture.
+    const loaded = await loadEngine();
+    if (request !== playRequest) return;
+    await loaded.play(fromBeat);
+  } finally { if (request === playRequest) useTransport.getState().setStarting(false); }
 }
 
 export function stop(rewind = false) {
+  ++playRequest;
+  useTransport.getState().setStarting(false);
   if (engine) engine.stop(rewind);
   else if (rewind) useTransport.getState().setPosition(0);
 }
 
 export async function togglePlay() {
-  await (await loadEngine()).togglePlay();
+  if (useTransport.getState().starting) stop();
+  else if (useTransport.getState().playing) await (await loadEngine()).togglePlay();
+  else await play();
 }
 
 export function seek(beat: number) {
@@ -50,10 +62,12 @@ export function seek(beat: number) {
 }
 
 export function previewNote(trackId: string, midi: number, velocity = 0.8) {
+  unlockAudio();
   void loadEngine().then((m) => m.previewNote(trackId, midi, velocity));
 }
 
 export async function previewSample(sampleId: string) {
+  unlockAudio();
   await (await loadEngine()).previewSample(sampleId);
 }
 

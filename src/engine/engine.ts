@@ -7,7 +7,7 @@ import { configureFreeze, scheduleFreeze } from './freeze';
 import type { Project } from '../model/types';
 import { renderSamplePreview } from './samplePreview';
 import { pcmToAudioBuffer } from './wav';
-import { nativeAudioContext } from './unlock';
+import { nativeAudioContext, resumeAudioContext } from './unlock';
 
 // Live playback engine: one EngineGraph on the realtime AudioContext, kept in sync
 // with the store. Everything here captures the realtime context/transport once,
@@ -141,12 +141,13 @@ export async function engineSettled(): Promise<void> {
 
 export async function ensureAudio() {
   // Offline rendering may currently own Tone's global context.
-  if (realtimeContext?.state !== 'running') await realtimeContext?.resume();
+  if (realtimeContext) await resumeAudioContext(realtimeContext);
 }
 
 export async function play(fromBeat?: number) {
   const request = ++playRequest;
   starting = true;
+  useTransport.getState().setStarting(true);
   try {
   await ensureAudio();
   queueSync(getProject()); // Pick up any freezes completed during the last playback.
@@ -160,12 +161,15 @@ export async function play(fromBeat?: number) {
   t.start('+0.05');
   useTransport.getState().setPlaying(true);
   startPlayheadLoop();
-  } finally { if (request === playRequest) starting = false; }
+  } finally {
+    if (request === playRequest) { starting = false; useTransport.getState().setStarting(false); }
+  }
 }
 
 export function stop(rewind = false) {
   ++playRequest;
   starting = false;
+  useTransport.getState().setStarting(false);
   transport?.stop();
   graph?.panic();
   useTransport.getState().setPlaying(false);
@@ -179,6 +183,7 @@ export function stop(rewind = false) {
 export function pause() {
   ++playRequest;
   starting = false;
+  useTransport.getState().setStarting(false);
   if (!transport) return;
   const at = realtimeContext!.immediate();
   const pos = transport.getTicksAtTime(at) / transport.PPQ;

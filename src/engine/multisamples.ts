@@ -43,6 +43,26 @@ export const MULTISAMPLES: Record<string, MultiSample> = {
 
 const cache = new Map<string, Promise<Record<string, AudioBuffer>>>();
 
+async function loadZone(url: string): Promise<AudioBuffer> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      (async () => {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`${res.status}`);
+        return decodeAudio(await res.arrayBuffer());
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error('Instrument sample timed out'));
+        }, 15000);
+      }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 /** Fetch and decode every zone of a multisampled instrument (deduplicated, cached). */
 export function loadMultisample(preset: string): Promise<Record<string, AudioBuffer>> {
   const def = MULTISAMPLES[preset];
@@ -53,9 +73,7 @@ export function loadMultisample(preset: string): Promise<Record<string, AudioBuf
       const entries = await Promise.all(
         Object.entries(def.files).map(async ([note, file]) => {
           try {
-            const res = await fetch(def.baseUrl + file);
-            if (!res.ok) throw new Error(`${res.status}`);
-            return [note, await decodeAudio(await res.arrayBuffer())] as const;
+            return [note, await loadZone(def.baseUrl + file)] as const;
           } catch (e) {
             console.warn(`Missing ${preset} zone ${note}`, e);
             return null;

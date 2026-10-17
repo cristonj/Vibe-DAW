@@ -158,21 +158,25 @@ export const getProject = () => useDaw.getState().project;
 // Playhead lives in its own store so 60fps updates don't re-render the whole app.
 interface TransportState {
   playing: boolean;
+  starting: boolean;
   /** Beats */
   position: number;
   recording: boolean;
   metronome: boolean;
   setPlaying: (p: boolean) => void;
+  setStarting: (s: boolean) => void;
   setPosition: (b: number) => void;
   setMetronome: (m: boolean) => void;
 }
 
 export const useTransport = create<TransportState>((set) => ({
   playing: false,
+  starting: false,
   position: 0,
   recording: false,
   metronome: false,
   setPlaying: (playing) => set({ playing }),
+  setStarting: (starting) => set({ starting }),
   setPosition: (position) => set({ position }),
   setMetronome: (metronome) => set({ metronome }),
 }));
