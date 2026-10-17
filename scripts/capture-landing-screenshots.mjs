@@ -23,7 +23,10 @@ const buildSession = (page) => page.evaluate(async () => {
     if (out.result.error) throw new Error(`${name}: ${out.result.error}`);
     return out;
   };
-  const keep = () => useDaw.getState().update('Keep', (d) => { for (const t of d.tracks) for (const c of t.clips) delete c.aiPending; });
+  const keep = () => useDaw.getState().update('Keep', (d) => {
+    for (const t of d.tracks) for (const c of t.clips) delete c.aiPending;
+    for (const a of d.annotations ?? []) delete a.aiPending;
+  });
 
   await run('set_project', { bpm: 84, key: 'F minor', swing: 0.22 });
   const drums = (await run('create_track', { name: 'Dusty drums', kind: 'drums', kit: 'lofi' })).result.track_id;
@@ -47,6 +50,8 @@ const buildSession = (page) => page.evaluate(async () => {
   ].map(([pitch, start, duration]) => ({ pitch, start, duration, velocity: 0.8 })) });
   await run('write_notes', { track_id: pad, start_bar: 1, length_bars: 20, clip_name: 'Glass bed', chords: prog(4, { duration: 4, velocity: 0.5 }), loop_bars: 4 });
   await run('set_sections', { sections: [{ name: 'Intro', start_bar: 1, length_bars: 4 }, { name: 'Verse', start_bar: 5, length_bars: 8 }, { name: 'Hook', start_bar: 13, length_bars: 8 }] });
+  for (const [text, start_bar, end_bar] of [['city lights', 13, 15], ['nobody awake', 15, 17], ['just the radio', 17, 19]]) await run('add_annotation', { text, kind: 'lyric', start_bar, end_bar });
+  await run('add_annotation', { text: 'Leave room for the vocal here', kind: 'note', start_bar: 5, end_bar: 9 });
   await run('add_effect', { track_id: keys, type: 'chorus' });
   await run('add_effect', { track_id: keys, type: 'lofi' });
   await run('add_effect', { track_id: drums, type: 'saturation' });
@@ -74,69 +79,107 @@ const buildSession = (page) => page.evaluate(async () => {
   runItems.push({ kind: 'assistant', id: id(30), text: 'Added a **flute hook** over bars 13–20: a four-bar phrase that answers itself, mostly stepwise so it stays out of the way of a vocal. A dotted-eighth delay gives it some air. Have a listen and keep what you like.', thinking: '', streaming: false });
   runItems.push({ kind: 'changes', id: id(40), lines: diffProjects(checkpoint, useDaw.getState().project).lines, checkpoint, state: 'pending' });
   useAgent.setState({ items: runItems });
-  useDaw.getState().setZoom(8);
-  const melodyClip = melody.clipIds[0];
-  useDaw.getState().select({ trackId: lead.result.track_id, clipIds: [melodyClip] });
-  useDaw.getState().openEditor(melodyClip);
-  return { drums, keys, bass, pad, melodyClip };
+  const t = (name) => useDaw.getState().project.tracks.find((x) => x.name === name);
+  return { drums, keys, bass, pad, lead: lead.result.track_id, melodyClip: melody.clipIds[0], hookDrums: t('Dusty drums').clips.find((c) => c.name === 'Hook groove').id };
 });
 
-async function open(viewport, opts = {}) {
-  const page = await browser.newPage({ viewport, deviceScaleFactor: 2, colorScheme: 'dark', ...opts });
+async function openStudio() {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: 'dark' });
   page.on('pageerror', (e) => console.error('page error:', e.message));
   await page.goto(`${BASE}/studio`);
   await page.waitForFunction(() => !!window.__vibe, null, { timeout: 60_000 });
-  return { page, ids: await buildSession(page) };
+  const ids = await buildSession(page);
+  await page.keyboard.press('Control+b'); // sound browser off: the crops are about the session
+  return { page, ids };
 }
 
 // Re-encode in the browser so the script needs nothing beyond Playwright.
-async function save(page, name, shot) {
-  const png = (shot ?? await page.screenshot()).toString('base64');
-  const webp = await page.evaluate(async (src) => {
+async function save(page, name, clip) {
+  await page.mouse.move(1, 1);
+  await page.waitForTimeout(900);
+  const pad = clip.pad ?? 0;
+  const png = (await page.screenshot({ clip: { x: clip.x - pad, y: clip.y - pad, width: clip.width + pad * 2, height: clip.height + pad * 2 } })).toString('base64');
+  const { webp, width, height } = await page.evaluate(async (src) => {
     const img = new Image(); img.src = `data:image/png;base64,${src}`; await img.decode();
     const canvas = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height });
     canvas.getContext('2d').drawImage(img, 0, 0);
-    return canvas.toDataURL('image/webp', 0.88).split(',')[1];
+    return { webp: canvas.toDataURL('image/webp', 0.9).split(',')[1], width: img.width, height: img.height };
   }, png);
   writeFileSync(`${OUT}${name}.webp`, Buffer.from(webp, 'base64'));
-  console.log(`saved ${name}.webp`);
+  console.log(`${name}.webp ${width}x${height}`);
 }
 
-// Park the pointer on empty timeline so no tooltip or hover state shows.
-const settle = async (page) => { await page.mouse.move(1000, 575); await page.waitForTimeout(1200); };
+const box = (page, selector) => page.locator(selector).first().boundingBox();
+const union = (...boxes) => {
+  const x = Math.min(...boxes.map((b) => b.x)), y = Math.min(...boxes.map((b) => b.y));
+  return { x, y, width: Math.max(...boxes.map((b) => b.x + b.width)) - x, height: Math.max(...boxes.map((b) => b.y + b.height)) - y };
+};
 
-{ // Arrangement, the Producer's run awaiting review, and the new part in the piano roll.
-  const { page } = await open({ width: 1440, height: 900 });
-  await page.locator('aside.browser .tab', { hasText: 'Instruments' }).click();
-  await settle(page);
-  const panel = await page.locator('aside.browser').boundingBox();
-  await save(page, 'instruments', await page.screenshot({ clip: { ...panel, height: 520 } }));
+{ // The Producer's run: prompt, tool calls, what it heard, and the review card.
+  const { page, ids } = await openStudio();
+  const feed = await box(page, '.agent .feed');
+  const first = await box(page, '.agent .msg-user');
+  const changes = await box(page, '.agent .changes');
+  await save(page, 'producer', { x: feed.x, y: first.y - 8, width: feed.width, height: changes.y + changes.height + 14 - (first.y - 8) });
+  await save(page, 'review', { ...changes, pad: 10 });
 
-  await page.keyboard.press('Control+b');
-  await settle(page);
-  await save(page, 'studio');
+  // Whole song, timeline only: lyrics lane, tracks, the lilac part waiting to be kept.
+  await page.keyboard.press('Control+j');
+  await page.evaluate(() => { const s = window.__vibe.useDaw.getState(); s.select({ trackId: null, clipIds: [] }); s.openEditor(null); s.toggleBottom(); });
+  await page.waitForTimeout(300);
+  const arrange = await box(page, '[aria-label="Arrangement"]');
+  const header = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.arrange')).getPropertyValue('--header-w')));
+  await page.evaluate((z) => window.__vibe.useDaw.getState().setZoom(z), (arrange.width - header - 12) / 80.5);
+  await page.waitForTimeout(300);
+  const ruler = await box(page, '.ruler');
+  const rows = await page.locator('.track-row').evaluateAll((els) => els.at(-1).getBoundingClientRect().bottom);
+  await save(page, 'arrangement', { x: arrange.x, y: ruler.y, width: arrange.width, height: rows - ruler.y });
 
+  // The editors, given room: grow the dock by dragging its handle like a user would.
+  await page.evaluate(() => window.__vibe.useDaw.getState().toggleBottom());
+  const handle = await box(page, '.dock-resize');
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down(); await page.mouse.move(handle.x + handle.width / 2, handle.y - 170, { steps: 6 }); await page.mouse.up();
+  const show = (id) => page.evaluate((id) => { const s = window.__vibe.useDaw.getState(); s.select({ trackId: null, clipIds: [id] }); s.openEditor(id); }, id);
+  await show(ids.melodyClip);
+  await page.waitForTimeout(300);
+  const tools = await box(page, '.dock .roll-tools');
+  const hint = await box(page, '.dock .editor-hint');
+  // From just above the highest note down through the velocity lane.
+  const top = await page.locator('.dock .roll-body .note').evaluateAll((els) => Math.min(...els.map((el) => el.getBoundingClientRect().top)));
+  const y = Math.max(tools.y + tools.height, top - 44);
+  await save(page, 'piano-roll', { x: tools.x, y, width: tools.width, height: hint.y - y });
+  await show(ids.hookDrums);
+  await page.waitForTimeout(300);
+  const lanes = await page.locator('.dock .drum-row').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }));
+  await save(page, 'drums', { ...union(...lanes), pad: 8 });
   await page.evaluate(() => window.__vibe.useDaw.getState().setBottom('mixer'));
-  await settle(page);
-  const dock = await page.locator('.dock').boundingBox();
-  const right = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.dock [class*="strip"]')].map((el) => el.getBoundingClientRect().right)));
-  await save(page, 'mixer', await page.screenshot({ clip: { ...dock, width: Math.min(dock.width, right - dock.x + 24) } }));
+  await page.waitForTimeout(300);
+  const strips = await page.evaluate(() => {
+    const r = [...document.querySelectorAll('.dock [class*="strip"]')].map((el) => el.getBoundingClientRect());
+    const x = Math.min(...r.map((b) => b.left)), y = Math.min(...r.map((b) => b.top));
+    return { x, y, width: Math.max(...r.map((b) => b.right)) - x, height: Math.max(...r.map((b) => b.bottom)) - y };
+  });
+  await save(page, 'mixer', { x: strips.x - 14, y: strips.y - 4, width: strips.width + 28, height: strips.height + 18 });
   await page.close();
 }
 
 { // Shift-drag a phrase across tracks, then Ctrl+K.
-  const { page, ids } = await open({ width: 1440, height: 900 });
-  await page.keyboard.press('Control+b');
+  const { page, ids } = await openStudio();
+  await page.keyboard.press('Control+j');
   await page.evaluate(({ bass, pad }) => {
-    const { useDaw } = window.__vibe;
-    useDaw.getState().openEditor(null);
-    useDaw.getState().select({ trackId: bass, clipIds: [], range: { start: 32, end: 48, trackIds: [bass, pad] } });
+    const s = window.__vibe.useDaw.getState();
+    s.openEditor(null);
+    s.setZoom(16);
+    s.select({ trackId: bass, clipIds: [], range: { start: 32, end: 48, trackIds: [bass, pad] } });
   }, ids);
   await page.keyboard.press('Control+k');
-  await page.getByRole('dialog', { name: 'Edit with AI' }).locator('input').fill('Walk the bass up into the hook');
-  await settle(page);
-  const box = await page.getByRole('region', { name: 'Arrangement', exact: true }).boundingBox();
-  await save(page, 'inline-edit', await page.screenshot({ clip: { x: box.x, y: box.y, width: box.width, height: 520 } }));
+  const dialog = page.getByRole('dialog', { name: 'Edit with AI' });
+  await dialog.locator('input').fill('Walk the bass up into the hook');
+  const regions = await page.locator('.selection-region').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }));
+  const d = await dialog.boundingBox();
+  const bottom = Math.max(...regions.map((r) => r.y + r.height)) + 24;
+  await save(page, 'inline-edit', { x: d.x - 1, y: d.y - 1, width: d.width + 2, height: bottom - d.y + 1 });
   await page.close();
 }
 

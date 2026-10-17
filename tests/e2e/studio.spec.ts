@@ -27,7 +27,7 @@ test('landing opens the studio without loading its audio engine', async ({ page 
   expect(requests.some((url) => /tone|firebase|studio\.tsx|genai/.test(url))).toBe(false);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/landing-${info.project.name}.png`, fullPage: true });
-  await page.getByRole('link', { name: 'Make something' }).click();
+  await page.getByRole('main').getByRole('link', { name: 'Open the studio' }).first().click();
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Arrangement', exact: true })).toBeVisible();
 });
