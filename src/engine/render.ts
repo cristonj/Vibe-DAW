@@ -273,7 +273,7 @@ export async function exportAudio(project: Project, format: ExportFormat, onProg
   let pcm = await renderProject(project, { onProgress: (f) => onProgress?.(f * renderShare, 'render') });
   if (TRIM_TRAILING_SILENCE) {
     const keep = trimmedLength(pcm.channels, pcm.sampleRate);
-    pcm = { ...pcm, channels: pcm.channels.map((c) => c.slice(0, keep)) };
+    pcm = { ...pcm, channels: pcm.channels.map((c) => keep < c.length ? c.slice(0, keep) : c) };
   }
   if (format === 'mp3') {
     // MP3 tops out at 48 kHz; high-rate devices get a band-limited downsample.

@@ -1,4 +1,5 @@
 import { AddToChat } from './AddToChat';
+import { createPortal } from 'react-dom';
 import { memo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, X, Copy, CopyPlus, ClipboardPaste, Scissors } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
@@ -294,13 +295,15 @@ function EmptyHero() {
     try { localStorage.setItem(HERO_DISMISSED, '1'); } catch { /* storage disabled */ }
   };
   if (dismissed || aiAvailable().ok) return null;
-  return (
+  // Portaled to <body>: the arrangement's container query contains fixed descendants.
+  return createPortal(
     <div className="empty-arrange">
       <div className="hero-card">
         <button className="btn icon hero-close" onClick={close} aria-label="Close" title="Close"><X size={16} /></button>
         <KeySetup />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

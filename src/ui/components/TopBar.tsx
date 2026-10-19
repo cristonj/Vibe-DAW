@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark, Ellipsis } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
-import { usePersist } from '../../state/persistence';
+import { flushAutosave, usePersist } from '../../state/persistence';
 import { useAuth, signIn } from '../../cloud/cloud';
 import { firebaseConfigured } from '../../cloud/config';
 import { togglePlay, stop, exportAudio } from '../../engine/api';
@@ -57,7 +57,12 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
   return (
     <header className="topbar">
-      <a className="brand" href="/" title="Vibe home" aria-label="Vibe home"><VibeMark className="brand-mark" flow={flow} /><Wordmark className="brand-name" flow={flow} /></a>
+      <a className="brand" href="/" onClick={(e) => {
+        // Save pending edits before leaving; a page being unloaded can drop the async write.
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        void flushAutosave().finally(() => { window.location.href = '/'; });
+      }} title="Vibe home" aria-label="Vibe home"><VibeMark className="brand-mark" flow={flow} /><Wordmark className="brand-name" flow={flow} /></a>
       <button className="btn icon" title={tip('Show or hide the sound browser', 'toggleBrowser')} onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
       <input
         className="project-name"
