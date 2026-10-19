@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { Bookmark, X } from 'lucide-react';
+import { Bookmark, X } from '../icons';
 import type { PresetKind } from '../../model/presets';
 import { usePresets } from '../../state/presetLibrary';
 import { useDaw } from '../../state/store';

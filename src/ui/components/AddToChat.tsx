@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from 'lucide-react';
+import { MessageSquarePlus } from '../icons';
 import { attachChatReference } from '../chatReferences';
 
 export function AddToChat({ referenceId, label, mini = false }: { referenceId: string; label: string; mini?: boolean }) {

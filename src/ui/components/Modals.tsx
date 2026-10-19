@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from 'lucide-react';
+import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from '../icons';
 import { useSettings, MODELS, MAX_CUSTOM_INSTRUCTIONS, type Thinking } from '../../state/settings';
 import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
 import { useAuth, signIn, signOut } from '../../cloud/cloud';
 import { usePersist, openProject, newProject, deleteProject, duplicateProject, syncNow } from '../../state/persistence';
 import { useDaw } from '../../state/store';
-import { relativeTime } from '../hooks';
+import { rangeFill, relativeTime } from '../hooks';
 import { toast } from '../toast';
 import { ACTIONS, bindings, comboFromEvent, useKeymap, type ActionId } from '../../state/keymap';
-import { ACCENTS, THEMES, useTheme, type ThemeId } from '../../state/theme';
+import { THEMES, flowSeconds, useTheme, type ThemeId } from '../../state/theme';
+import { accentFill } from '../../state/accent';
+import { AccentPicker } from './AccentPicker';
 import { importMidiFile } from '../midiActions';
 import { openSavePreset } from './SavePreset';
 import { importProjectFile } from '../../state/projectFile';
@@ -84,16 +86,16 @@ function AiSettings() {
       <label className="field">
         <span>Model</span>
         <select value={s.model} onChange={(e) => s.set({ model: e.target.value as typeof s.model })}>
-          {MODELS.map((m) => <option key={m.id} value={m.id}>{m.name} — {m.blurb}</option>)}
+          {MODELS.map((m) => <option key={m.id} value={m.id}>{m.name} - {m.blurb}</option>)}
         </select>
       </label>
       <label className="field">
         <span>Thinking</span>
         <select value={s.thinking} onChange={(e) => s.set({ thinking: e.target.value as Thinking })}>
-          <option value="MINIMAL">Minimal — fastest</option>
+          <option value="MINIMAL">Minimal - fastest</option>
           <option value="LOW">Low</option>
-          <option value="MEDIUM">Medium — balanced</option>
-          <option value="HIGH">High — best musical decisions, slower</option>
+          <option value="MEDIUM">Medium - balanced</option>
+          <option value="HIGH">High - best musical decisions, slower</option>
         </select>
       </label>
       <label className="field">
@@ -147,6 +149,8 @@ function AiSettings() {
   );
 }
 
+const flowLabel = (speed: number) => `${Math.round(flowSeconds(speed))} s`;
+
 function AppearanceSettings() {
   const t = useTheme();
   return (
@@ -155,13 +159,13 @@ function AppearanceSettings() {
         <span>Theme</span>
         <div className="theme-grid">
           {(Object.keys(THEMES) as ThemeId[]).map((id) => {
-            const v = { '--bg': '#161925', '--panel': '#1c2030', '--raised': '#282e46', '--text': '#ebe9f4', ...THEMES[id].vars } as Record<string, string>;
+            const v = { '--bg': '#050505', '--panel': '#0b0b0c', '--raised': '#1a1a1d', '--text': '#ececee', ...THEMES[id].vars } as Record<string, string>;
             return (
               <button key={id} className={`theme-card ${t.theme === id ? 'on' : ''}`} onClick={() => t.set({ theme: id })} aria-pressed={t.theme === id}>
                 <span className="theme-swatch" style={{ background: v['--bg'] }}>
                   <i style={{ background: v['--panel'] }} />
                   <i style={{ background: v['--raised'] }} />
-                  <i style={{ background: t.accent }} />
+                  <i style={{ background: accentFill(t.accent) }} />
                 </span>
                 {THEMES[id].name}
               </button>
@@ -170,15 +174,16 @@ function AppearanceSettings() {
         </div>
       </div>
       <div className="field">
-        <span>Accent color</span>
-        <small>Used for AI changes, selection, and primary buttons.</small>
-        <div className="accent-row">
-          {ACCENTS.map((c) => (
-            <button key={c} className={`accent-dot ${t.accent === c ? 'on' : ''}`} style={{ background: c }} onClick={() => t.set({ accent: c })} aria-label={`Accent ${c}`} title={c} />
-          ))}
-          <label className="accent-custom" title="Pick any color">
-            <input type="color" value={t.accent} onChange={(e) => t.set({ accent: e.target.value })} aria-label="Custom accent color" /> Custom
-          </label>
+        <span>Accent</span>
+        <small>The agent's ink: AI changes, selection, and primary buttons. Pick one, or build your own gradient.</small>
+        <AccentPicker />
+      </div>
+      <div className="field">
+        <span>Color flow</span>
+        <small>How fast the accent's gradients and glows drift. All the way left holds them still.</small>
+        <div className="flow-row">
+          <input type="range" min={0} max={1} step={0.01} value={t.flow} style={rangeFill(t.flow, 0, 1)} onChange={(e) => t.set({ flow: Number(e.target.value) })} aria-label="Color flow speed" aria-valuetext={t.flow > 0 ? `One pass every ${flowLabel(t.flow)}` : 'Off'} />
+          <span>{t.flow > 0 ? flowLabel(t.flow) : 'Off'}</span>
         </div>
       </div>
       <label className="field">

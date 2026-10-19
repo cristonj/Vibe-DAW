@@ -152,7 +152,7 @@ function unionSchema(groups: Array<[owner: string, params: Record<string, { labe
   return {
     type: 'object',
     description: title,
-    properties: Object.fromEntries(Object.entries(props).map(([k, v]) => [k, { type: v.type, description: `${v.description} — ${v.owners.join(', ')}` }])),
+    properties: Object.fromEntries(Object.entries(props).map(([k, v]) => [k, { type: v.type, description: `${v.description} - ${v.owners.join(', ')}` }])),
   };
 }
 
@@ -1045,7 +1045,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
       return {
         result: { auditions: heard.map(({ id, name, ...rest }) => ({ id, name, ...('heard' in rest ? { heard: rest.heard } : { error: rest.error }) })) },
         summary: `Listened to ${ids.length} sample${ids.length > 1 ? 's' : ''}`,
-        heard: heard.map((h) => `**${h.name ?? h.id}** — ${'heard' in h ? h.heard : h.error}`).join('\n\n'),
+        heard: heard.map((h) => `**${h.name ?? h.id}** - ${'heard' in h ? h.heard : h.error}`).join('\n\n'),
         sampleIds: ids,
       };
     },
@@ -1101,7 +1101,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
   {
     decl: {
       name: 'bounce_to_sample',
-      description: 'Render bars of the song (optionally soloed tracks) into a new sample — for resampling tricks: reversed swells, chopped re-pitched melodies, printing a layer.',
+      description: 'Render bars of the song (optionally soloed tracks) into a new sample - for resampling tricks: reversed swells, chopped re-pitched melodies, printing a layer.',
       parameters: obj({ start_bar: N('From bar'), end_bar: N('To bar (exclusive)'), track_ids: A(S('Track id'), 'Only these tracks'), name: S('Sample name') }, ['start_bar', 'end_bar']),
     },
     run: async (a) => {

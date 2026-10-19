@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Play, MousePointer2 } from 'lucide-react';
+import { Play, MousePointer2 } from '../icons';
 import { useDaw } from '../../state/store';
 import type { MidiClip, Project, Track } from '../../model/types';
 import { beatsPerBar, uid } from '../../model/project';
@@ -87,13 +87,13 @@ export function DrumEditor({ clip, track, project }: { clip: MidiClip; track: Tr
         <span className="hide-touch" style={{ color: 'var(--faint)', fontSize: 12, marginLeft: 8 }}>Click to toggle · Ctrl = accent · Alt = ghost · Shift-drag to select</span>
         <button className="btn" aria-pressed={selectMode} onClick={() => setSelectMode((v) => !v)}><MousePointer2 size={14} /> Select{selected?.length ? ` · ${selected.length}` : ''}</button>
         <div style={{ flex: 1 }} />
-        <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}>Edit with AI</button>
+        <button className="btn" onClick={() => openInlineAI([clip.id])}><span className="ai-ink">Edit with AI</span></button>
       </div>
       <div className={`drum-grid ${selectMode ? 'selecting-range' : ''}`} onPointerDownCapture={selectRegion}>
         {lanes.map((l, laneIndex) => (
           <div className="drum-row" key={l.id}>
             <div className="lname">
-              <button className="btn icon" style={{ width: 22, height: 22 }} onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} fill="currentColor" /></button>
+              <button className="btn icon" style={{ width: 22, height: 22 }} onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} /></button>
               {l.name}
             </div>
             <div className="steps">
@@ -112,7 +112,7 @@ export function DrumEditor({ clip, track, project }: { clip: MidiClip; track: Tr
                     onClick={(e) => toggle(l.note, i, e)}
                     aria-label={`${l.name} step ${i + 1}${on ? ' on' : ''}`}
                   >
-                    {hits.length > 1 ? <span style={{ fontSize: 9, fontWeight: 700, color: '#10131c' }}>{hits.length}</span> : null}
+                    {hits.length > 1 ? <span style={{ fontSize: 9, fontWeight: 700, color: '#0b0b0c' }}>{hits.length}</span> : null}
                   </button>
                 );
               })}

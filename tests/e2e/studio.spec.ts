@@ -23,13 +23,29 @@ test('landing opens the studio without loading its audio engine', async ({ page 
   const requests: string[] = [];
   page.on('request', (req) => requests.push(req.url()));
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The open source agentic DAW built to augment, not replace, human creativity.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The open source agentic DAW built to enhance, not replace, human creativity.');
+  await expect(page.getByRole('main').getByRole('img', { name: 'Vibe', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation')).toHaveCount(0);
   expect(requests.some((url) => /tone|firebase|studio\.tsx|genai/.test(url))).toBe(false);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/landing-${info.project.name}.png`, fullPage: true });
   await page.getByRole('main').getByRole('link', { name: 'Open the studio' }).first().click();
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Arrangement', exact: true })).toBeVisible();
+});
+
+test('landing shows one donation QR code at a time', async ({ page }) => {
+  await page.goto('/');
+  const btc = page.getByRole('button', { name: 'Show Bitcoin QR code' });
+  await btc.click();
+  await expect(page.getByRole('img', { name: 'QR code for the Bitcoin address' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hide Bitcoin QR code' })).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Show Monero QR code' }).click();
+  await expect(page.getByRole('img', { name: 'QR code for the Monero address' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /^QR code for/ })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Hide Monero QR code' }).click();
+  await expect(page.getByRole('img', { name: /^QR code for/ })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('first-run Gemini setup is fully visible and not covered by the timeline', async ({ page }) => {
@@ -317,7 +333,7 @@ test('click, right-click and @ mentions attach the same current project context'
   await expect(page.getByRole('listbox', { name: 'Add a project reference' })).not.toBeVisible();
 });
 
-test('Producer reviews remain scrollable and can be attached using their button or mention', async ({ page }) => {
+test('Producer reviews remain scrollable and can be attached by mention', async ({ page }) => {
   await fixture(page);
   await page.evaluate(async () => {
     const { useAgent } = await import('/src/agent/agent.ts');
@@ -330,9 +346,6 @@ test('Producer reviews remain scrollable and can be attached using their button 
   expect(await notes.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
   await notes.evaluate((el) => { el.scrollTop = el.scrollHeight; });
   expect(await notes.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-  await page.getByRole('button', { name: 'Add Producer notes to chat', exact: true }).click();
-  await expect(page.locator('.composer .attach-chip')).toContainText('Reviewed the intro');
-  await page.getByRole('button', { name: 'Remove Reviewed the intro' }).click();
   const message = page.getByRole('textbox', { name: 'Message the agent' });
   await message.fill('@Reviewed'); await page.getByRole('option', { name: /Reviewed the intro/ }).click();
   await expect(page.locator('.composer .attach-chip')).toContainText('Reviewed the intro');

@@ -188,7 +188,7 @@ async function lfoPhases() {
       const d = Math.abs(((first - second + 540) % 360) - 180);
       write(`${d < 3 ? 'PASS' : 'FAIL'} tremolo on a loop: first pass ${first.toFixed(1)}°, second pass ${second.toFixed(1)}°`);
     }
-    write(`${worst < 3 ? 'PASS' : 'FAIL'} tremolo on ${where}: wobble phase at bar 2 — live from 0 ${ph[0].toFixed(1)}°, live from bar 2 ${ph[1].toFixed(1)}°, export ${ph[2].toFixed(1)}°, export from bar 2 ${ph[3].toFixed(1)}° (spread ${worst.toFixed(1)}°)`);
+    write(`${worst < 3 ? 'PASS' : 'FAIL'} tremolo on ${where}: wobble phase at bar 2 - live from 0 ${ph[0].toFixed(1)}°, live from bar 2 ${ph[1].toFixed(1)}°, export ${ph[2].toFixed(1)}°, export from bar 2 ${ph[3].toFixed(1)}° (spread ${worst.toFixed(1)}°)`);
   }
 }
 

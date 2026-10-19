@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark, Ellipsis } from 'lucide-react';
+import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark, Ellipsis } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
 import { usePersist } from '../../state/persistence';
 import { useAuth, signIn } from '../../cloud/cloud';
@@ -14,15 +14,8 @@ import { toast } from '../toast';
 import { tip, useKeymap } from '../../state/keymap';
 import { exportProjectFile } from '../../state/projectFile';
 import { projectCredits } from '../../samples/credits';
-
-export function Logo() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
-      <rect width="32" height="32" rx="8" fill="#262b40" />
-      <path d="M6 20c3 0 3-8 6-8s3 12 6 12 3-16 6-16 2 6 2 6" fill="none" stroke="#b69cff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+import { VibeMark, Wordmark } from '../../brand/Wordmark';
+import { flowSeconds, useTheme } from '../../state/theme';
 
 function Position() {
   const pos = useTransport((s) => s.position);
@@ -32,6 +25,7 @@ function Position() {
 
 export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () => void; onOpenHelp: () => void; browserOpen: boolean; agentOpen: boolean; toggleBrowser: () => void; toggleAgent: () => void }) {
   useKeymap((k) => k.overrides);
+  const flow = useTheme((s) => flowSeconds(s.flow));
   const name = useDaw((s) => s.project.name);
   const bpm = useDaw((s) => s.project.bpm);
   const key = useDaw((s) => s.project.key);
@@ -50,6 +44,8 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
   const sampleSyncError = useAuth((s) => s.sampleSyncError);
   const cloudSyncError = useAuth((s) => s.lastSyncError);
   const [bpmDraft, setBpmDraft] = useState<string | null>(null);
+  const tempoInput = useRef<HTMLInputElement>(null);
+  const tempoDrag = useRef<{ y: number; bpm: number; moved: boolean } | null>(null);
 
   const commitBpm = () => {
     if (bpmDraft === null) return;
@@ -61,8 +57,8 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
   return (
     <header className="topbar">
+      <div className="brand"><VibeMark className="brand-mark" flow={flow} /><Wordmark className="brand-name" flow={flow} /></div>
       <button className="btn icon" title={tip('Show or hide the sound browser', 'toggleBrowser')} onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
-      <div className="brand"><Logo /> <span className="brand-name">Vibe</span></div>
       <input
         className="project-name"
         value={name}
@@ -79,9 +75,9 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
       <div className="transport">
         <button className="btn icon" title={tip('Back to start', 'stopRewind')} onClick={() => stop(true)}><SkipBack size={16} /></button>
-        <button className="btn icon hide-narrow" title="Stop" onClick={() => stop(false)}><Square size={14} fill="currentColor" /></button>
+        <button className="btn icon hide-narrow" title="Stop" onClick={() => stop(false)}><Square size={14} /></button>
         <button className={`play ${playing || starting ? 'playing' : ''}`} aria-label={starting ? 'Cancel playback startup' : playing ? 'Pause' : 'Play'} title={starting ? 'Loading audio… Click to cancel' : tip('Play / pause', 'playPause')} onClick={() => void togglePlay().catch((e) => toast(`Playback failed: ${(e as Error).message}`, 'error'))}>
-          {playing || starting ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+          {playing || starting ? <Pause size={17} /> : <Play size={17} />}
         </button>
         {starting && <span className="transport-loading" role="status">Loading audio…</span>}
         <button className={`btn icon ${loop ? 'on' : ''}`} title={tip('Loop', 'toggleLoop')} onClick={() => update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; })}><Repeat size={16} /></button>
@@ -90,8 +86,35 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
       <div className="lcd">
         <Position />
-        <div title="Tempo">
+        {/* Drag up or down to change the tempo (Shift for tenths); a click without a drag types instead. */}
+        <div
+          className="tempo"
+          title="Tempo · drag up or down, or click to type"
+          onPointerDown={(e) => {
+            if (document.activeElement === tempoInput.current) return;
+            e.preventDefault();
+            tempoDrag.current = { y: e.clientY, bpm, moved: false };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const d = tempoDrag.current;
+            if (!d) return;
+            const dy = d.y - e.clientY;
+            if (!d.moved && Math.abs(dy) < 3) return;
+            d.moved = true;
+            const fine = e.shiftKey, v = Math.max(40, Math.min(220, d.bpm + dy * (fine ? 0.1 : 0.5)));
+            const next = fine ? Math.round(v * 10) / 10 : Math.round(v);
+            if (next !== useDaw.getState().project.bpm) update('Tempo', (p) => { p.bpm = next; }, { coalesce: true });
+          }}
+          onPointerUp={() => {
+            const d = tempoDrag.current;
+            tempoDrag.current = null;
+            if (d && !d.moved) { tempoInput.current?.focus(); tempoInput.current?.select(); }
+          }}
+          onPointerCancel={() => { tempoDrag.current = null; }}
+        >
           <input
+            ref={tempoInput}
             aria-label="Tempo"
             value={bpmDraft ?? String(bpm)}
             onChange={(e) => setBpmDraft(e.target.value)}
@@ -119,7 +142,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
       <div className="top-right">
         <ExportMenu />
         {firebaseConfigured && (user ? (
-          <span className="avatar" title={`${user.name ?? user.email} — synced to the cloud`}>
+          <span className="avatar" title={`${user.name ?? user.email} - synced to the cloud`}>
             {user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : (user.name ?? '?')[0]}
           </span>
         ) : (

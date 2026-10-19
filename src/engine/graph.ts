@@ -186,7 +186,7 @@ export class EngineGraph {
 
     const anySolo = p.tracks.some((x) => x.solo);
     const audibleOf = (track: Track) => (this.opts.onlyTracks ? this.opts.onlyTracks.includes(track.id) : !track.mute && (!anySolo || track.solo));
-    // Offline renders don't build silent tracks at all — except ones that trigger a
+    // Offline renders don't build silent tracks at all - except ones that trigger a
     // sidechain duck on an audible track; those become ghosts that only send triggers.
     const duckSources = new Set<string>();
     for (const t of p.tracks) if (audibleOf(t)) for (const e of t.effects) if (e.type === 'duck' && e.enabled) duckSources.add(String(e.params.source));
@@ -504,7 +504,7 @@ export class EngineGraph {
     s.resources.add(gain);
     const cleanup = () => {
       s.audioVoices.delete(voice);
-      // Offline 'ended' fires on Tone's clock, ahead of the rendered audio — don't cut the clip short.
+      // Offline 'ended' fires on Tone's clock, ahead of the rendered audio - don't cut the clip short.
       if (!context.isOffline) { node.dispose(); gain.dispose(); s.resources.delete(node); s.resources.delete(gain); }
     };
     node.onended = cleanup;

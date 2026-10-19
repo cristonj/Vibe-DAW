@@ -11,6 +11,12 @@
   to = "/index.html"
   status = 200
 
+# The service worker must always be fresh, or a deploy could hide behind an old one.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
 [[headers]]
   for = "/assets/*"
   [headers.values]

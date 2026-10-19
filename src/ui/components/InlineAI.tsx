@@ -5,7 +5,7 @@ import { findClip } from '../../model/project';
 import { runAgent, useAgent } from '../../agent/agent';
 import { selectionClips, selectedNotes, type EditSelection } from '../../model/selection';
 import { shuffledSuggestions } from '../../agent/suggestions';
-import { Shuffle } from 'lucide-react';
+import { Shuffle } from '../icons';
 
 // Ctrl+K: Cursor-style inline edit, scoped to the selected clips.
 
@@ -49,10 +49,10 @@ export function InlineAI() {
   };
 
   return (
-    <div className="overlay" style={{ background: 'rgba(8,9,16,0.35)', placeItems: 'start center' }} onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+    <div className="overlay" style={{ background: 'rgba(0,0,0,0.35)', placeItems: 'start center' }} onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="inline-ai" role="dialog" aria-modal="true" aria-label="Edit with AI">
         <div className="ctx">
-          {selection?.range || selection?.notes?.length ? `${noteCount} selected notes${selection.range ? ` · beats ${selection.range.start}–${selection.range.end}` : ''} · ${found.length} clips` : found.length ? `Editing ${found.map((f) => `“${f.clip.name}” (${f.track.name})`).join(', ')}` : 'No clip selected — this will go to the agent for the whole song'}
+          {selection?.range || selection?.notes?.length ? `${noteCount} selected notes${selection.range ? ` · beats ${selection.range.start}–${selection.range.end}` : ''} · ${found.length} clips` : found.length ? `Editing ${found.map((f) => `“${f.clip.name}” (${f.track.name})`).join(', ')}` : 'No clip selected - this will go to the agent for the whole song'}
         </div>
         <input
           ref={inputRef}
@@ -66,7 +66,7 @@ export function InlineAI() {
           {quick.map((q) => <button key={q} className="suggestion" onClick={() => submit(q)}>{q}</button>)}
         </div>
         <button className="btn" onClick={() => setQuick(shuffledSuggestions(kind))}><Shuffle size={13} /> More ideas</button>
-        <div className="hint">{running ? 'Enter to steer the active run' : 'Enter to run'} · Esc to close · changes show up in lilac until you keep them</div>
+        <div className="hint">{running ? 'Enter to steer the active run' : 'Enter to run'} · Esc to close · changes stay outlined until you keep them</div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Square, Ear, Plus, Play, Check, RotateCcw, Paperclip, X, Brain, ListChecks, Eye, Mic, LoaderCircle, Pause, Shuffle, AtSign, MessageSquarePlus, Wrench,
-} from 'lucide-react';
+  ArrowUp, Square, Ear, Plus, Play, Check, RotateCcw, Paperclip, X, Brain, ListChecks, Eye, Mic, LoaderCircle, Pause, Shuffle, AtSign, Wrench,
+} from '../icons';
 import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } from '../../agent/agent';
 import { analyzeReference } from '../../agent/ears';
 import { useSettings, MODELS, aiAvailable } from '../../state/settings';
@@ -17,7 +17,7 @@ import { MAX_VOICE_SECONDS, useVoiceRecorder, voiceSupported, type VoiceClip } f
 
 function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan' }>; pinned?: boolean }) {
   const done = item.steps.filter((s) => s.status === 'done').length;
-  return <details data-chat-ref={`chat:${item.id}`} className={`plan ${pinned ? 'pinned-plan' : ''}`} open>
+  return <details className={`plan ${pinned ? 'pinned-plan' : ''}`} open>
     <summary className="plan-title"><ListChecks size={14} /><b>Checklist</b><span>{done}/{item.steps.length}</span></summary>
     <div className="plan-steps">{item.steps.map((s, i) => (
       <div key={i} className={`plan-step ${s.status}`}>
@@ -25,7 +25,6 @@ function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan'
         {s.title}
       </div>
     ))}</div>
-    <button className="btn" onClick={() => attachChatReference(`chat:${item.id}`)}><MessageSquarePlus size={12} /> Add checklist to chat</button>
   </details>;
 }
 
@@ -46,8 +45,8 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
         </div>
       </div>
       {item.heard && (
-        <section data-chat-ref={`review:${item.id}`} className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
-          <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b><span>Producer notes</span><button className="btn icon" onClick={() => attachChatReference(`review:${item.id}`)} aria-label="Add Producer notes to chat" title="Add these Producer notes to chat"><MessageSquarePlus size={13} /></button></header>
+        <section className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
+          <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b></header>
           <div className="review-notes" tabIndex={0} aria-label="Producer review notes"><Markdown text={item.heard} /></div>
         </section>
       )}
@@ -69,7 +68,7 @@ function VoiceNote({ url, seconds }: { url: string; seconds: number }) {
   };
   return (
     <button className="voice-note" onClick={toggle} aria-label={playing ? 'Stop voice message' : 'Play voice message'}>
-      {playing ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+      {playing ? <Pause size={12} /> : <Play size={12} />}
       <Mic size={12} /> Voice message · {clock(seconds)}
     </button>
   );
@@ -89,7 +88,7 @@ function Item({ item }: { item: ChatItem }) {
       );
     case 'assistant':
       return (
-        <div className="msg-ai" data-chat-ref={`chat:${item.id}`}>
+        <div className="msg-ai">
           {item.thinking && (
             <details className="thinking">
               <summary><Brain size={12} /> {item.streaming && !item.text ? 'Thinking…' : 'Thought process'}</summary>
@@ -97,7 +96,6 @@ function Item({ item }: { item: ChatItem }) {
             </details>
           )}
           {item.text && <div className={item.streaming ? 'cursor-blink' : ''}><Markdown text={item.text} /></div>}
-          {!item.streaming && item.text && <button className="btn msg-add" onClick={() => attachChatReference(`chat:${item.id}`)} aria-label="Add message to chat"><MessageSquarePlus size={12} /> Add to chat</button>}
         </div>
       );
     case 'tool':
@@ -113,8 +111,8 @@ function Item({ item }: { item: ChatItem }) {
           <ul>{item.lines.slice(0, 14).map((l, i) => <li key={i}>{l}</li>)}{item.lines.length > 14 && <li>…and {item.lines.length - 14} more</li>}</ul>
           {item.state === 'pending' && (
             <div className="actions">
-              <button className="btn primary" onClick={() => keepChanges(item.id)}><Check size={14} /> Keep</button>
               <button className="btn solid" onClick={() => revertTo(item.checkpoint, item.id)}><RotateCcw size={14} /> Undo all</button>
+              <button className="btn primary" onClick={() => keepChanges(item.id)}><Check size={14} /> Keep</button>
             </div>
           )}
         </div>
@@ -245,7 +243,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   return (
     <aside className={`agent ${open ? '' : 'collapsed'}`} aria-label="Agent">
       <div className="agent-head">
-        <div className="agent-title"><span className={`agent-dot ${running ? 'busy' : ''}`} /> Producer</div>
+        <div className="agent-title">Producer</div>
         <div className="seg" role="radiogroup" aria-label="Agent mode">
           <button className={mode === 'agent' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('agent')} role="radio" aria-checked={mode === 'agent'} title="The agent edits your project">Agent</button>
           <button className={mode === 'ask' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('ask')} role="radio" aria-checked={mode === 'ask'} title="Read-only: questions and feedback">Ask</button>
@@ -276,7 +274,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
               <span>{recording ? `Recording ${clock(recorder.seconds)}` : 'Preparing…'}</span>
               {recording && recorder.seconds > MAX_VOICE_SECONDS - 15 && <span className="rec-limit">stops at {clock(MAX_VOICE_SECONDS)}</span>}
               <div className="spacer" />
-              {recording && <button className="btn" onClick={() => void recorder.stop().then((clip) => clip && setDraft(clip))} aria-label="Stop recording to listen back" title="Stop and listen back before sending"><Square size={11} fill="currentColor" /> Stop</button>}
+              {recording && <button className="btn" onClick={() => void recorder.stop().then((clip) => clip && setDraft(clip))} aria-label="Stop recording to listen back" title="Stop and listen back before sending"><Square size={11} /> Stop</button>}
               {recording && <button className="btn" onClick={recorder.cancel} aria-label="Discard voice message"><X size={13} /> Discard</button>}
             </div>
           )}
@@ -326,7 +324,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
           />
           <div className="composer-row">
             <button className="btn icon" aria-label="Mention a project item" title="Attach tracks, clips, effects, sounds, notes and Producer reviews (@)" onClick={() => { const next = text + (text && !/\s$/.test(text) ? ' ' : '') + '@'; setText(next); setCaret(next.length); requestAnimationFrame(() => { taRef.current?.focus(); taRef.current?.setSelectionRange(next.length, next.length); }); }}><AtSign size={15} /></button>
-            <button className="btn icon" title="Attach a reference track — the agent listens and matches its style" onClick={() => fileRef.current?.click()} disabled={analyzing}><Paperclip size={15} /></button>
+            <button className="btn icon" title="Attach a reference track - the agent listens and matches its style" onClick={() => fileRef.current?.click()} disabled={analyzing}><Paperclip size={15} /></button>
             <input ref={fileRef} type="file" accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = ''; }} />
             <select
               value={model}
@@ -349,7 +347,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
               </button>
             )}
             {running && (
-              <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} fill="currentColor" /></button>
+              <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} /></button>
             )}
             <button className={`send ${recording ? 'recording' : ''}`} onClick={() => void send()} disabled={(!text.trim() && !recording && !draft && !pending.length && !attachments.length) || analyzing || recorder.state === 'encoding'} title={recording || draft ? 'Send voice message (Enter)' : running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={recording || draft ? 'Send voice message' : running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
           </div>

@@ -16,7 +16,7 @@ import { arrayBufferToBase64 } from '../engine/wav';
 
 // The agent loop: stream a turn, run whatever tools the model calls, feed results
 // back, repeat until it answers in plain text. All edits land in one undo step and
-// get a reviewable change summary — Cursor's accept/reject, for music.
+// get a reviewable change summary - Cursor's accept/reject, for music.
 
 const MAX_TURNS = 48;
 

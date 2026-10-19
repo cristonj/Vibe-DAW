@@ -1,6 +1,6 @@
 import { AddToChat } from './AddToChat';
 import { useMemo, useRef, useState } from 'react';
-import { Play, Trash, Plus, Power, CopyPlus, Bookmark, ChevronUp, ChevronDown, RotateCcw, Code, CircleAlert } from 'lucide-react';
+import { Play, Trash, Plus, Power, CopyPlus, Bookmark, ChevronUp, ChevronDown, RotateCcw, Code, CircleAlert } from '../icons';
 import { openSavePreset } from './SavePreset';
 import { useDaw } from '../../state/store';
 import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams, type EffectInfo } from '../../model/catalog';
@@ -8,6 +8,7 @@ import type { Effect, EffectType, Project, Track } from '../../model/types';
 import { cloneDeep, mintId } from '../../model/project';
 import { useLibrary } from '../../samples/library';
 import { previewNote } from '../../engine/api';
+import { rangeFill } from '../hooks';
 import { CUSTOM_BLANK, CUSTOM_STARTERS, customDefaults, effectName, newCustomEffect } from '../../model/customEffect';
 import { useCustomFxErrors } from '../../engine/customFx';
 import { usePresets } from '../../state/presetLibrary';
@@ -51,7 +52,7 @@ export function ParamSlider({ label, value, min, max, step, onChange, format, de
     <div className="param">
       <span title={label}>{label.replace(/\s*\((Hz|dB|s|ms)\)/, '')}</span>
       <input
-        type="range" min={min} max={max} step={s} value={value}
+        type="range" min={min} max={max} step={s} value={value} style={rangeFill(value, min, max)}
         onChange={(e) => onChange(Number(e.target.value))}
         onDoubleClick={() => defaultValue !== undefined && onChange(defaultValue)}
         aria-label={label}
@@ -278,7 +279,7 @@ function DrumKit({ track }: { track: Track }) {
             {options.map((m) => <option key={m.id} value={m.id}>{m.category} · {m.name}</option>)}
           </select>
           <input type="number" step={0.5} value={l.gainDb} onChange={(e) => setLane(l.id, (x) => { x.gainDb = Number(e.target.value); })} aria-label={`${l.name} gain dB`} title="Gain dB" />
-          <button className="btn icon" onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} fill="currentColor" /></button>
+          <button className="btn icon" onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} /></button>
         </div>
       ))}
     </div>

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from '../icons';
 import { useDaw } from '../../state/store';
 import { findClip, findTrack } from '../../model/project';
 import { AnnotationsPanel } from './Annotations';

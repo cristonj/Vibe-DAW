@@ -116,28 +116,18 @@ const union = (...boxes) => {
   return { x, y, width: Math.max(...boxes.map((b) => b.x + b.width)) - x, height: Math.max(...boxes.map((b) => b.y + b.height)) - y };
 };
 
-{ // The Producer's run: prompt, tool calls, what it heard, and the review card.
+{ // The whole studio with the song fitted to the timeline, the Producer panel on its own, then the editors.
   const { page, ids } = await openStudio();
-  const feed = await box(page, '.agent .feed');
-  const first = await box(page, '.agent .msg-user');
-  const changes = await box(page, '.agent .changes');
-  await save(page, 'producer', { x: feed.x, y: first.y - 8, width: feed.width, height: changes.y + changes.height + 14 - (first.y - 8) });
-  await save(page, 'review', { ...changes, pad: 10 });
-
-  // Whole song, timeline only: lyrics lane, tracks, the lilac part waiting to be kept.
-  await page.keyboard.press('Control+j');
-  await page.evaluate(() => { const s = window.__vibe.useDaw.getState(); s.select({ trackId: null, clipIds: [] }); s.openEditor(null); s.toggleBottom(); });
+  await page.evaluate(() => { const s = window.__vibe.useDaw.getState(); s.select({ trackId: null, clipIds: [] }); s.openEditor(null); s.setBottom('mixer'); });
   await page.waitForTimeout(300);
   const arrange = await box(page, '[aria-label="Arrangement"]');
   const header = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.arrange')).getPropertyValue('--header-w')));
   await page.evaluate((z) => window.__vibe.useDaw.getState().setZoom(z), (arrange.width - header - 12) / 80.5);
   await page.waitForTimeout(300);
-  const ruler = await box(page, '.ruler');
-  const rows = await page.locator('.track-row').evaluateAll((els) => els.at(-1).getBoundingClientRect().bottom);
-  await save(page, 'arrangement', { x: arrange.x, y: ruler.y, width: arrange.width, height: rows - ruler.y });
+  await save(page, 'studio', { x: 0, y: 0, width: 1440, height: 900 });
+  await save(page, 'producer', await box(page, '.agent'));
 
   // The editors, given room: grow the dock by dragging its handle like a user would.
-  await page.evaluate(() => window.__vibe.useDaw.getState().toggleBottom());
   const handle = await box(page, '.dock-resize');
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await page.mouse.down(); await page.mouse.move(handle.x + handle.width / 2, handle.y - 170, { steps: 6 }); await page.mouse.up();
@@ -161,7 +151,7 @@ const union = (...boxes) => {
     const x = Math.min(...r.map((b) => b.left)), y = Math.min(...r.map((b) => b.top));
     return { x, y, width: Math.max(...r.map((b) => b.right)) - x, height: Math.max(...r.map((b) => b.bottom)) - y };
   });
-  await save(page, 'mixer', { x: strips.x - 14, y: strips.y - 4, width: strips.width + 28, height: strips.height + 18 });
+  await save(page, 'mixer', { x: strips.x - 8, y: strips.y - 4, width: strips.width + 16, height: strips.height + 6 });
   await page.close();
 }
 

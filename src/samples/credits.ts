@@ -19,5 +19,5 @@ export function projectCredits(project: Project): string {
   if (instruments.has('piano')) entries.push('Salamander Grand Piano by Alexander Holm\nLicense: CC BY 3.0\nhttps://archive.org/details/SalamanderGrandPianoV3\nhttps://creativecommons.org/licenses/by/3.0/');
   const other = [...instruments].filter((id) => id !== 'piano');
   if (other.length) entries.push(`${other.map((id) => PRESET_BY_ID[id].name).join(', ')}\nSample library: tonejs-instruments by Nicholaus Brosowsky\nLicense: CC BY 3.0\nhttps://github.com/nbrosowsky/tonejs-instruments\nhttps://creativecommons.org/licenses/by/3.0/`);
-  return `${project.name} — sound credits\nMade with Vibe · https://vibedaw.org\n\n${entries.join('\n\n') || 'No attributed library sounds are referenced by this session.'}\n\nEdits and processing may have been applied in this session. Check source pages for exact authorship and license terms. Add credits for any user-uploaded recordings separately.\n`;
+  return `${project.name}: sound credits\nMade with Vibe · https://vibedaw.org\n\n${entries.join('\n\n') || 'No attributed library sounds are referenced by this session.'}\n\nEdits and processing may have been applied in this session. Check source pages for exact authorship and license terms. Add credits for any user-uploaded recordings separately.\n`;
 }

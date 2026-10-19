@@ -1,10 +1,10 @@
-# Vibe
+<h1><picture><source media="(prefers-color-scheme: dark)" srcset="public/brand/wordmark.svg"><img src="public/brand/wordmark-light.svg" alt="Vibe" height="96"></picture></h1>
 
-The open source agentic DAW built to augment, not replace, human creativity.
+The open source agentic DAW built to enhance, not replace, human creativity.
 
 [vibedaw.org](https://vibedaw.org/)
 
-Vibe is a full digital audio workstation — arrangement, piano roll, step sequencer, mixer, effects — with a producer agent built in. Type *"make a Lil Peep type beat"* and it plans the track, picks and **listens to** sounds, writes the parts, arranges and mixes them, then bounces the song and listens back to fix what it hears. Everything it does is ordinary DAW state: you can edit any of it by hand, and one undo takes back a whole agent run.
+Vibe is a full digital audio workstation - arrangement, piano roll, step sequencer, mixer, effects - with a producer agent built in. Type *"make a Lil Peep type beat"* and it plans the track, picks and **listens to** sounds, writes the parts, arranges and mixes them, then bounces the song and listens back to fix what it hears. Everything it does is ordinary DAW state: you can edit any of it by hand, and one undo takes back a whole agent run.
 
 It's Cursor for music: the agent edits your session the way Cursor edits your code, with reviewable changes, checkpoints, and inline edits on a selection.
 
@@ -13,8 +13,8 @@ It's Cursor for music: the agent edits your session the way Cursor edits your co
 - **Ears, not just eyes.** Gemini is multimodal, so the agent auditions samples and critiques real offline bounces of your song (rendered by the same engine you hear), paired with measured loudness, spectrum balance, and stereo data.
 - **A DAW API built for a model.** Tools speak producer: step-string drum patterns with trap rolls (`x.x.3.4.`), chord symbols with strum/arpeggio/voice-leading, 1-based bars, `copy_bars`/`clear_bars` arrangement moves, sidechain ducking, sound design, resampling.
 - **No generated audio.** Every sound is a real instrument, your own samples, or something synthesized from parameters. The agent composes and produces; it never prints audio from a text prompt.
-- **Review like code.** Agent-made clips are drawn in lilac until you **Keep** them. Each run ends with a change summary and **Undo all**; every message has a checkpoint you can restore.
-- **Ctrl+K inline edits.** Shift-drag a region across tracks or select notes, then press Ctrl+K, say "add hi-hat rolls" or "make it sadder" — the agent receives exact note IDs and timing and can rewrite just that phrase. Touch screens have Range / Select controls and an Edit selection button.
+- **Review like code.** Agent-made clips are outlined in the brand gradient until you **Keep** them. Each run ends with a change summary and **Undo all**; every message has a checkpoint you can restore.
+- **Ctrl+K inline edits.** Shift-drag a region across tracks or select notes, then press Ctrl+K, say "add hi-hat rolls" or "make it sadder" - the agent receives exact note IDs and timing and can rewrite just that phrase. Touch screens have Range / Select controls and an Edit selection button.
 - **Reference tracks.** Attach a song; the agent listens and extracts a production recipe (tempo feel, drum placement, 808 behavior, mix character) to work from.
 - **Agent and Ask modes.** Ask mode is read-only: it listens and gives notes without touching the session.
 
@@ -37,6 +37,8 @@ npm test          # unit tests (theory, editing ops, analysis, diffs)
 npm run typecheck
 npm run build
 ```
+
+The wordmark and mark are drawn in code in `src/brand/glyphs.ts`: each letter is its own stroked path, so weight, spacing, and color are a one-line change. `npm run brand` re-exports `public/brand` (each letter, the wordmark, the mark, and the social card) and the favicons from it.
 
 ## Sounds and workflow
 
@@ -88,7 +90,7 @@ firebase deploy --only firestore:rules,storage
 
 1. New site from this repo. `netlify.toml` already sets the build (`npm run build`, publish `dist`, SPA redirects, asset caching).
 2. Site settings → Environment variables: add every `VITE_FIREBASE_*` value and `VITE_RECAPTCHA_SITE_KEY`.
-3. **Do not set `VITE_GEMINI_API_KEY` on Netlify** — Vite inlines `VITE_*` values into the public bundle.
+3. **Do not set `VITE_GEMINI_API_KEY` on Netlify** - Vite inlines `VITE_*` values into the public bundle.
 
 ## Architecture
 
@@ -131,7 +133,7 @@ How a run works: the user's message plus a compact text snapshot of the session 
 - [Tone.js](https://tonejs.github.io) (MIT) powers the audio engine.
 - Piano: [Salamander Grand Piano](https://archive.org/details/SalamanderGrandPianoV3) by Alexander Holm (CC-BY 3.0), via tonejs.github.io.
 - Guitars, bass, strings, flute, harp, organ, xylophone: [tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments) by Nicholaus Brosowsky (CC-BY 3.0).
-- All drums, 808s, effects, and textures are synthesized in the browser by Vibe — royalty-free.
+- All drums, 808s, effects, and textures are synthesized in the browser by Vibe - royalty-free.
 
 ## Support Vibe
 

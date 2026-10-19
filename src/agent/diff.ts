@@ -2,7 +2,7 @@ import type { Clip, Project } from '../model/types';
 import { formatKey } from '../model/theory';
 import { effectName } from '../model/customEffect';
 
-// Human-readable summary of what changed between two project versions —
+// Human-readable summary of what changed between two project versions:
 // the DAW equivalent of a code diff, shown under every agent run.
 
 export interface ChangeSummary {

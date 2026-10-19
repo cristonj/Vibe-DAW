@@ -2,7 +2,7 @@ import { memo, useRef } from 'react';
 import { useDaw } from '../../state/store';
 import type { Track } from '../../model/types';
 import { getMasterLevels, getTrackLevel } from '../../engine/api';
-import { useAnimationFrame } from '../hooks';
+import { rangeFill, useAnimationFrame } from '../hooks';
 
 function levelToPct(db: number) {
   if (!isFinite(db)) return 0;
@@ -26,9 +26,9 @@ const Strip = memo(function Strip({ track, selected }: { track: Track; selected:
       <button className="fx-count btn" style={{ height: 20, padding: '0 6px' }} title="Open this track's instrument and effects" onClick={() => { select({ trackId: track.id }); setBottom('track'); }}>
         {track.effects.length ? `FX · ${track.effects.length}` : '+ FX'}
       </button>
-      <input className="pan" type="range" min={-1} max={1} step={0.01} value={track.pan} onChange={(e) => set('Pan', (t) => { t.pan = Number(e.target.value); }, true)} onDoubleClick={() => set('Pan', (t) => { t.pan = 0; })} aria-label={`${track.name} pan`} title={`Pan ${track.pan === 0 ? 'center' : `${Math.round(Math.abs(track.pan) * 100)}% ${track.pan < 0 ? 'left' : 'right'}`} · double-click to center`} />
+      <input className="pan" type="range" min={-1} max={1} step={0.01} value={track.pan} style={rangeFill(track.pan, -1, 1)} onChange={(e) => set('Pan', (t) => { t.pan = Number(e.target.value); }, true)} onDoubleClick={() => set('Pan', (t) => { t.pan = 0; })} aria-label={`${track.name} pan`} title={`Pan ${track.pan === 0 ? 'center' : `${Math.round(Math.abs(track.pan) * 100)}% ${track.pan < 0 ? 'left' : 'right'}`} · double-click to center`} />
       <div className="fader-wrap">
-        <input className="fader" type="range" min={-60} max={6} step={0.5} value={track.volumeDb} onChange={(e) => set('Volume', (t) => { t.volumeDb = Number(e.target.value); }, true)} onDoubleClick={() => set('Volume', (t) => { t.volumeDb = 0; })} aria-label={`${track.name} volume`} title="Volume · double-click to reset to 0 dB" />
+        <input className="fader" type="range" min={-60} max={6} step={0.5} value={track.volumeDb} style={rangeFill(track.volumeDb, -60, 6)} onChange={(e) => set('Volume', (t) => { t.volumeDb = Number(e.target.value); }, true)} onDoubleClick={() => set('Volume', (t) => { t.volumeDb = 0; })} aria-label={`${track.name} volume`} title="Volume · double-click to reset to 0 dB" />
         <Meter read={() => getTrackLevel(track.id)} />
       </div>
       <span className="db">{track.volumeDb > 0 ? '+' : ''}{track.volumeDb.toFixed(1)} dB</span>
@@ -52,7 +52,7 @@ export function Mixer() {
         <div className="sname">Master</div>
         <span className="fx-count">{master.effects.length} fx</span>
         <div className="fader-wrap">
-          <input className="fader" type="range" min={-24} max={6} step={0.5} value={master.volumeDb} onChange={(e) => update('Master volume', (d) => { d.master.volumeDb = Number(e.target.value); }, { coalesce: true })} aria-label="Master volume" />
+          <input className="fader" type="range" min={-24} max={6} step={0.5} value={master.volumeDb} style={rangeFill(master.volumeDb, -24, 6)} onChange={(e) => update('Master volume', (d) => { d.master.volumeDb = Number(e.target.value); }, { coalesce: true })} aria-label="Master volume" />
           <Meter read={() => getMasterLevels()[0]} />
           <Meter read={() => getMasterLevels()[1]} />
         </div>

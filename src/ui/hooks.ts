@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { getLoadedBuffer, loadBuffer, useLibrary } from '../samples/library';
 import { waveformPeaks } from '../samples/analysis';
 
@@ -71,6 +71,11 @@ export function uiZoom(): number {
 }
 
 /** Layout breakpoints, kept in sync with the media queries in global.css. */
+/** How far along a slider's value is, as the --p its groove fills up to (see global.css). */
+export function rangeFill(value: number, min: number, max: number): CSSProperties {
+  return { '--p': `${(Math.max(0, Math.min(1, (value - min) / (max - min))) * 100).toFixed(2)}%` } as CSSProperties;
+}
+
 export const NARROW = '(max-width: 1024px)'; // side panels become drawers
 export const PHONE = '(max-width: 640px)'; // compact top bar and timeline
 
