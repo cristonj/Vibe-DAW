@@ -109,7 +109,6 @@
 .lp-daw-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 88px; align-items: end; margin-bottom: 56px; }
 .lp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 20px; }
 .lp-grid .wide { grid-column: 1 / -1; }
-.lp-grid figcaption { padding: 12px 18px; font-size: 13px; color: var(--faint); border-top: 1px solid var(--line-soft); }
 .lp-grid .lp-mixer { align-self: start; min-width: 0; }
 .lp-mixer img { width: 100%; height: auto; }
 .lp-promise { align-self: center; padding: 0 0 0 40px; }
@@ -173,6 +172,8 @@
   .lp-grid { grid-template-columns: 1fr; }
   .lp-grid .wide { grid-column: auto; }
   .lp-grid .wide img { width: 170%; max-width: none; }
+  /* Scaled down, the screenshot's own rounded card is tighter than the frame's corners. */
+  .lp-inline { border-radius: var(--radius-s); }
   .lp-end { padding-top: 120px; padding-bottom: 80px; }
 }
 /* Sections rise in as they arrive, and the hero shot straightens as you scroll, driven by
