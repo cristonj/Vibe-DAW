@@ -1,7 +1,9 @@
 import { create } from 'zustand';
+import { GRADIENT } from '../brand/glyphs';
 
 // Themes are sets of CSS variable overrides on :root. Accent recolors the agent ink
-// (the purple used for AI changes, focus rings and primary buttons).
+// (AI changes, focus rings and primary buttons). The default accent is the brand gradient:
+// filled surfaces paint --agent-fill, and thin lines and text use --agent, its solid middle.
 
 export const THEMES = {
   midnight: { name: 'Midnight', vars: {} as Record<string, string> },
@@ -26,7 +28,17 @@ export const THEMES = {
 
 export type ThemeId = keyof typeof THEMES;
 
-export const ACCENTS = ['#b69cff', '#5cc8ff', '#3ddc97', '#ffb547', '#ff7aa2', '#f7a8ff'];
+/** The brand gradient as an accent. Stored as this word rather than a color. */
+export const VIBE_ACCENT = 'vibe';
+export const ACCENTS = [VIBE_ACCENT, '#5cc8ff', '#3ddc97', '#ffb547', '#ff7aa2', '#f7a8ff'];
+/** The lilac that was the default before the gradient. Saved copies of it become the gradient. */
+const OLD_DEFAULT = '#b69cff';
+
+const gradient = (stops: readonly string[]) => `linear-gradient(100deg, ${stops.join(', ')})`;
+/** The solid color an accent uses where a gradient can't go: outlines, text, sliders. */
+export const accentSolid = (accent: string) => accent === VIBE_ACCENT ? GRADIENT[1] : accent;
+/** The paint for a filled surface in an accent. Always an image, so it works as background-image. */
+export const accentFill = (accent: string) => gradient(accent === VIBE_ACCENT ? GRADIENT : [accent, accent]);
 
 interface ThemeState {
   theme: ThemeId;
@@ -40,9 +52,10 @@ const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}'
 
 /** Valid theme id and accent color, falling back to defaults (also used for synced preferences). */
 export function sanitizeAppearance(v: { theme?: unknown; accent?: unknown }): { theme: ThemeId; accent: string } {
+  const color = typeof v.accent === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v.accent) && v.accent.toLowerCase() !== OLD_DEFAULT;
   return {
     theme: typeof v.theme === 'string' && Object.hasOwn(THEMES, v.theme) ? (v.theme as ThemeId) : 'midnight',
-    accent: typeof v.accent === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v.accent) ? v.accent : ACCENTS[0],
+    accent: color ? (v.accent as string) : VIBE_ACCENT,
   };
 }
 
@@ -62,6 +75,7 @@ function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
+const lighten = (hex: string) => `rgb(${hexToRgb(hex).map((c) => Math.min(255, c + 25)).join(', ')})`;
 
 let applied: string[] = [];
 
@@ -70,11 +84,13 @@ export function applyTheme() {
   const root = document.documentElement;
   for (const k of applied) root.style.removeProperty(k);
   const vars: Record<string, string> = { ...THEMES[theme].vars };
-  const [r, g, b] = hexToRgb(accent);
-  vars['--agent'] = accent;
-  vars['--agent-strong'] = `rgb(${Math.min(255, r + 25)}, ${Math.min(255, g + 25)}, ${Math.min(255, b + 25)})`;
+  const solid = accentSolid(accent), [r, g, b] = hexToRgb(solid);
+  vars['--agent'] = solid;
+  vars['--agent-strong'] = lighten(solid);
   vars['--agent-wash'] = `rgba(${r}, ${g}, ${b}, 0.14)`;
   vars['--agent-line'] = `rgba(${r}, ${g}, ${b}, 0.55)`;
+  vars['--agent-fill'] = accentFill(accent);
+  vars['--agent-fill-strong'] = gradient(accent === VIBE_ACCENT ? GRADIENT.map(lighten) : [lighten(solid), lighten(solid)]);
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
   applied = Object.keys(vars);
   root.dataset.theme = theme;

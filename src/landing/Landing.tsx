@@ -83,7 +83,7 @@ export function Landing() {
     <main>
       <section className="lp-hero lp-wrap">
         <div onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" /></div>
-        <h1>The open source agentic DAW built to <mark>augment, not replace,</mark> human creativity.</h1>
+        <h1>The open source agentic DAW built to <mark>enhance, not replace,</mark> human creativity.</h1>
         <div className="lp-actions lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">View the code</a></div>
         <figure className="lp-hero-shot">
           <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.arrangement} alt="A Vibe arrangement: drums, Rhodes, bass and pad tracks across intro, verse and hook, lyric cues above, and a new flute part in lilac waiting for review." /></div>

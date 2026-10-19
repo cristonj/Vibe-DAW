@@ -286,7 +286,7 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
           <button className="btn icon danger" onClick={() => deleteNotes(selected)} disabled={!sel} aria-label="Delete selected notes" title={tip('Delete selected notes', 'delete')}><Trash size={14} /></button>
         </div>
         <div style={{ flex: 1 }} />
-        <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])} title="Ask the agent to change this clip (Ctrl+K)">Edit with AI</button>
+        <button className="btn" onClick={() => openInlineAI([clip.id])} title="Ask the agent to change this clip (Ctrl+K)"><span className="ai-ink">Edit with AI</span></button>
       </div>
       <div className="roll-body" ref={bodyRef} tabIndex={0} onKeyDown={onKey}>
         <div className="keys" style={{ height: ROWS * ROW }}>

@@ -87,7 +87,7 @@ export function DrumEditor({ clip, track, project }: { clip: MidiClip; track: Tr
         <span className="hide-touch" style={{ color: 'var(--faint)', fontSize: 12, marginLeft: 8 }}>Click to toggle · Ctrl = accent · Alt = ghost · Shift-drag to select</span>
         <button className="btn" aria-pressed={selectMode} onClick={() => setSelectMode((v) => !v)}><MousePointer2 size={14} /> Select{selected?.length ? ` · ${selected.length}` : ''}</button>
         <div style={{ flex: 1 }} />
-        <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}>Edit with AI</button>
+        <button className="btn" onClick={() => openInlineAI([clip.id])}><span className="ai-ink">Edit with AI</span></button>
       </div>
       <div className={`drum-grid ${selectMode ? 'selecting-range' : ''}`} onPointerDownCapture={selectRegion}>
         {lanes.map((l, laneIndex) => (

@@ -612,8 +612,8 @@ export function Arrangement() {
         <button className="btn icon" title={tip('Zoom in', 'zoomIn')} onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
         <div style={{ flex: 1 }} />
         {hasPending && (
-          <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed and remove the purple outlines">
-            <Check size={14} /> Keep<span className="btn-label minor"> AI changes</span>
+          <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed and remove its outlines">
+            <Check size={14} /> <span className="ai-ink">Keep<span className="btn-label minor"> AI changes</span></span>
           </button>
         )}
       </div>

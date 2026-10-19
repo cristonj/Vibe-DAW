@@ -1,5 +1,5 @@
-/* Landing. Same ink-navy palette as the studio (global.css :root), with lilac kept for
-   what it means in the app: the agent's ink. */
+/* Landing. Same ink-navy palette as the studio (global.css :root), with the brand gradient
+   kept for what it means in the app: the agent's ink. */
 .landing { height: 100%; overflow-y: auto; overflow-x: hidden; background: var(--bg); color: var(--text); font-size: 17px; line-height: 1.6; user-select: text; scroll-behavior: smooth; }
 .landing a { color: inherit; text-decoration: none; }
 :where(.landing figure) { margin: 0; }
@@ -9,8 +9,8 @@
 .lp-foot a:hover { color: var(--text); }
 .lp-brand { display: flex; align-items: center; }
 
-.lp-btn { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: var(--radius-m); background: var(--agent); color: var(--bg) !important; font-size: 15px; font-weight: 600; transition: background 120ms; }
-.lp-btn:hover { background: var(--agent-strong); }
+.lp-btn { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: var(--radius-m); background: var(--agent-fill); color: var(--bg) !important; font-size: 15px; font-weight: 600; }
+.lp-btn:hover { background: var(--agent-fill-strong); }
 .lp-btn.ghost { background: var(--panel); color: var(--text) !important; box-shadow: inset 0 0 0 1px var(--line); }
 .lp-btn.ghost:hover { background: var(--raised); }
 .lp-actions { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -21,7 +21,10 @@
 .landing h3 { font-size: 30px; line-height: 1.1; letter-spacing: -0.025em; }
 :where(.landing p) { color: var(--muted); margin: 0; }
 /* The pending-clip hatch from the arrangement, as a highlighter. */
-.landing mark { color: var(--agent-strong); background: repeating-linear-gradient(-45deg, var(--agent-wash) 0 3px, transparent 3px 9px) 0 88% / 100% 0.36em no-repeat; }
+/* The promise, in the wordmark's ink and glow. The gradient runs there and back so it can drift. */
+.landing mark { color: transparent; background: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 0.32em rgba(255, 143, 207, 0.35)); animation: lp-drift 9s ease-in-out infinite alternate; }
+@keyframes lp-drift { to { background-position: 100% 0; } }
 .landing kbd { font: 600 0.56em/1 var(--font-ui); display: inline-block; vertical-align: 0.2em; padding: 0.32em 0.45em; margin: 0 0.08em; border-radius: 6px; background: var(--raised); box-shadow: inset 0 -2px 0 var(--line), 0 0 0 1px var(--line); color: var(--text); letter-spacing: 0; }
 
 .lp-hero { position: relative; padding-top: 96px; }
@@ -131,6 +134,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .landing { scroll-behavior: auto; }
-  .lp-btn { transition: none; }
+  .landing mark { animation: none; }
   .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop { animation: none; }
 }

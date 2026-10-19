@@ -1,6 +1,6 @@
 /* Vibe: studio at night.
    Quiet ink-navy surfaces, colorful tracks, and one loud idea: everything the agent
-   touches is drawn in lilac ink until you keep it. */
+   touches is drawn in the brand gradient until you keep it. */
 
 :root {
   --bg: #161925;
@@ -13,10 +13,14 @@
   --text: #ebe9f4;
   --muted: #a0a3bf;
   --faint: #6b7090;
-  --agent: #b69cff;
-  --agent-strong: #cbb8ff;
-  --agent-wash: rgba(182, 156, 255, 0.14);
-  --agent-line: rgba(182, 156, 255, 0.55);
+  /* The agent's ink. --agent-fill paints surfaces with the brand gradient (theme.ts swaps it
+     for a custom accent); --agent is its solid middle, for lines and text. */
+  --agent: #ff8fcf;
+  --agent-strong: #ffa8e8;
+  --agent-wash: rgba(255, 143, 207, 0.14);
+  --agent-line: rgba(255, 143, 207, 0.55);
+  --agent-fill: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547);
+  --agent-fill-strong: linear-gradient(100deg, #cfb5ff, #ffa8e8, #ffce60);
   --signal: #ffb547;
   --rec: #ff5d73;
   --ok: #3ddc97;
@@ -116,8 +120,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   white-space: nowrap;
 }
 .btn:hover { background: var(--hover); color: var(--text); }
-.btn.primary { background: var(--agent); color: #1a1430; font-weight: 600; }
-.btn.primary:hover { background: var(--agent-strong); }
+.btn.primary { background: var(--agent-fill); color: #1a1430; font-weight: 600; }
+.btn.primary:hover { background: var(--agent-fill-strong); }
+/* Text in the agent's ink. Text only: it would hide an icon drawn in currentColor. */
+.ai-ink { background: var(--agent-fill); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .btn.solid { background: var(--raised); color: var(--text); }
 .btn.solid:hover { background: var(--hover); }
 .btn.danger:hover { color: var(--rec); }
@@ -230,7 +236,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .tabs { display: flex; gap: 2px; padding: 8px 8px 0; }
 .tab { padding: 6px 10px; border-radius: var(--radius-s) var(--radius-s) 0 0; color: var(--faint); font-weight: 500; }
 .tab:hover { color: var(--text); }
-.tab.active { color: var(--text); box-shadow: inset 0 -2px 0 var(--agent); }
+.tab.active { color: var(--text); background: var(--agent-fill) bottom / 100% 2px no-repeat; }
 
 .browser-search { padding: 8px; display: flex; gap: 6px; border-bottom: 1px solid var(--line-soft); }
 .browser-search input { flex: 1; min-width: 0; }
@@ -263,7 +269,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   .sample-row:hover .add-mini, .sample-row .add-mini:focus-visible { opacity: 1; }
 }
 .sample-row .heard { grid-column: 2 / 5; color: var(--faint); font-size: 11px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.sample-row.generated .name::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--agent); margin-right: 6px; vertical-align: 1px; }
+.sample-row.generated .name::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--agent-fill); margin-right: 6px; vertical-align: 1px; }
 
 .preset-row { display: flex; flex-direction: column; gap: 2px; padding: 7px 8px; border-radius: var(--radius-s); cursor: grab; }
 .preset-row:hover { background: var(--panel-2); }
@@ -421,19 +427,30 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .clip.muted { opacity: 0.35; }
 .clip .resize { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: ew-resize; }
 
-/* The signature: agent-made clips carry lilac ink until reviewed. */
-.clip.ai {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 0 0 1.5px var(--agent);
+/* The signature: agent-made clips carry the agent's ink until reviewed. The clip clips its
+   children, so the gradient ring is drawn just inside its edge, inside the white ring when selected. */
+.clip.ai::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: 2px;
+  border-radius: inherit;
+  background: var(--agent-fill);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
 }
-.clip.ai.selected { box-shadow: inset 0 0 0 2px #fff, 0 0 0 1.5px var(--agent); }
+.clip.ai.selected::before { inset: 2px; border-radius: 3px; }
 .clip.ai::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(115deg, transparent 0 10px, rgba(182, 156, 255, 0.13) 10px 12px);
+  background: repeating-linear-gradient(115deg, transparent 0 10px, var(--agent-wash) 10px 12px);
 }
-.clip.ai .cname::after { content: 'AI'; flex: none; align-self: stretch; color: #1a1430; background: var(--agent); padding: 0 4px; margin-right: -5px; font-size: 9.5px; letter-spacing: 0.04em; }
+.clip.ai .cname::after { content: 'AI'; flex: none; align-self: stretch; color: #1a1430; background: var(--agent-fill); padding: 0 4px; margin-right: -5px; font-size: 9.5px; letter-spacing: 0.04em; }
 
 .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--signal); z-index: 5; pointer-events: none; box-shadow: 0 0 8px rgba(255, 181, 71, 0.6); }
 .playhead::before { content: ''; position: absolute; top: 0; left: -5px; border: 5px solid transparent; border-top: 7px solid var(--signal); }
@@ -557,9 +574,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 
 .agent-head { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 10px; border-bottom: 1px solid var(--line-soft); }
 .agent-title { display: flex; align-items: center; gap: 8px; font-weight: 650; }
-.agent-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--agent); box-shadow: 0 0 0 3px var(--agent-wash); }
+.agent-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--agent-fill); box-shadow: 0 0 0 3px var(--agent-wash); }
 .agent-dot.busy { animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(182, 156, 255, 0.05); } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--agent) 5%, transparent); } }
 .seg { display: flex; padding: 2px; border-radius: var(--radius-s); background: var(--bg); margin-left: auto; }
 .seg button { padding: 3px 10px; border-radius: 3px; color: var(--faint); font-size: 12px; font-weight: 500; }
 .seg button.on { background: var(--raised); color: var(--text); }
@@ -612,9 +629,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .plan-step.done { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--line); }
 .plan-step.active { color: var(--text); }
 .plan-step .box { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line); flex: none; display: grid; place-items: center; }
-.plan-step.done .box { background: var(--agent); box-shadow: none; color: #1a1430; }
+.plan-step.done .box { background: var(--agent-fill); box-shadow: none; color: #1a1430; }
 .plan-step.active .box { box-shadow: inset 0 0 0 1.5px var(--agent); }
-.plan-step.active .box::after { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--agent); animation: pulse 1.2s infinite; }
+.plan-step.active .box::after { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--agent-fill); animation: pulse 1.2s infinite; }
 .pinned-plan { flex: none; margin: 10px 10px 0; padding: 10px 12px; }
 .plan-title { display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
 .plan-title::-webkit-details-marker { display: none; }
@@ -661,8 +678,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .msg-user .voice-note + * { margin-top: 4px; }
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.send { width: 30px; height: 30px; border-radius: var(--radius-s); display: grid; place-items: center; background: var(--agent); color: #1a1430; }
-.send:hover { background: var(--agent-strong); }
+.send { width: 30px; height: 30px; border-radius: var(--radius-s); display: grid; place-items: center; background: var(--agent-fill); color: #1a1430; }
+.send:hover { background: var(--agent-fill-strong); }
 .send:disabled { opacity: 0.35; }
 .send.stop { background: var(--raised); color: var(--text); }
 .agent-foot { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; padding: 0 2px; }
@@ -706,9 +723,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   top: 72px;
   transform: translateX(-50%);
   width: min(560px, 92%);
-  background: var(--panel);
+  /* A gradient ring: the panel fills the padding box, the agent's ink shows in the border. */
+  border: 1.5px solid transparent;
+  background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--agent-fill) border-box;
   border-radius: var(--radius-l);
-  box-shadow: 0 0 0 1.5px var(--agent), 0 24px 60px rgba(5, 6, 14, 0.6);
+  box-shadow: 0 24px 60px rgba(5, 6, 14, 0.6);
   padding: 10px 12px;
 }
 .inline-ai .ctx { color: var(--agent); font-size: 11.5px; margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
@@ -766,7 +785,7 @@ kbd {
 .roll-tools .seg.tools { margin-left: 0; }
 .roll-tools .seg.tools button { display: inline-flex; align-items: center; gap: 4px; }
 .grid.select-tool { cursor: default; }
-.marquee { position: absolute; border: 1px solid var(--agent); background: rgba(182, 156, 255, 0.12); pointer-events: none; z-index: 2; }
+.marquee { position: absolute; border: 1px solid var(--agent); background: color-mix(in srgb, var(--agent) 12%, transparent); pointer-events: none; z-index: 2; }
 .roll-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--signal); pointer-events: none; z-index: 3; }
 .modal.help { width: min(640px, 94%); }
 .modal.help h3 { margin: 18px 0 8px; font-size: 14px; }
@@ -812,7 +831,7 @@ kbd {
 .fx-card .card-head { gap: 2px; }
 .fx-name { margin-left: 4px; }
 .fx-power { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--faint); box-shadow: inset 0 0 0 1px var(--line); }
-.fx-power.on { color: #10131c; background: var(--agent); box-shadow: none; }
+.fx-power.on { color: #10131c; background: var(--agent-fill); box-shadow: none; }
 .fx-preset { padding: 2px 4px; font-size: 11.5px; max-width: 96px; }
 .add-fx { justify-content: center; }
 
@@ -1041,7 +1060,7 @@ kbd {
   .msg-user .restore { opacity: 0.55; }
 }
 
-.selection-region { position: absolute; top: 0; bottom: 0; background: #b69cff30; border: 1px solid var(--agent); pointer-events: none; z-index: 4; }
+.selection-region { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--agent) 19%, transparent); border: 1px solid var(--agent); pointer-events: none; z-index: 4; }
 .selecting-range .lane, .selecting-range .steps { touch-action: none; cursor: crosshair; }
 .step.note-selected { outline: 2px solid #fff; outline-offset: -2px; }
 .online-caption { font-size: 12px; color: var(--muted); padding: 0 14px; line-height: 1.6; }

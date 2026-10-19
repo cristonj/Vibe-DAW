@@ -23,7 +23,7 @@ test('landing opens the studio without loading its audio engine', async ({ page 
   const requests: string[] = [];
   page.on('request', (req) => requests.push(req.url()));
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The open source agentic DAW built to augment, not replace, human creativity.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The open source agentic DAW built to enhance, not replace, human creativity.');
   await expect(page.getByRole('main').getByRole('img', { name: 'Vibe', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation')).toHaveCount(0);
   expect(requests.some((url) => /tone|firebase|studio\.tsx|genai/.test(url))).toBe(false);

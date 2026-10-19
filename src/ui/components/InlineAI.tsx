@@ -66,7 +66,7 @@ export function InlineAI() {
           {quick.map((q) => <button key={q} className="suggestion" onClick={() => submit(q)}>{q}</button>)}
         </div>
         <button className="btn" onClick={() => setQuick(shuffledSuggestions(kind))}><Shuffle size={13} /> More ideas</button>
-        <div className="hint">{running ? 'Enter to steer the active run' : 'Enter to run'} · Esc to close · changes show up in lilac until you keep them</div>
+        <div className="hint">{running ? 'Enter to steer the active run' : 'Enter to run'} · Esc to close · changes stay outlined until you keep them</div>
       </div>
     </div>
   );

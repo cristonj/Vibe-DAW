@@ -1,6 +1,6 @@
 <h1><picture><source media="(prefers-color-scheme: dark)" srcset="public/brand/wordmark.svg"><img src="public/brand/wordmark-light.svg" alt="Vibe" height="96"></picture></h1>
 
-The open source agentic DAW built to augment, not replace, human creativity.
+The open source agentic DAW built to enhance, not replace, human creativity.
 
 [vibedaw.org](https://vibedaw.org/)
 
@@ -13,7 +13,7 @@ It's Cursor for music: the agent edits your session the way Cursor edits your co
 - **Ears, not just eyes.** Gemini is multimodal, so the agent auditions samples and critiques real offline bounces of your song (rendered by the same engine you hear), paired with measured loudness, spectrum balance, and stereo data.
 - **A DAW API built for a model.** Tools speak producer: step-string drum patterns with trap rolls (`x.x.3.4.`), chord symbols with strum/arpeggio/voice-leading, 1-based bars, `copy_bars`/`clear_bars` arrangement moves, sidechain ducking, sound design, resampling.
 - **No generated audio.** Every sound is a real instrument, your own samples, or something synthesized from parameters. The agent composes and produces; it never prints audio from a text prompt.
-- **Review like code.** Agent-made clips are drawn in lilac until you **Keep** them. Each run ends with a change summary and **Undo all**; every message has a checkpoint you can restore.
+- **Review like code.** Agent-made clips are outlined in the brand gradient until you **Keep** them. Each run ends with a change summary and **Undo all**; every message has a checkpoint you can restore.
 - **Ctrl+K inline edits.** Shift-drag a region across tracks or select notes, then press Ctrl+K, say "add hi-hat rolls" or "make it sadder" - the agent receives exact note IDs and timing and can rewrite just that phrase. Touch screens have Range / Select controls and an Edit selection button.
 - **Reference tracks.** Attach a song; the agent listens and extracts a production recipe (tempo feel, drum placement, 808 behavior, mix character) to work from.
 - **Agent and Ask modes.** Ask mode is read-only: it listens and gives notes without touching the session.

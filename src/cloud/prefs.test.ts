@@ -60,7 +60,10 @@ describe('synced preference sanitizing', () => {
 
   it('rejects unknown themes and non-color accents', () => {
     expect(sanitizeAppearance({ theme: 'oled', accent: '#5cc8ff' })).toEqual({ theme: 'oled', accent: '#5cc8ff' });
-    expect(sanitizeAppearance({ theme: 'toString', accent: 'red; background: url(x)' })).toEqual({ theme: 'midnight', accent: '#b69cff' });
+    expect(sanitizeAppearance({ theme: 'toString', accent: 'red; background: url(x)' })).toEqual({ theme: 'midnight', accent: 'vibe' });
+    // The gradient is the default, and the old default lilac moves to it.
+    expect(sanitizeAppearance({ theme: 'midnight', accent: 'vibe' }).accent).toBe('vibe');
+    expect(sanitizeAppearance({ theme: 'midnight', accent: '#B69CFF' }).accent).toBe('vibe');
   });
 
   it('keeps only known shortcut actions with string combos', () => {

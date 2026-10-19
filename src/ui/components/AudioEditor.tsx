@@ -46,7 +46,7 @@ export function AudioEditor({ clip, track, project }: { clip: AudioClip; track: 
           {meta?.bpm && <span className="chip">{meta.bpm} BPM</span>}
           {meta?.key && <span className="chip">{meta.key}</span>}
           <div className="spacer" />
-          <button className="btn" style={{ color: 'var(--agent)' }} onClick={() => openInlineAI([clip.id])}>Edit with AI</button>
+          <button className="btn" onClick={() => openInlineAI([clip.id])}><span className="ai-ink">Edit with AI</span></button>
         </div>
         <Wave sampleId={clip.sampleId} reverse={clip.reverse} color={track.color} />
         {meta?.aiDescription && <div className="heard" style={{ margin: 0 }}><div className="heard-label"><Ear size={12} /> What the agent heard</div>{meta.aiDescription}</div>}

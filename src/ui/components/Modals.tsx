@@ -8,7 +8,7 @@ import { useDaw } from '../../state/store';
 import { relativeTime } from '../hooks';
 import { toast } from '../toast';
 import { ACTIONS, bindings, comboFromEvent, useKeymap, type ActionId } from '../../state/keymap';
-import { ACCENTS, THEMES, useTheme, type ThemeId } from '../../state/theme';
+import { ACCENTS, THEMES, VIBE_ACCENT, accentFill, accentSolid, useTheme, type ThemeId } from '../../state/theme';
 import { importMidiFile } from '../midiActions';
 import { openSavePreset } from './SavePreset';
 import { importProjectFile } from '../../state/projectFile';
@@ -161,7 +161,7 @@ function AppearanceSettings() {
                 <span className="theme-swatch" style={{ background: v['--bg'] }}>
                   <i style={{ background: v['--panel'] }} />
                   <i style={{ background: v['--raised'] }} />
-                  <i style={{ background: t.accent }} />
+                  <i style={{ background: accentFill(t.accent) }} />
                 </span>
                 {THEMES[id].name}
               </button>
@@ -174,10 +174,10 @@ function AppearanceSettings() {
         <small>Used for AI changes, selection, and primary buttons.</small>
         <div className="accent-row">
           {ACCENTS.map((c) => (
-            <button key={c} className={`accent-dot ${t.accent === c ? 'on' : ''}`} style={{ background: c }} onClick={() => t.set({ accent: c })} aria-label={`Accent ${c}`} title={c} />
+            <button key={c} className={`accent-dot ${t.accent === c ? 'on' : ''}`} style={{ background: accentFill(c) }} onClick={() => t.set({ accent: c })} aria-label={c === VIBE_ACCENT ? 'Accent: Vibe gradient' : `Accent ${c}`} title={c === VIBE_ACCENT ? 'Vibe gradient' : c} />
           ))}
           <label className="accent-custom" title="Pick any color">
-            <input type="color" value={t.accent} onChange={(e) => t.set({ accent: e.target.value })} aria-label="Custom accent color" /> Custom
+            <input type="color" value={accentSolid(t.accent)} onChange={(e) => t.set({ accent: e.target.value })} aria-label="Custom accent color" /> Custom
           </label>
         </div>
       </div>
