@@ -122,24 +122,24 @@ function EffectCard({ fx, index, count, onChange, onRemove, onMove, onDuplicate,
         <span className="fx-name" title={custom?.description ?? info.description}>{name}</span>
         <AddToChat referenceId={`effect:${fx.id}`} label={name} />
         <div className="spacer" />
-        {presets && (
-          <select
-            className="fx-preset"
-            value=""
-            onChange={(e) => { const pr = presets[e.target.value]; if (pr) onChange((x) => { x.params = { ...x.params, ...pr }; }); }}
-            aria-label={`${info.name} preset`}
-            title="Load a preset"
-          >
-            <option value="">Presets…</option>
-            {Object.keys(presets).map((k) => <option key={k} value={k}>{k}</option>)}
-          </select>
-        )}
         <button className="btn icon" disabled={index === 0} onClick={() => onMove(-1)} title="Move earlier in the chain" aria-label="Move up"><ChevronUp size={13} /></button>
         <button className="btn icon" disabled={index === count - 1} onClick={() => onMove(1)} title="Move later in the chain" aria-label="Move down"><ChevronDown size={13} /></button>
         <button className="btn icon" onClick={() => onChange((x) => { x.params = x.custom ? customDefaults(x.custom) : { ...defaultEffectParams(x.type), ...(x.type === 'duck' ? { source: x.params.source } : {}) }; })} title="Reset all settings" aria-label="Reset"><RotateCcw size={12} /></button>
         <button className="btn icon" onClick={onDuplicate} title="Duplicate effect with its settings" aria-label={`Duplicate ${name}`}><CopyPlus size={13} /></button>
         <button className="btn icon danger" onClick={onRemove} title="Remove this effect" aria-label={`Remove ${name}`}><Trash size={13} /></button>
       </div>
+      {presets && (
+        <select
+          className="fx-preset"
+          value=""
+          onChange={(e) => { const pr = presets[e.target.value]; if (pr) onChange((x) => { x.params = { ...x.params, ...pr }; }); }}
+          aria-label={`${info.name} preset`}
+          title="Load a preset"
+        >
+          <option value="">Presets…</option>
+          {Object.keys(presets).map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+      )}
       {custom && <div className="fx-custom-row">
         <button className="btn solid" onClick={() => openCustomEffectEditor(fx.id)}><Code size={13} /> Edit code</button>
         <button className="btn" onClick={() => openSavePreset({ kind: 'effects', name: custom.name, effectId: fx.id })}><Bookmark size={13} /> Save as plugin</button>

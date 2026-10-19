@@ -48,6 +48,16 @@ function Qr({ uri, name }: { uri: string; name: string }) {
   </figure>;
 }
 
+/** Unfolds when opened and folds away when closed, then leaves the page. */
+function QrPanel({ open, id, uri, name }: { open: boolean; id: string; uri: string; name: string }) {
+  const [shown, setShown] = useState(open);
+  useEffect(() => { if (open) setShown(true); }, [open]);
+  if (!shown) return null;
+  return <div className={`lp-qr-panel${open ? '' : ' closing'}`} id={id} aria-hidden={!open || undefined} onAnimationEnd={(e) => { if (!open && e.target === e.currentTarget) setShown(false); }}>
+    <div><Qr uri={uri} name={name} /></div>
+  </div>;
+}
+
 function Support() {
   const [copied, setCopied] = useState('');
   const [status, setStatus] = useState('');
@@ -58,15 +68,15 @@ function Support() {
   };
   if (!donationWallets.length) return <p className="lp-support-line">Vibe is free. If it helps you make music, a star or a pull request on <a href={REPO} target="_blank" rel="noreferrer">GitHub</a> helps keep it going.</p>;
   return <div className="lp-wallets">
-    <p className="lp-support-line">Vibe is free. If it helps you make music, you can help keep it going. Donations are optional. Send each coin only on the network shown.</p>
+    <p className="lp-support-line">Vibe is free. If it helps you make music, you can help keep it going. Donations are optional. Send each coin only on its own network.</p>
     {donationWallets.map((wallet) => {
       const open = qr === wallet.name, panel = `qr-${wallet.name.toLowerCase()}`;
       return <div className="lp-wallet" key={wallet.name}>
-        <span>{wallet.name}<small>{wallet.network}</small></span>
+        <span>{wallet.name}<small>{wallet.symbol}{wallet.network === wallet.name ? '' : ` · ${wallet.network}`}</small></span>
         <code>{wallet.address}</code>
         <button onClick={() => void copy(wallet.address)} aria-label={`Copy ${wallet.name} address`}>{copied === wallet.address ? 'Copied' : 'Copy'}</button>
         <button onClick={() => setQr(open ? '' : wallet.name)} aria-expanded={open} aria-controls={panel} aria-label={`${open ? 'Hide' : 'Show'} ${wallet.name} QR code`}>{open ? 'Hide QR' : 'Show QR'}</button>
-        {open && <div className="lp-qr-panel" id={panel}><Qr uri={`${wallet.scheme}${wallet.address}${wallet.suffix ?? ''}`} name={wallet.name} /></div>}
+        <QrPanel open={open} id={panel} uri={`${wallet.scheme}${wallet.address}${wallet.suffix ?? ''}`} name={wallet.name} />
       </div>;
     })}
     <span className="lp-status" role="status">{status}</span>
@@ -157,6 +167,5 @@ export function Landing() {
         <Support />
       </section>
     </main>
-    <footer className="lp-foot lp-wrap"><a className="lp-brand" href="/" aria-label="Vibe home"><Wordmark tone="mono" label="" /></a><span>vibedaw.org</span><a href={REPO} target="_blank" rel="noreferrer">GitHub</a></footer>
   </div>;
 }

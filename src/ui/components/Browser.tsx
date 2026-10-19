@@ -83,7 +83,7 @@ function SampleRow({ m, playing, onPlay }: { m: SampleMeta; playing: boolean; on
       <AddToChat referenceId={`sample:${m.id}`} label={m.name} mini />
       <button className="add-mini" onClick={() => addSampleToTimeline(m)} aria-label={`Add ${m.name} to the timeline`} title="Add to the selected audio track at the playhead, or a new track"><Plus size={13} /></button>
       <button className="add-mini" onClick={() => openSavePreset({ kind: 'sound', name: m.name, sampleId: m.id })} aria-label={`Save ${m.name} to library`} title="Save sound to your library"><Bookmark size={12} /></button>
-      {m.attribution && <a className="heard" href={m.attribution.sourceUrl} target="_blank" rel="noreferrer">{m.attribution.author} · {m.attribution.license}</a>}
+      {m.attribution && <a className="credit" href={m.attribution.sourceUrl} target="_blank" rel="noreferrer">{m.attribution.author} · {m.attribution.license}</a>}
       {m.aiDescription && <span className="heard">{m.aiDescription}</span>}
     </div>
   );
