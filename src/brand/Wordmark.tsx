@@ -16,7 +16,7 @@ function Stroke({ glyph, paint }: { glyph: Glyph; paint: string }) {
 }
 
 function DotMark({ dot, tone }: { dot: Dot; tone: Tone }) {
-  return <circle className="vibe-dot" cx={dot.cx} cy={dot.cy} r={dot.r} style={{ fill: `var(--vibe-dot, ${tone === 'gradient' ? '#fff' : 'var(--agent, #b69cff)'})` }} />;
+  return <circle className="vibe-dot" cx={dot.cx} cy={dot.cy} r={dot.r} style={{ fill: `var(--vibe-dot, ${tone === 'gradient' ? 'var(--logo-dot, #fff)' : 'var(--agent, #b69cff)'})` }} />;
 }
 
 /**

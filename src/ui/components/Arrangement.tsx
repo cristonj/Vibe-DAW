@@ -20,6 +20,7 @@ import { MousePointer2, Bookmark } from 'lucide-react';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
 import { toast } from '../toast';
+import { useTheme } from '../../state/theme';
 import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, placeSample, splitAtPlayhead } from '../actions';
 
 const HEADER_W = 200;
@@ -67,6 +68,7 @@ function AudioBody({ clip, project, widthPx }: { clip: AudioClip; project: Proje
   const peaks = usePeaks(clip.sampleId, clip.reverse);
   const ref = useRef<HTMLCanvasElement>(null);
   const meta = getSampleMeta(clip.sampleId);
+  const theme = useTheme((s) => s.theme);
   useLayoutEffect(() => {
     const cv = ref.current;
     if (!cv || !peaks || !meta) return;
@@ -76,7 +78,7 @@ function AudioBody({ clip, project, widthPx }: { clip: AudioClip; project: Proje
     cv.height = h * devicePixelRatio;
     const g = cv.getContext('2d')!;
     g.scale(devicePixelRatio, devicePixelRatio);
-    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.fillStyle = getComputedStyle(cv).color; // --clip-ink, via .clip > canvas
     const rate = audioClipRate(project, clip, meta.bpm);
     const secPerPx = ((clip.length * 60) / project.bpm / w) * rate;
     const dur = meta.duration;
@@ -88,7 +90,7 @@ function AudioBody({ clip, project, widthPx }: { clip: AudioClip; project: Proje
       const v = peaks[Math.min(peaks.length - 1, idx)] * (h / 2 - 1) * Math.pow(10, clip.gainDb / 20);
       g.fillRect(x, h / 2 - v, 1, Math.max(1, v * 2));
     }
-  }, [peaks, widthPx, clip, project.bpm, meta]);
+  }, [peaks, widthPx, clip, project.bpm, meta, theme]);
   if (!meta) return null;
   return <canvas ref={ref} aria-hidden />;
 }
@@ -612,8 +614,8 @@ export function Arrangement() {
         <button className="btn icon" title={tip('Zoom in', 'zoomIn')} onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
         <div style={{ flex: 1 }} />
         {hasPending && (
-          <button className="btn" style={{ color: 'var(--agent)' }} onClick={keepAllPending} title="Accept everything the agent changed and remove its outlines">
-            <Check size={14} /> <span className="ai-ink">Keep<span className="btn-label minor"> AI changes</span></span>
+          <button className="btn keep-all" onClick={keepAllPending} title="Keep everything the agent changed and remove its outlines">
+            <Check size={14} /> <span className="ai-ink">Keep</span>
           </button>
         )}
       </div>
@@ -685,7 +687,7 @@ const TrackHeader = memo(function TrackHeader({ track, selected }: { track: Trac
   const set = (label: string, fn: (t: Track) => void) => update(label, (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) fn(t); });
   return (
     <div data-chat-ref={`track:${track.id}`} className={`track-head ${selected ? 'selected' : ''}`} onPointerDown={() => select({ trackId: track.id })} onDoubleClick={() => setBottom('editor')}>
-      <div className="swatch" style={{ background: track.color }} />
+      <div className="swatch" style={{ background: track.color, color: track.color }} />
       <input className="tname" value={track.name} aria-label="Track name" onChange={(e) => update('Rename track', (d) => { const t = d.tracks.find((x) => x.id === track.id); if (t) t.name = e.target.value; }, { coalesce: true })} />
       <div className="tbtns">
         <button className={`ms m ${track.mute ? 'on' : ''}`} title="Mute this track" onClick={() => set('Mute', (t) => { t.mute = !t.mute; })}>M</button>

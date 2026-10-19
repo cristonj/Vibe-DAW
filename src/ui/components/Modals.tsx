@@ -8,7 +8,9 @@ import { useDaw } from '../../state/store';
 import { relativeTime } from '../hooks';
 import { toast } from '../toast';
 import { ACTIONS, bindings, comboFromEvent, useKeymap, type ActionId } from '../../state/keymap';
-import { ACCENTS, THEMES, VIBE_ACCENT, accentFill, accentSolid, useTheme, type ThemeId } from '../../state/theme';
+import { THEMES, useTheme, type ThemeId } from '../../state/theme';
+import { accentFill } from '../../state/accent';
+import { AccentPicker } from './AccentPicker';
 import { importMidiFile } from '../midiActions';
 import { openSavePreset } from './SavePreset';
 import { importProjectFile } from '../../state/projectFile';
@@ -155,7 +157,7 @@ function AppearanceSettings() {
         <span>Theme</span>
         <div className="theme-grid">
           {(Object.keys(THEMES) as ThemeId[]).map((id) => {
-            const v = { '--bg': '#161925', '--panel': '#1c2030', '--raised': '#282e46', '--text': '#ebe9f4', ...THEMES[id].vars } as Record<string, string>;
+            const v = { '--bg': '#050505', '--panel': '#0b0b0c', '--raised': '#1a1a1d', '--text': '#ececee', ...THEMES[id].vars } as Record<string, string>;
             return (
               <button key={id} className={`theme-card ${t.theme === id ? 'on' : ''}`} onClick={() => t.set({ theme: id })} aria-pressed={t.theme === id}>
                 <span className="theme-swatch" style={{ background: v['--bg'] }}>
@@ -170,16 +172,9 @@ function AppearanceSettings() {
         </div>
       </div>
       <div className="field">
-        <span>Accent color</span>
-        <small>Used for AI changes, selection, and primary buttons.</small>
-        <div className="accent-row">
-          {ACCENTS.map((c) => (
-            <button key={c} className={`accent-dot ${t.accent === c ? 'on' : ''}`} style={{ background: accentFill(c) }} onClick={() => t.set({ accent: c })} aria-label={c === VIBE_ACCENT ? 'Accent: Vibe gradient' : `Accent ${c}`} title={c === VIBE_ACCENT ? 'Vibe gradient' : c} />
-          ))}
-          <label className="accent-custom" title="Pick any color">
-            <input type="color" value={accentSolid(t.accent)} onChange={(e) => t.set({ accent: e.target.value })} aria-label="Custom accent color" /> Custom
-          </label>
-        </div>
+        <span>Accent</span>
+        <small>The agent's ink: AI changes, selection, and primary buttons. Pick one, or build your own gradient.</small>
+        <AccentPicker />
       </div>
       <label className="field">
         <span>Interface size</span>

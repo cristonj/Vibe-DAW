@@ -333,7 +333,7 @@ test('click, right-click and @ mentions attach the same current project context'
   await expect(page.getByRole('listbox', { name: 'Add a project reference' })).not.toBeVisible();
 });
 
-test('Producer reviews remain scrollable and can be attached using their button or mention', async ({ page }) => {
+test('Producer reviews remain scrollable and can be attached by mention', async ({ page }) => {
   await fixture(page);
   await page.evaluate(async () => {
     const { useAgent } = await import('/src/agent/agent.ts');
@@ -346,9 +346,6 @@ test('Producer reviews remain scrollable and can be attached using their button 
   expect(await notes.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
   await notes.evaluate((el) => { el.scrollTop = el.scrollHeight; });
   expect(await notes.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-  await page.getByRole('button', { name: 'Add Producer notes to chat', exact: true }).click();
-  await expect(page.locator('.composer .attach-chip')).toContainText('Reviewed the intro');
-  await page.getByRole('button', { name: 'Remove Reviewed the intro' }).click();
   const message = page.getByRole('textbox', { name: 'Message the agent' });
   await message.fill('@Reviewed'); await page.getByRole('option', { name: /Reviewed the intro/ }).click();
   await expect(page.locator('.composer .attach-chip')).toContainText('Reviewed the intro');

@@ -53,8 +53,8 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
   return (
     <header className="topbar">
-      <button className="btn icon" title={tip('Show or hide the sound browser', 'toggleBrowser')} onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
       <div className="brand"><VibeMark className="brand-mark" /><Wordmark className="brand-name" /></div>
+      <button className="btn icon" title={tip('Show or hide the sound browser', 'toggleBrowser')} onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
       <input
         className="project-name"
         value={name}

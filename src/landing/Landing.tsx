@@ -7,13 +7,12 @@ const REPO = 'https://github.com/cristonj/Vibe-DAW';
 
 // Crops of the real studio from scripts/capture-landing-screenshots.mjs (npm run screenshots).
 const SHOTS = {
-  arrangement: { src: '/screenshots/arrangement.webp', width: 2880, height: 878 },
-  review: { src: '/screenshots/review.webp', width: 774, height: 236 },
-  producer: { src: '/screenshots/producer.webp', width: 782, height: 1148 },
-  inlineEdit: { src: '/screenshots/inline-edit.webp', width: 1124, height: 822 },
-  pianoRoll: { src: '/screenshots/piano-roll.webp', width: 2880, height: 586 },
-  drums: { src: '/screenshots/drums.webp', width: 2880, height: 332 },
-  mixer: { src: '/screenshots/mixer.webp', width: 1236, height: 858 },
+  studio: { src: '/screenshots/studio.webp', width: 2880, height: 1800 },
+  producer: { src: '/screenshots/producer.webp', width: 784, height: 1660 },
+  inlineEdit: { src: '/screenshots/inline-edit.webp', width: 1124, height: 846 },
+  pianoRoll: { src: '/screenshots/piano-roll.webp', width: 2060, height: 558 },
+  drums: { src: '/screenshots/drums.webp', width: 2088, height: 332 },
+  mixer: { src: '/screenshots/mixer.webp', width: 1220, height: 850 },
 };
 
 function Shot({ shot, alt, eager = false, className = '' }: { shot: typeof SHOTS[keyof typeof SHOTS]; alt: string; eager?: boolean; className?: string }) {
@@ -57,9 +56,9 @@ function Support() {
     try { await navigator.clipboard.writeText(address); setCopied(address); setStatus('Address copied'); }
     catch { setStatus('Copy is unavailable. Select the address to copy it manually.'); }
   };
-  if (!donationWallets.length) return <p className="lp-support-line">If Vibe helps you make something, a star or a pull request on <a href={REPO} target="_blank" rel="noreferrer">GitHub</a> helps it grow.</p>;
-  return <div className="lp-wallets" id="support">
-    <p className="lp-support-line">If Vibe helps you make something, you can help it grow. Donations are always optional. Use the network shown for each address.</p>
+  if (!donationWallets.length) return <p className="lp-support-line">Vibe is free. If it helps you make music, a star or a pull request on <a href={REPO} target="_blank" rel="noreferrer">GitHub</a> helps keep it going.</p>;
+  return <div className="lp-wallets">
+    <p className="lp-support-line">Vibe is free. If it helps you make music, you can help keep it going. Donations are optional. Send each coin only on the network shown.</p>
     {donationWallets.map((wallet) => {
       const open = qr === wallet.name, panel = `qr-${wallet.name.toLowerCase()}`;
       return <div className="lp-wallet" key={wallet.name}>
@@ -74,6 +73,21 @@ function Support() {
   </div>;
 }
 
+/** Things people ask the Producer, for the ticker. */
+const PROMPTS = [
+  ['sad trap beat with guitar', 'add hi-hat rolls', 'walk the bass up into the hook', 'lo-fi study beat at 82 BPM', 'give the hook a breathy flute', 'make the drums hit harder', 'leave room for a vocal'],
+  ['turn this into a delicate arpeggio', 'add a riser before the drop', 'make it sadder', 'house groove, four on the floor', 'tighten the low end', 'answer the melody an octave up', 'what is muddy in this mix?'],
+];
+
+function Ticker() {
+  return <section className="lp-ticker" aria-label="Things you can ask the Producer">
+    {PROMPTS.map((row, k) => <div key={k} className="lp-ticker-row">
+      {/* Two copies, so the row can loop seamlessly. The second is for the eye only. */}
+      {[0, 1].map((copy) => <ul key={copy} aria-hidden={copy === 1 || undefined}>{row.map((p) => <li key={p}>{p}</li>)}</ul>)}
+    </div>)}
+  </section>;
+}
+
 /** Bounce the letter under the pointer. A class rather than :hover, so it finishes the bounce. */
 const bop = (e: PointerEvent) => (e.target as Element).closest('.vibe-letter')?.classList.add('bop');
 const unbop = (e: AnimationEvent) => { if (e.animationName === 'lp-bop') (e.target as Element).classList.remove('bop'); };
@@ -82,57 +96,59 @@ export function Landing() {
   return <div className="landing">
     <main>
       <section className="lp-hero lp-wrap">
-        <div onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" /></div>
+        <div className="lp-aurora" aria-hidden><i /><i /><i /></div>
+        <div className="lp-wordmark-wrap" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" /></div>
         <h1>The open source agentic DAW built to <mark>enhance, not replace,</mark> human creativity.</h1>
-        <div className="lp-actions lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">View the code</a></div>
+        <div className="lp-actions lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href="#support">Support</a></div>
         <figure className="lp-hero-shot">
-          <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.arrangement} alt="A Vibe arrangement: drums, Rhodes, bass and pad tracks across intro, verse and hook, lyric cues above, and a new flute part in lilac waiting for review." /></div>
-          <Shot className="lp-float" shot={SHOTS.review} alt="The Changes to review card with Keep and Undo all buttons." />
+          <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.studio} alt="The Vibe studio: five tracks on the timeline with a new flute part outlined in the agent's gradient, the Producer's run and its Changes to review card on the right, and the mixer below." /></div>
         </figure>
       </section>
 
-      <section className="lp-split lp-wrap">
+      <Ticker />
+
+      <section className="lp-split lp-wrap lp-reveal">
         <div className="lp-copy">
-          <h2>You ask for a part. It shows its work.</h2>
-          <p>Describe what you want in plain words. The Producer plans it, auditions sounds, writes the notes, then bounces your song and listens before it answers. You get a summary of every change, with Keep and Undo all.</p>
+          <h2>Describe it. The Producer builds it.</h2>
+          <p>Ask in plain words for a beat, a part, or a fix. The Producer picks real instruments, writes the notes, sets up the mix, then listens to the result before it answers.</p>
           <ul className="lp-facts">
-            <li>Every message is a checkpoint you can go back to.</li>
-            <li>Ask mode gives notes on the mix without touching it.</li>
-            <li>Attach a reference track and it pulls a production recipe from it.</li>
+            <li>Every change is listed. Keep it, or undo the whole run in one click.</li>
+            <li>Ask mode reviews your mix without touching it.</li>
+            <li>Attach a reference track and it pulls out the production recipe.</li>
           </ul>
         </div>
-        <figure className="lp-frame lp-producer"><Shot shot={SHOTS.producer} alt="The Producer panel: a request for a breathy flute melody, the tool calls it made, a mix review of what it heard, its reply, and the Changes to review card." /></figure>
+        <figure className="lp-frame lp-producer"><Shot shot={SHOTS.producer} alt="The Producer panel: a request for a breathy flute melody, the tools it used, its mix review, its reply, and the Changes to review card with Undo all and Keep." /></figure>
       </section>
 
-      <section className="lp-band">
+      <section className="lp-band lp-reveal">
         <div className="lp-split lp-wrap reverse">
           <figure className="lp-frame"><Shot shot={SHOTS.inlineEdit} alt="Four bars of bass and pad selected across two tracks with the inline edit box open: Walk the bass up into the hook." /></figure>
           <div className="lp-copy">
-            <h2>Select a phrase. Press <kbd>Ctrl</kbd><kbd>K</kbd>. Say what you want.</h2>
-            <p>Shift-drag across tracks or select notes in the piano roll. The agent gets the exact notes and timing, and rewrites that phrase and nothing else. On a touchscreen, Range and Edit selection do the same thing.</p>
+            <h2>Select. Press <kbd>Ctrl</kbd><kbd>K</kbd>. Say what to change.</h2>
+            <p>Select notes or drag across tracks. The agent gets the exact notes and timing and rewrites only your selection, so the rest of the song stays as it was. On touchscreens, use Range and Edit selection.</p>
           </div>
         </div>
       </section>
 
       <section className="lp-daw lp-wrap">
-        <div className="lp-daw-head">
-          <h2>A real DAW underneath.</h2>
-          <p>Arrangement, piano roll, step sequencer and mixer. 31 instruments, sampled and synthesized, and 16 effects. Record your own audio, freeze finished tracks, bounce WAV or MP3. The agent edits the same session you do, so you can always take over by hand.</p>
+        <div className="lp-daw-head lp-reveal">
+          <h2>A full DAW, not a demo.</h2>
+          <p>Arrangement, piano roll, step sequencer and mixer. 31 instruments and 16 effects, plus any effect the agent writes for you in code. Record audio, freeze tracks, export WAV or MP3. You and the agent edit the same session, so you can take over at any point.</p>
         </div>
         <div className="lp-grid">
-          <figure className="lp-frame wide"><Shot shot={SHOTS.pianoRoll} alt="The piano roll showing the flute melody with note velocities." /><figcaption>Piano roll</figcaption></figure>
-          <figure className="lp-frame wide"><Shot shot={SHOTS.drums} alt="The step sequencer with kick, snare, hat, rim and shaker lanes." /><figcaption>Step sequencer</figcaption></figure>
-          <figure className="lp-frame mixer"><Shot shot={SHOTS.mixer} alt="The mixer with a channel strip for each track and the master bus." /><figcaption>Mixer</figcaption></figure>
-          <div className="lp-promise">
-            <h3>It never prints audio from a prompt.</h3>
-            <p>Every sound is a real instrument, your own recording, or synthesized from parameters. The agent composes and produces. What comes out is still your song.</p>
+          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.pianoRoll} alt="The piano roll showing the flute melody with note velocities." /><figcaption>Piano roll</figcaption></figure>
+          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.drums} alt="The step sequencer with kick, snare, hat, rim and shaker lanes." /><figcaption>Step sequencer</figcaption></figure>
+          <figure className="lp-frame mixer lp-reveal"><Shot shot={SHOTS.mixer} alt="The mixer with a channel strip for each track and the master bus." /><figcaption>Mixer</figcaption></figure>
+          <div className="lp-promise lp-reveal">
+            <h3>No AI-generated audio.</h3>
+            <p>Every sound is a sampled instrument, a synth, or your own recording. The agent writes and arranges notes; it never renders a song from a prompt. What you make is yours.</p>
           </div>
         </div>
       </section>
 
-      <section className="lp-end lp-wrap">
-        <h2>Free, open source, and yours to change.</h2>
-        <p>MIT licensed. No install, and no account needed to start. The music tools work without an AI key. The Producer uses your Gemini key, or hosted AI when it is enabled.</p>
+      <section className="lp-end lp-wrap" id="support">
+        <h2>Free and open source.</h2>
+        <p>MIT licensed. Runs in your browser with no install and no account. Every music tool works without AI. The Producer uses your own Gemini key, which has a free tier.</p>
         <div className="lp-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">Star it on GitHub</a></div>
         <Support />
       </section>

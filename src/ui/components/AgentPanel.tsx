@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Square, Ear, Plus, Play, Check, RotateCcw, Paperclip, X, Brain, ListChecks, Eye, Mic, LoaderCircle, Pause, Shuffle, AtSign, MessageSquarePlus, Wrench,
+  ArrowUp, Square, Ear, Plus, Play, Check, RotateCcw, Paperclip, X, Brain, ListChecks, Eye, Mic, LoaderCircle, Pause, Shuffle, AtSign, Wrench,
 } from 'lucide-react';
 import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } from '../../agent/agent';
 import { analyzeReference } from '../../agent/ears';
@@ -17,7 +17,7 @@ import { MAX_VOICE_SECONDS, useVoiceRecorder, voiceSupported, type VoiceClip } f
 
 function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan' }>; pinned?: boolean }) {
   const done = item.steps.filter((s) => s.status === 'done').length;
-  return <details data-chat-ref={`chat:${item.id}`} className={`plan ${pinned ? 'pinned-plan' : ''}`} open>
+  return <details className={`plan ${pinned ? 'pinned-plan' : ''}`} open>
     <summary className="plan-title"><ListChecks size={14} /><b>Checklist</b><span>{done}/{item.steps.length}</span></summary>
     <div className="plan-steps">{item.steps.map((s, i) => (
       <div key={i} className={`plan-step ${s.status}`}>
@@ -25,7 +25,6 @@ function Plan({ item, pinned = false }: { item: Extract<ChatItem, { kind: 'plan'
         {s.title}
       </div>
     ))}</div>
-    <button className="btn" onClick={() => attachChatReference(`chat:${item.id}`)}><MessageSquarePlus size={12} /> Add checklist to chat</button>
   </details>;
 }
 
@@ -46,8 +45,8 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
         </div>
       </div>
       {item.heard && (
-        <section data-chat-ref={`review:${item.id}`} className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
-          <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b><span>Producer notes</span><button className="btn icon" onClick={() => attachChatReference(`review:${item.id}`)} aria-label="Add Producer notes to chat" title="Add these Producer notes to chat"><MessageSquarePlus size={13} /></button></header>
+        <section className="listening-review" aria-label={item.name === 'listen' ? 'Mix review' : 'Sound review'}>
+          <header><Ear size={15} /><b>{item.name === 'listen' ? 'Mix review' : 'Sound review'}</b></header>
           <div className="review-notes" tabIndex={0} aria-label="Producer review notes"><Markdown text={item.heard} /></div>
         </section>
       )}
@@ -89,7 +88,7 @@ function Item({ item }: { item: ChatItem }) {
       );
     case 'assistant':
       return (
-        <div className="msg-ai" data-chat-ref={`chat:${item.id}`}>
+        <div className="msg-ai">
           {item.thinking && (
             <details className="thinking">
               <summary><Brain size={12} /> {item.streaming && !item.text ? 'Thinking…' : 'Thought process'}</summary>
@@ -97,7 +96,6 @@ function Item({ item }: { item: ChatItem }) {
             </details>
           )}
           {item.text && <div className={item.streaming ? 'cursor-blink' : ''}><Markdown text={item.text} /></div>}
-          {!item.streaming && item.text && <button className="btn msg-add" onClick={() => attachChatReference(`chat:${item.id}`)} aria-label="Add message to chat"><MessageSquarePlus size={12} /> Add to chat</button>}
         </div>
       );
     case 'tool':
@@ -113,8 +111,8 @@ function Item({ item }: { item: ChatItem }) {
           <ul>{item.lines.slice(0, 14).map((l, i) => <li key={i}>{l}</li>)}{item.lines.length > 14 && <li>…and {item.lines.length - 14} more</li>}</ul>
           {item.state === 'pending' && (
             <div className="actions">
-              <button className="btn primary" onClick={() => keepChanges(item.id)}><Check size={14} /> Keep</button>
               <button className="btn solid" onClick={() => revertTo(item.checkpoint, item.id)}><RotateCcw size={14} /> Undo all</button>
+              <button className="btn primary" onClick={() => keepChanges(item.id)}><Check size={14} /> Keep</button>
             </div>
           )}
         </div>

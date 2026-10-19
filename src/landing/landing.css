@@ -9,8 +9,8 @@
 .lp-foot a:hover { color: var(--text); }
 .lp-brand { display: flex; align-items: center; }
 
-.lp-btn { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: var(--radius-m); background: var(--agent-fill); color: var(--bg) !important; font-size: 15px; font-weight: 600; }
-.lp-btn:hover { background: var(--agent-fill-strong); }
+.lp-btn { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: var(--radius-m); background: var(--agent-fill); color: var(--agent-ink) !important; font-size: 15px; font-weight: 600; transition: transform 200ms, box-shadow 200ms; }
+.lp-btn:hover { background: var(--agent-fill-strong); transform: translateY(-1px); box-shadow: 0 14px 36px -14px var(--agent); }
 .lp-btn.ghost { background: var(--panel); color: var(--text) !important; box-shadow: inset 0 0 0 1px var(--line); }
 .lp-btn.ghost:hover { background: var(--raised); }
 .lp-actions { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -20,25 +20,31 @@
 .landing h2 { font-size: clamp(32px, 3.8vw, 50px); line-height: 1.06; }
 .landing h3 { font-size: 30px; line-height: 1.1; letter-spacing: -0.025em; }
 :where(.landing p) { color: var(--muted); margin: 0; }
-/* The pending-clip hatch from the arrangement, as a highlighter. */
 /* The promise, in the wordmark's ink and glow. The gradient runs there and back so it can drift. */
 .landing mark { color: transparent; background: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text;
   filter: drop-shadow(0 0 0.32em rgba(255, 143, 207, 0.35)); animation: lp-drift 9s ease-in-out infinite alternate; }
 @keyframes lp-drift { to { background-position: 100% 0; } }
 .landing kbd { font: 600 0.56em/1 var(--font-ui); display: inline-block; vertical-align: 0.2em; padding: 0.32em 0.45em; margin: 0 0.08em; border-radius: 6px; background: var(--raised); box-shadow: inset 0 -2px 0 var(--line), 0 0 0 1px var(--line); color: var(--text); letter-spacing: 0; }
 
-.lp-hero { position: relative; padding-top: 96px; }
-/* Stage light behind the wordmark. */
-.lp-hero::before { content: ''; position: absolute; z-index: 0; top: -120px; left: -10%; width: min(1100px, 120%); height: 640px; pointer-events: none;
-  background: radial-gradient(closest-side at 30% 50%, rgba(182, 156, 255, 0.16), transparent), radial-gradient(closest-side at 62% 58%, rgba(255, 143, 207, 0.09), transparent 90%); }
+/* The hero: centered, under a slow aurora in the brand colors. */
+.lp-hero { position: relative; display: flex; flex-direction: column; align-items: center; padding-top: 104px; text-align: center; }
 .lp-hero > * { position: relative; }
-.lp-wordmark { font-size: clamp(104px, 34vw, 300px); margin-left: -0.025em; filter: drop-shadow(0 0 0.22em rgba(255, 143, 207, 0.18)); }
-.lp-hero h1 { margin-top: 56px; font-size: clamp(30px, 3.9vw, 54px); line-height: 1.08; max-width: 920px; }
-.lp-hero-actions { margin-top: 40px; }
+.lp-aurora { position: absolute !important; z-index: 0; top: -100px; left: 50%; width: min(1240px, 140vw); height: 780px; translate: -50% 0; pointer-events: none; filter: blur(80px); opacity: 0.3; }
+.lp-aurora i { position: absolute; border-radius: 50%; }
+.lp-aurora i:nth-child(1) { left: 12%; top: 6%; width: 44%; height: 60%; background: #b69cff; animation: lp-aurora-a 19s ease-in-out infinite alternate; }
+.lp-aurora i:nth-child(2) { left: 36%; top: 22%; width: 38%; height: 50%; background: #ff8fcf; animation: lp-aurora-b 23s ease-in-out infinite alternate; }
+.lp-aurora i:nth-child(3) { left: 54%; top: 2%; width: 34%; height: 46%; background: #ffb547; opacity: 0.5; animation: lp-aurora-c 17s ease-in-out infinite alternate; }
+@keyframes lp-aurora-a { to { transform: translate(20%, 16%) scale(1.15); } }
+@keyframes lp-aurora-b { to { transform: translate(-24%, -12%) scale(0.88); } }
+@keyframes lp-aurora-c { to { transform: translate(-14%, 22%) scale(1.2); } }
+.lp-wordmark { font-size: clamp(104px, 34vw, 300px); filter: drop-shadow(0 0 0.22em rgba(255, 143, 207, 0.2)); }
+.lp-hero h1 { margin-top: 52px; font-size: clamp(30px, 3.9vw, 54px); line-height: 1.08; max-width: 980px; }
+.lp-hero-actions { margin-top: 40px; justify-content: center; }
 
-/* The letters rise in on the beat, then the dot drops onto the i: the finishing touch. */
-.lp-wordmark .vibe-letter { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both; animation-delay: calc(var(--i) * 90ms); }
-.lp-wordmark .vibe-i .vibe-dot { animation: lp-drop 1100ms cubic-bezier(0.3, 0, 0.3, 1) 520ms both; transform-origin: 50% 100%; }
+/* The letters rise in on the beat, then the dot drops onto the i: the finishing touch. After
+   that the word does a small wave now and then, and the dot keeps time. */
+.lp-wordmark .vibe-letter { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite; animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms); }
+.lp-wordmark .vibe-i .vibe-dot { animation: lp-drop 1100ms cubic-bezier(0.3, 0, 0.3, 1) 520ms both, lp-beat 1.6s ease-out 2.2s infinite; }
 @keyframes lp-rise { from { transform: translateY(26%); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
 @keyframes lp-drop {
   0% { transform: translateY(-260%); opacity: 0; }
@@ -50,13 +56,27 @@
   88% { transform: translateY(0) scale(1.02, 0.98); }
   100% { transform: none; opacity: 1; }
 }
-/* Each letter bounces on its own when you touch it. Keeping lp-rise in the list stops it replaying. */
-.lp-wordmark .vibe-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-bop 520ms cubic-bezier(0.3, 0, 0.3, 1); animation-delay: calc(var(--i) * 90ms), 0ms; }
+@keyframes lp-wave { 0%, 10%, 100% { transform: none; } 3.5% { transform: translateY(-5%) scale(0.99, 1.03); } 7% { transform: translateY(0.6%); } }
+@keyframes lp-beat { 0% { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); } 12% { filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.85)); } 100% { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); } }
+/* Each letter bounces on its own when you touch it. Keeping the other two in the list stops them restarting. */
+.lp-wordmark .vibe-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 520ms cubic-bezier(0.3, 0, 0.3, 1); animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms), 0ms; }
 @keyframes lp-bop { 30% { transform: translateY(-9%) scale(0.97, 1.04); } 60% { transform: translateY(1.5%) scale(1.03, 0.97); } 100% { transform: none; } }
-.lp-hero-shot { position: relative; margin-top: 72px; padding-bottom: 56px; }
-.lp-frame { border-radius: var(--radius-l); overflow: hidden; background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 40px 100px rgba(5, 6, 14, 0.6); }
-.lp-hero-shot .lp-frame { box-shadow: 0 0 0 1px var(--line), 0 40px 120px rgba(5, 6, 14, 0.7), 0 0 160px -40px var(--agent-wash); }
-.lp-float { position: absolute; left: 20%; bottom: 0; width: min(390px, 33%); border-radius: 12px; box-shadow: 0 24px 60px rgba(5, 6, 14, 0.75), 0 0 0 1px var(--agent-line); }
+
+/* Things you can ask, gliding past in two rows. */
+.lp-ticker { display: flex; flex-direction: column; gap: 14px; margin-top: 128px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.lp-ticker-row { display: flex; width: max-content; animation: lp-tick 64s linear infinite; }
+.lp-ticker-row:nth-child(2) { animation-duration: 76s; animation-direction: reverse; }
+.lp-ticker:hover .lp-ticker-row { animation-play-state: paused; }
+.lp-ticker ul { display: flex; gap: 14px; margin: 0; padding: 0 14px 0 0; list-style: none; }
+.lp-ticker li { display: flex; align-items: center; gap: 10px; padding: 11px 20px 11px 16px; border-radius: 999px; white-space: nowrap; font-size: 15px; color: var(--muted);
+  background: linear-gradient(var(--panel), var(--panel-2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px var(--line-soft); }
+.lp-ticker li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--agent-fill); box-shadow: 0 0 10px var(--agent); }
+@keyframes lp-tick { to { transform: translateX(-50%); } }
+#support { scroll-margin-top: 48px; }
+
+.lp-hero-shot { position: relative; width: 100%; margin-top: 76px; text-align: left; }
+.lp-frame { border-radius: var(--radius-l); overflow: hidden; background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 40px 100px rgba(0, 0, 0, 0.6); }
+.lp-hero-shot .lp-frame { box-shadow: 0 0 0 1px var(--line), 0 40px 120px rgba(0, 0, 0, 0.7), 0 0 160px -40px var(--agent-wash); }
 
 .lp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 88px; align-items: center; padding-top: 160px; padding-bottom: 40px; }
 .lp-copy h2 { margin-bottom: 24px; }
@@ -117,10 +137,11 @@
   .lp-hero h1 { margin-top: 36px; }
   .lp-hero-actions { margin-top: 32px; }
   .lp-hero-shot { margin-top: 48px; padding-bottom: 0; }
-  /* Phones get the verse-to-hook half of the timeline at a readable size. */
+  /* Phones get the timeline and mixer at a readable size; the Producer runs off the edge. */
   .lp-bleed { margin-right: -20px; border-radius: var(--radius-m) 0 0 var(--radius-m); }
-  .lp-bleed img { width: 210%; max-width: none; margin-left: -110%; }
-  .lp-float { position: relative; left: auto; width: 86%; margin: -28px 0 0 auto; }
+  .lp-bleed img { width: 170%; max-width: none; }
+  .lp-ticker { margin-top: 88px; gap: 10px; }
+  .lp-ticker li { font-size: 14px; padding: 9px 16px 9px 13px; }
   .lp-split { padding-top: 104px; }
   .lp-band { margin-top: 104px; }
   .lp-band .lp-split { padding-block: 80px; }
@@ -132,8 +153,24 @@
   .lp-end { padding-top: 120px; padding-bottom: 80px; }
   .lp-foot { gap: 18px; }
 }
+/* Sections rise in as they arrive, and the hero shot straightens as you scroll, driven by
+   the scroll position itself. Browsers without scroll timelines show everything still. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-reveal { animation: lp-reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
+    .lp-hero-shot .lp-frame { transform-origin: 50% 0; animation: lp-tilt linear both; animation-timeline: view(); animation-range: entry 40% cover 55%; }
+  }
+}
+@keyframes lp-reveal { from { opacity: 0; transform: translateY(64px) scale(0.98); } }
+@keyframes lp-tilt { from { transform: perspective(1400px) rotateX(18deg) scale(0.94); } }
+
 @media (prefers-reduced-motion: reduce) {
   .landing { scroll-behavior: auto; }
-  .landing mark { animation: none; }
+  .landing mark, .lp-aurora i, .lp-btn { animation: none; transition: none; }
   .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop { animation: none; }
+  /* The ticker holds still and wraps instead. */
+  .lp-ticker { mask-image: none; -webkit-mask-image: none; }
+  .lp-ticker-row { width: auto; animation: none; justify-content: center; }
+  .lp-ticker ul { flex-wrap: wrap; justify-content: center; padding: 0; }
+  .lp-ticker ul[aria-hidden] { display: none; }
 }

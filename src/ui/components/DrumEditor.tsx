@@ -112,7 +112,7 @@ export function DrumEditor({ clip, track, project }: { clip: MidiClip; track: Tr
                     onClick={(e) => toggle(l.note, i, e)}
                     aria-label={`${l.name} step ${i + 1}${on ? ' on' : ''}`}
                   >
-                    {hits.length > 1 ? <span style={{ fontSize: 9, fontWeight: 700, color: '#10131c' }}>{hits.length}</span> : null}
+                    {hits.length > 1 ? <span style={{ fontSize: 9, fontWeight: 700, color: '#0b0b0c' }}>{hits.length}</span> : null}
                   </button>
                 );
               })}

@@ -9,9 +9,9 @@ const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const OUT = `${PUBLIC}brand/`;
 mkdirSync(OUT, { recursive: true });
 
-const INK = '#ebe9f4';
-const NAVY = '#161925';
-const TILE = '#1c2030';
+const INK = '#ececee';
+const BLACK = '#050505';
+const TILE = '#0b0b0c';
 const AGENT = GRADIENT[0];
 
 const stops = GRADIENT.map((c, k) => `<stop offset="${k / (GRADIENT.length - 1)}" stop-color="${c}"/>`).join('');
@@ -36,7 +36,7 @@ const word = (letterPaint, dotPaint, defs = '') => {
 };
 const perLetter = WORDMARK.letters.map(({ name, x }) => wordGradient(`g-${name}`, x)).join('');
 files['wordmark.svg'] = word((name) => `url(#g-${name})`, '#ffffff', perLetter);
-files['wordmark-light.svg'] = word((name) => `url(#g-${name})`, NAVY, perLetter);
+files['wordmark-light.svg'] = word((name) => `url(#g-${name})`, BLACK, perLetter);
 files['wordmark-mono.svg'] = word(() => INK, AGENT);
 
 // Each letter on its own, with its slice of the gradient, so they line up again side by side.
@@ -73,7 +73,7 @@ for (const [file, size] of [['apple-touch-icon.png', 180], ['brand/icon-512.png'
 }
 // The link preview card: the wordmark under a stage light.
 await page.setViewportSize({ width: 1200, height: 630 });
-await page.setContent(`<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:radial-gradient(closest-side at 42% 50%,rgba(182,156,255,.2),transparent),radial-gradient(closest-side at 64% 56%,rgba(255,143,207,.1),transparent) ${NAVY}}svg{height:250px;filter:drop-shadow(0 0 50px rgba(255,143,207,.2))}</style>${files['wordmark.svg']}`);
+await page.setContent(`<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:radial-gradient(closest-side at 42% 50%,rgba(182,156,255,.2),transparent),radial-gradient(closest-side at 64% 56%,rgba(255,143,207,.1),transparent) ${BLACK}}svg{height:250px;filter:drop-shadow(0 0 50px rgba(255,143,207,.2))}</style>${files['wordmark.svg']}`);
 await page.screenshot({ path: `${OUT}og.jpg`, type: 'jpeg', quality: 90 });
 await browser.close();
 console.log(`Wrote ${Object.keys(files).length + 4} files to public/`);

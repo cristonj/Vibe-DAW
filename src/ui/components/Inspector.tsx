@@ -8,6 +8,7 @@ import type { Effect, EffectType, Project, Track } from '../../model/types';
 import { cloneDeep, mintId } from '../../model/project';
 import { useLibrary } from '../../samples/library';
 import { previewNote } from '../../engine/api';
+import { rangeFill } from '../hooks';
 import { CUSTOM_BLANK, CUSTOM_STARTERS, customDefaults, effectName, newCustomEffect } from '../../model/customEffect';
 import { useCustomFxErrors } from '../../engine/customFx';
 import { usePresets } from '../../state/presetLibrary';
@@ -51,7 +52,7 @@ export function ParamSlider({ label, value, min, max, step, onChange, format, de
     <div className="param">
       <span title={label}>{label.replace(/\s*\((Hz|dB|s|ms)\)/, '')}</span>
       <input
-        type="range" min={min} max={max} step={s} value={value}
+        type="range" min={min} max={max} step={s} value={value} style={rangeFill(value, min, max)}
         onChange={(e) => onChange(Number(e.target.value))}
         onDoubleClick={() => defaultValue !== undefined && onChange(defaultValue)}
         aria-label={label}
