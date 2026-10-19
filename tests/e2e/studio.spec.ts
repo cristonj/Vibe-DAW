@@ -24,12 +24,28 @@ test('landing opens the studio without loading its audio engine', async ({ page 
   page.on('request', (req) => requests.push(req.url()));
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('The open source agentic DAW built to augment, not replace, human creativity.');
+  await expect(page.getByRole('main').getByRole('img', { name: 'Vibe', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation')).toHaveCount(0);
   expect(requests.some((url) => /tone|firebase|studio\.tsx|genai/.test(url))).toBe(false);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/landing-${info.project.name}.png`, fullPage: true });
   await page.getByRole('main').getByRole('link', { name: 'Open the studio' }).first().click();
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Arrangement', exact: true })).toBeVisible();
+});
+
+test('landing shows one donation QR code at a time', async ({ page }) => {
+  await page.goto('/');
+  const btc = page.getByRole('button', { name: 'Show Bitcoin QR code' });
+  await btc.click();
+  await expect(page.getByRole('img', { name: 'QR code for the Bitcoin address' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hide Bitcoin QR code' })).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Show Monero QR code' }).click();
+  await expect(page.getByRole('img', { name: 'QR code for the Monero address' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /^QR code for/ })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Hide Monero QR code' }).click();
+  await expect(page.getByRole('img', { name: /^QR code for/ })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('first-run Gemini setup is fully visible and not covered by the timeline', async ({ page }) => {

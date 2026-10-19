@@ -13,7 +13,7 @@ The landing page shows the project's Bitcoin and Monero addresses by default. To
 | `VITE_DONATION_ETH_ADDRESS` | Ethereum mainnet |
 | `VITE_DONATION_SOL_ADDRESS` | Solana |
 
-Only configured addresses appear. Each has a copy button and wallet link. Never put private keys, recovery phrases, or credentials in `VITE_*` variables: they are public build inputs.
+Only configured addresses appear. Each has a copy button and a QR code of its payment link (such as `bitcoin:<address>`) for scanning with a phone wallet. Never put private keys, recovery phrases, or credentials in `VITE_*` variables: they are public build inputs.
 
 ## Automatic Firebase rules deployments
 

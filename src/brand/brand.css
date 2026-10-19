@@ -1,0 +1,4 @@
+.vibe-wordmark, .vibe-mark { display: block; height: 1em; width: auto; overflow: visible; }
+.vibe-wordmark path, .vibe-mark path { fill: none; stroke-linecap: round; }
+/* Letters move from their own bottom center. */
+.vibe-letter, .vibe-dot { transform-box: fill-box; transform-origin: 50% 100%; }

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState, type AnimationEvent, type PointerEvent } from 'react';
+import { Wordmark } from '../brand/Wordmark';
 import { donationWallets } from './donations';
 import './landing.css';
 
@@ -19,13 +20,39 @@ function Shot({ shot, alt, eager = false, className = '' }: { shot: typeof SHOTS
   return <img className={className} src={shot.src} width={shot.width / 2} height={shot.height / 2} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" {...(eager ? { fetchPriority: 'high' as const } : {})} />;
 }
 
-function Logo() {
-  return <svg className="lp-mark" viewBox="0 0 32 32" aria-hidden><rect width="32" height="32" rx="8" /><path d="M6 20c3 0 3-8 6-8s3 12 6 12 3-16 6-16 2 6 2 6" /></svg>;
+/** A scannable payment link, drawn as one path of dark modules. The encoder loads on first use. */
+function Qr({ uri, name }: { uri: string; name: string }) {
+  const [code, setCode] = useState<{ size: number; d: string } | 'error' | null>(null);
+  useEffect(() => {
+    let live = true;
+    import('uqr').then(({ encode }) => {
+      const { data, size } = encode(uri, { ecc: 'M', border: 0 });
+      let d = '';
+      data.forEach((row, y) => {
+        for (let x = 0; x < size; x++) {
+          if (!row[x]) continue;
+          let run = 1;
+          while (row[x + run]) run++;
+          d += `M${x} ${y}h${run}v1h${-run}z`;
+          x += run;
+        }
+      });
+      if (live) setCode({ size, d });
+    }, () => { if (live) setCode('error'); });
+    return () => { live = false; };
+  }, [uri]);
+  if (code === 'error') return <p className="lp-qr-note">The QR code could not load. Copy the address instead.</p>;
+  return <figure className="lp-qr">
+    {/* Four modules of quiet zone, as scanners expect. */}
+    {code ? <svg viewBox={`-4 -4 ${code.size + 8} ${code.size + 8}`} role="img" aria-label={`QR code for the ${name} address`} shapeRendering="crispEdges"><path d={code.d} /></svg> : <div className="lp-qr-wait" />}
+    <figcaption>Scan with your {name} wallet app.</figcaption>
+  </figure>;
 }
 
 function Support() {
   const [copied, setCopied] = useState('');
   const [status, setStatus] = useState('');
+  const [qr, setQr] = useState('');
   const copy = async (address: string) => {
     try { await navigator.clipboard.writeText(address); setCopied(address); setStatus('Address copied'); }
     catch { setStatus('Copy is unavailable. Select the address to copy it manually.'); }
@@ -33,24 +60,29 @@ function Support() {
   if (!donationWallets.length) return <p className="lp-support-line">If Vibe helps you make something, a star or a pull request on <a href={REPO} target="_blank" rel="noreferrer">GitHub</a> helps it grow.</p>;
   return <div className="lp-wallets" id="support">
     <p className="lp-support-line">If Vibe helps you make something, you can help it grow. Donations are always optional. Use the network shown for each address.</p>
-    {donationWallets.map((wallet) => <div className="lp-wallet" key={wallet.name}>
-      <span>{wallet.name}<small>{wallet.network}</small></span>
-      <code>{wallet.address}</code>
-      <button onClick={() => void copy(wallet.address)} aria-label={`Copy ${wallet.name} address`}>{copied === wallet.address ? 'Copied' : 'Copy'}</button>
-      <a href={`${wallet.scheme}${wallet.address}${wallet.suffix ?? ''}`} aria-label={`Open ${wallet.name} wallet`}>Open wallet</a>
-    </div>)}
+    {donationWallets.map((wallet) => {
+      const open = qr === wallet.name, panel = `qr-${wallet.name.toLowerCase()}`;
+      return <div className="lp-wallet" key={wallet.name}>
+        <span>{wallet.name}<small>{wallet.network}</small></span>
+        <code>{wallet.address}</code>
+        <button onClick={() => void copy(wallet.address)} aria-label={`Copy ${wallet.name} address`}>{copied === wallet.address ? 'Copied' : 'Copy'}</button>
+        <button onClick={() => setQr(open ? '' : wallet.name)} aria-expanded={open} aria-controls={panel} aria-label={`${open ? 'Hide' : 'Show'} ${wallet.name} QR code`}>{open ? 'Hide QR' : 'Show QR'}</button>
+        {open && <div className="lp-qr-panel" id={panel}><Qr uri={`${wallet.scheme}${wallet.address}${wallet.suffix ?? ''}`} name={wallet.name} /></div>}
+      </div>;
+    })}
     <span className="lp-status" role="status">{status}</span>
   </div>;
 }
 
+/** Bounce the letter under the pointer. A class rather than :hover, so it finishes the bounce. */
+const bop = (e: PointerEvent) => (e.target as Element).closest('.vibe-letter')?.classList.add('bop');
+const unbop = (e: AnimationEvent) => { if (e.animationName === 'lp-bop') (e.target as Element).classList.remove('bop'); };
+
 export function Landing() {
   return <div className="landing">
-    <nav className="lp-nav lp-wrap" aria-label="Main navigation">
-      <a className="lp-brand" href="/" aria-label="Vibe home"><Logo />Vibe</a>
-      <div><a href={REPO} target="_blank" rel="noreferrer">GitHub</a><a className="lp-btn small" href="/studio">Open the studio</a></div>
-    </nav>
     <main>
       <section className="lp-hero lp-wrap">
+        <div onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" /></div>
         <h1>The open source agentic DAW built to <mark>augment, not replace,</mark> human creativity.</h1>
         <div className="lp-actions lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">View the code</a></div>
         <figure className="lp-hero-shot">
@@ -105,6 +137,6 @@ export function Landing() {
         <Support />
       </section>
     </main>
-    <footer className="lp-foot lp-wrap"><a className="lp-brand" href="/"><Logo />Vibe</a><span>vibedaw.org</span><a href={REPO} target="_blank" rel="noreferrer">GitHub</a></footer>
+    <footer className="lp-foot lp-wrap"><a className="lp-brand" href="/" aria-label="Vibe home"><Wordmark tone="mono" label="" /></a><span>vibedaw.org</span><a href={REPO} target="_blank" rel="noreferrer">GitHub</a></footer>
   </div>;
 }

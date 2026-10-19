@@ -1,4 +1,4 @@
-/* Vibe — studio at night.
+/* Vibe: studio at night.
    Quiet ink-navy surfaces, colorful tracks, and one loud idea: everything the agent
    touches is drawn in lilac ink until you keep it. */
 
@@ -149,8 +149,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
   border-bottom: 1px solid var(--line);
 }
 
-.brand { display: flex; align-items: center; gap: 8px; padding-right: 6px; font-weight: 700; letter-spacing: -0.01em; font-size: 14px; }
-.brand svg { display: block; }
+.brand { display: flex; align-items: center; padding: 0 8px 0 4px; }
+.brand-name { font-size: 19px; }
+.brand-mark { display: none; font-size: 20px; }
 
 .project-name {
   background: transparent;
@@ -889,7 +890,8 @@ kbd {
 
 @media (max-width: 1360px) {
   .brand-name { display: none; }
-  .brand { padding-right: 0; }
+  .brand-mark { display: block; }
+  .brand { padding: 0 2px; }
 }
 @media (max-width: 1200px) {
   .browser { width: 220px; }

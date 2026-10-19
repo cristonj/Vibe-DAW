@@ -14,15 +14,7 @@ import { toast } from '../toast';
 import { tip, useKeymap } from '../../state/keymap';
 import { exportProjectFile } from '../../state/projectFile';
 import { projectCredits } from '../../samples/credits';
-
-export function Logo() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
-      <rect width="32" height="32" rx="8" fill="#262b40" />
-      <path d="M6 20c3 0 3-8 6-8s3 12 6 12 3-16 6-16 2 6 2 6" fill="none" stroke="#b69cff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+import { VibeMark, Wordmark } from '../../brand/Wordmark';
 
 function Position() {
   const pos = useTransport((s) => s.position);
@@ -62,7 +54,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
   return (
     <header className="topbar">
       <button className="btn icon" title={tip('Show or hide the sound browser', 'toggleBrowser')} onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
-      <div className="brand"><Logo /> <span className="brand-name">Vibe</span></div>
+      <div className="brand"><VibeMark className="brand-mark" /><Wordmark className="brand-name" /></div>
       <input
         className="project-name"
         value={name}
@@ -119,7 +111,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
       <div className="top-right">
         <ExportMenu />
         {firebaseConfigured && (user ? (
-          <span className="avatar" title={`${user.name ?? user.email} — synced to the cloud`}>
+          <span className="avatar" title={`${user.name ?? user.email} - synced to the cloud`}>
             {user.photo ? <img src={user.photo} alt="" referrerPolicy="no-referrer" /> : (user.name ?? '?')[0]}
           </span>
         ) : (
