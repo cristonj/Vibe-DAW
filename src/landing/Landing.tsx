@@ -9,8 +9,8 @@ const REPO = 'https://github.com/cristonj/Vibe-DAW';
 const SHOTS = {
   studio: { src: '/screenshots/studio.webp', width: 2880, height: 1800 },
   producer: { src: '/screenshots/producer.webp', width: 784, height: 1660 },
-  inlineEdit: { src: '/screenshots/inline-edit.webp', width: 1124, height: 854 },
-  pianoRoll: { src: '/screenshots/piano-roll.webp', width: 2060, height: 558 },
+  inlineEdit: { src: '/screenshots/inline-edit.webp', width: 1124, height: 806 },
+  pianoRoll: { src: '/screenshots/piano-roll.webp', width: 2060, height: 538 },
   drums: { src: '/screenshots/drums.webp', width: 2088, height: 332 },
   mixer: { src: '/screenshots/mixer.webp', width: 1220, height: 850 },
 };
@@ -152,7 +152,7 @@ export function Landing() {
         <div className="lp-grid">
           <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.pianoRoll} alt="The piano roll showing the flute melody with note velocities." /><figcaption>Piano roll</figcaption></figure>
           <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.drums} alt="The step sequencer with kick, snare, hat, rim and shaker lanes." /><figcaption>Step sequencer</figcaption></figure>
-          <figure className="lp-frame mixer lp-reveal"><Shot shot={SHOTS.mixer} alt="The mixer with a channel strip for each track and the master bus." /><figcaption>Mixer</figcaption></figure>
+          <figure className="lp-frame lp-mixer lp-reveal"><Shot shot={SHOTS.mixer} alt="The mixer with a channel strip for each track and the master bus." /><figcaption>Mixer</figcaption></figure>
           <div className="lp-promise lp-reveal">
             <h3>No AI-generated audio.</h3>
             <p>Every sound is a sampled instrument, a synth, or your own recording. The agent writes and arranges notes; it never renders a song from a prompt. What you make is yours.</p>

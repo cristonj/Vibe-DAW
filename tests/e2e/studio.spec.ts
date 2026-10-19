@@ -211,7 +211,8 @@ async function openLibrary(page: Page) {
 
 test('saved phrases survive reload and can be reused in another project with undo', async ({ page }) => {
   await fixture(page);
-  await page.getByRole('button', { name: 'Save selected clips to library', exact: true }).click();
+  await page.getByRole('button', { name: 'Clip actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Save selected clips to library', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Save to library' });
   await dialog.getByRole('textbox', { name: 'Library item name' }).fill('My intro');
   await dialog.getByRole('textbox', { name: 'Library item tags' }).fill('intro, warm');
@@ -311,7 +312,8 @@ test('timed notes and lyrics work without a vocal track, persist and export as L
 
 test('click, right-click and @ mentions attach the same current project context', async ({ page }) => {
   await fixture(page);
-  await page.getByRole('button', { name: 'Add selection to chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Clip actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add selection to chat', exact: true }).click();
   await expect(page.locator('.composer .attach-chip')).toContainText('Current selection');
   const message = page.getByRole('textbox', { name: 'Message the agent' });
   await message.fill('@Intro');
@@ -362,4 +364,65 @@ test('tooltips stay inside viewport edges with a zoomed interface and disappear 
   expect(bounds.x).toBeGreaterThanOrEqual(7); expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width - 7);
   expect(bounds.y).toBeGreaterThanOrEqual(7); expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height - 7);
   await page.mouse.move(0, 0); await expect(tip).not.toBeVisible();
+});
+
+
+test('toolbar menus fit, edit clips, and keep timeline controls reachable', async ({ page }) => {
+  await fixture(page);
+  for (const width of [1440, 1100, 820, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const fits = await page.locator('.arrange-tools').evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight);
+    expect(fits, `toolbar at ${width}px`).toBe(true);
+  }
+  await page.getByRole('button', { name: 'Clip actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Duplicate selected clips', exact: true }).click();
+  expect(await page.evaluate(() => (window as any).__vibe.useDaw.getState().project.tracks[0].clips.length)).toBe(2);
+  await page.getByRole('button', { name: 'Timeline view', exact: true }).click();
+  const follow = page.getByRole('menuitemcheckbox', { name: 'Follow playhead', exact: true });
+  await expect(follow).toHaveAttribute('aria-checked', 'true');
+  await follow.click();
+  await expect(follow).toHaveAttribute('aria-checked', 'false');
+  expect(await page.evaluate(() => (window as any).__vibe.useDaw.getState().followPlayhead)).toBe(false);
+  await page.getByRole('menu', { name: 'Timeline view', exact: true }).getByRole('combobox', { name: 'Snap', exact: true }).selectOption('0.5');
+  expect(await page.evaluate(() => (window as any).__vibe.useDaw.getState().snap)).toBe(0.5);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu', { name: 'Timeline view', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Timeline view', exact: true })).toBeFocused();
+  await page.evaluate(() => { document.getElementById('root')!.style.zoom = '1.25'; });
+  await page.getByRole('button', { name: 'Clip actions', exact: true }).press('ArrowDown');
+  const bounds = (await page.getByRole('menu', { name: 'Clip actions', exact: true }).boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(7);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(313);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(893);
+  await page.keyboard.press('Escape');
+});
+
+test('model menu uses the shared UI and preserves the selected model', async ({ page }) => {
+  await fixture(page);
+  await page.evaluate(() => window.dispatchEvent(new Event('vibe:open-agent')));
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  const menu = page.getByRole('listbox', { name: 'Model', exact: true });
+  const bounds = (await menu.boundingBox())!;
+  expect(bounds.y).toBeGreaterThanOrEqual(7);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(page.viewportSize()!.height - 7);
+  await page.getByRole('option', { name: /Gemini 4 Argon/ }).click();
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText('Gemini 4 Argon');
+  await page.reload(); await page.waitForFunction(() => !!(window as any).__vibe);
+  await page.evaluate(() => window.dispatchEvent(new Event('vibe:open-agent')));
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText('Gemini 4 Argon');
+});
+
+test('landing mixer fits its frame and prompts continue moving on hover', async ({ page }, info) => {
+  await page.goto('/');
+  const mixer = page.locator('.lp-mixer');
+  await mixer.scrollIntoViewIfNeeded();
+  await expect(mixer.locator('img')).toBeVisible();
+  await mixer.locator('img').evaluate((img) => (img as HTMLImageElement).decode());
+  expect(await mixer.evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)).toBe(true);
+  expect(await mixer.locator('img').evaluate((el) => Math.abs((el as HTMLElement).offsetWidth - el.parentElement!.clientWidth) < 2)).toBe(true);
+  expect(await page.locator('.landing').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  if (info.project.name === 'desktop') {
+    await page.locator('.lp-ticker').hover();
+    expect(await page.locator('.lp-ticker-row').first().evaluate((el) => getComputedStyle(el).animationPlayState)).toBe('running');
+  }
 });

@@ -14,7 +14,8 @@
     "test:browser": "playwright test",
     "screenshots": "node scripts/capture-landing-screenshots.mjs",
     "brand": "node scripts/build-brand.mjs",
-    "test:rules": "npx --yes firebase-tools@15.34.0 emulators:exec --only firestore --project demo-vibe-tests \"node --test tests/rules/library.test.mjs\""
+    "test:rules": "npx --yes firebase-tools@15.34.0 emulators:exec --only firestore --project demo-vibe-tests \"node --test tests/rules/library.test.mjs\"",
+    "promo": "node scripts/frame-promo-images.mjs"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",

@@ -1,6 +1,6 @@
 import { AddToChat } from './AddToChat';
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, Check, X, Copy, CopyPlus, ClipboardPaste, Scissors, ChevronDown } from '../icons';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { ZoomIn, ZoomOut, Plus, Drum, Piano, AudioLines, Trash, X, Copy, CopyPlus, ClipboardPaste, Scissors } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
 import { beatsPerBar, cloneDeep, createMidiClip, createTrack, projectLength } from '../../model/project';
 import { PRESET_BY_ID } from '../../model/catalog';
@@ -9,13 +9,12 @@ import { seek, stop, play } from '../../engine/api';
 import { getSampleMeta } from '../../samples/library';
 import { audioClipRate, repeatNotes } from '../../model/edit';
 import { PHONE, uiZoom, usePeaks, useMediaQuery } from '../hooks';
-import { keepAllPending } from '../../agent/agent';
+import { Dropdown } from './Dropdown';
 import { AnnotationLane } from './Annotations';
 import { attachChatReference } from '../chatReferences';
 import { MessageSquarePlus } from '../icons';
 import { saveSelectedClips } from './SavePreset';
 import { openInlineAI } from './InlineAI';
-import { selectedNotes } from '../../model/selection';
 import { MousePointer2, Bookmark } from '../icons';
 import { aiAvailable, useSettings } from '../../state/settings';
 import { tip, useKeymap } from '../../state/keymap';
@@ -326,7 +325,6 @@ export function Arrangement() {
   const bpb = beatsPerBar(project);
   const totalBeats = Math.max(projectLength(project), ...(project.annotations ?? []).map((a) => a.start + a.length)) + bpb * 16;
   const width = totalBeats * zoom;
-  const hasPending = useMemo(() => project.tracks.some((t) => t.clips.some((c) => c.aiPending)) || !!project.annotations?.some((a) => a.aiPending), [project]);
   const empty = project.tracks.length === 0;
 
   useEffect(() => {
@@ -347,7 +345,7 @@ export function Arrangement() {
       const d = useDaw.getState();
       if (!d.followPlayhead || !useTransport.getState().playing) return;
       d.setFollow(false);
-      toast('Stopped following the playhead. Turn Follow back on in the toolbar.');
+      toast('Stopped following the playhead. Turn Follow playhead back on in the View menu.');
     };
     const onPointerDown = (e: PointerEvent) => {
       if (e.target !== el) return;
@@ -592,32 +590,35 @@ export function Arrangement() {
     <section className="arrange" style={{ ['--header-w' as string]: `${headerW}px`, ['--track-h' as string]: `${TRACK_H}px` }} aria-label="Arrangement">
       <div className="arrange-tools">
         <AddTrackMenu />
-        <div className="tool-divider" />
-        <button className="btn" onClick={() => newClipOnSelectedTrack()} disabled={!project.tracks.some((t) => t.kind !== 'audio')} title={tip('New empty pattern on the selected track, at the playhead', 'newClip')} aria-label="New clip"><Plus size={14} /> <span className="btn-label">New clip</span></button>
+        <Dropdown label="Clip actions" content={(close) => {
+          const pick = (action: () => void) => () => { close(); action(); };
+          const selected = !!selection.clipIds.length;
+          return <>
+            <button className="menu-item" role="menuitem" disabled={!project.tracks.some((t) => t.kind !== 'audio')} onClick={pick(newClipOnSelectedTrack)}><b><Plus size={14} /> New clip</b></button>
+            <button className="menu-item" role="menuitem" disabled={!selected} onClick={pick(copySelectedClips)}><b><Copy size={14} /> Copy selected clips</b></button>
+            <button className="menu-item" role="menuitem" onClick={pick(pasteClips)}><b><ClipboardPaste size={14} /> Paste clips at the playhead</b></button>
+            <button className="menu-item" role="menuitem" disabled={!selected} onClick={pick(duplicateSelectedClips)}><b><CopyPlus size={14} /> Duplicate selected clips</b></button>
+            <button className="menu-item" role="menuitem" onClick={pick(splitAtPlayhead)}><b><Scissors size={14} /> Split clips at the playhead</b></button>
+            <div className="menu-divider" />
+            <button className="menu-item" role="menuitem" disabled={!selected && !selection.range} onClick={pick(() => attachChatReference('selection'))}><b><MessageSquarePlus size={14} /> Add selection to chat</b></button>
+            <button className="menu-item" role="menuitem" disabled={!selected} onClick={pick(saveSelectedClips)}><b><Bookmark size={14} /> Save selected clips to library</b></button>
+            <button className="menu-item danger" role="menuitem" disabled={!selected} onClick={pick(deleteSelectedClips)}><b><Trash size={14} /> Delete selected clips</b></button>
+          </>;
+        }}>Clips</Dropdown>
         <button className={`btn ${rangeMode ? 'active' : ''}`} aria-pressed={rangeMode} onClick={() => setRangeMode((v) => !v)} title="Drag across tracks to select a time range. Shift-drag also works."><MousePointer2 size={14} /> Range</button>
-        <button className="btn" onClick={() => openInlineAI()} disabled={!selection.clipIds.length} title="Edit the selected notes or region with AI (Ctrl+K)">Edit selection{selection.range ? ` · ${selection.clipIds.reduce((n, id) => n + selectedNotes(project, selection, id).length, 0)} notes` : ''}</button>
-        <button className="btn icon" disabled={!selection.clipIds.length && !selection.range} onClick={() => attachChatReference('selection')} aria-label="Add selection to chat" title="Add selected notes or region to chat"><MessageSquarePlus size={14} /></button>
-        <button className="btn icon" disabled={!selection.clipIds.length} onClick={saveSelectedClips} title="Save selected clips to your library" aria-label="Save selected clips to library"><Bookmark size={14} /></button>
-        <button className="btn icon" onClick={() => copySelectedClips()} disabled={!selection.clipIds.length} title={tip('Copy selected clips', 'copy')}><Copy size={14} /></button>
-        <button className="btn icon" onClick={() => pasteClips()} title={tip('Paste clips at the playhead', 'paste')}><ClipboardPaste size={14} /></button>
-        <button className="btn icon" onClick={() => duplicateSelectedClips()} disabled={!selection.clipIds.length} title={tip('Duplicate selected clips', 'duplicate')}><CopyPlus size={14} /></button>
-        <button className="btn icon" onClick={() => splitAtPlayhead()} title={tip('Split clips at the playhead', 'split')}><Scissors size={14} /></button>
-        <button className="btn icon danger" onClick={() => deleteSelectedClips()} disabled={!selection.clipIds.length} title={tip('Delete selected clips', 'delete')}><Trash size={14} /></button>
-        <div className="tool-divider" />
-        <label title="Clips snap to this grid when you move or resize them"><span className="btn-label minor">Snap</span>
-          <select value={snap} onChange={(e) => setSnap(Number(e.target.value))} aria-label="Snap">
-            {SNAPS.map(([l, v]) => <option key={l} value={v}>{l}</option>)}
-          </select>
-        </label>
-        <label title="Scroll the timeline to keep the playhead in view"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} aria-label="Follow playhead" /> <span className="btn-label minor">Follow playhead</span></label>
-        <button className="btn icon" title={tip('Zoom out', 'zoomOut')} onClick={() => setZoom(zoom / 1.3)}><ZoomOut size={15} /></button>
-        <button className="btn icon" title={tip('Zoom in', 'zoomIn')} onClick={() => setZoom(zoom * 1.3)}><ZoomIn size={15} /></button>
-        <div style={{ flex: 1 }} />
-        {hasPending && (
-          <button className="btn keep-all" onClick={keepAllPending} title="Keep everything the agent changed and remove its outlines">
-            <Check size={14} /> <span className="ai-ink">Keep</span>
-          </button>
-        )}
+        <button className="btn" onClick={() => openInlineAI()} disabled={!selection.clipIds.length} title="Edit the selected notes or region with AI (Ctrl+K)" aria-label="Edit selection"><MessageSquarePlus size={14} /><span className="btn-label">Edit selection</span></button>
+        <div className="spacer" />
+        <Dropdown label="Timeline view" content={() => <>
+          <label className="menu-control" title="Clips snap to this grid when you move or resize them">Snap to grid
+            <select value={snap} onChange={(e) => setSnap(Number(e.target.value))} aria-label="Snap">
+              {SNAPS.map(([l, v]) => <option key={l} value={v}>{l}</option>)}
+            </select>
+          </label>
+          <button className={`menu-item toggle-item ${follow ? 'on' : ''}`} role="menuitemcheckbox" aria-checked={follow} onClick={() => setFollow(!follow)} title="Scroll the timeline to keep the playhead in view"><b>Follow playhead</b><span className="toggle-switch" aria-hidden="true" /></button>
+          <div className="menu-divider" />
+          <button className="menu-item" role="menuitem" title={tip('Zoom out', 'zoomOut')} onClick={() => setZoom(zoom / 1.3)}><b><ZoomOut size={15} /> Zoom out</b></button>
+          <button className="menu-item" role="menuitem" title={tip('Zoom in', 'zoomIn')} onClick={() => setZoom(zoom * 1.3)}><b><ZoomIn size={15} /> Zoom in</b></button>
+        </>}>View</Dropdown>
       </div>
       <div className="scroller" ref={scrollRef} onPointerDown={(e) => { if (e.target === e.currentTarget) select({ clipIds: [] }); }}>
         <div className={`timeline ${rangeMode ? 'selecting-range' : ''}`} style={{ width: headerW + width }} onPointerDownCapture={startRange}>
@@ -637,7 +638,7 @@ export function Arrangement() {
               >
                 {!t.clips.length && (
                   <div className="lane-hint">
-                    <span className="hide-touch">{t.kind === 'audio' ? 'Drag a sound from the left panel onto this lane' : 'Double-click here (or use New clip) to draw a pattern'}</span>
+                    <span className="hide-touch">{t.kind === 'audio' ? 'Drag a sound from the left panel onto this lane' : 'Double-click here (or use Clips → New clip) to draw a pattern'}</span>
                     <span className="only-touch">{t.kind === 'audio' ? 'Tap + next to a sound in the browser to add it' : 'Tap New clip to draw a pattern'}</span>
                   </div>
                 )}
@@ -705,36 +706,12 @@ const TrackHeader = memo(function TrackHeader({ track, selected }: { track: Trac
 });
 
 function AddTrackMenu() {
-  const [open, setOpen] = useState(false);
-  const [at, setAt] = useState({ left: 0, top: 0 });
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [open]);
-  const pick = (kind: 'drums' | 'instrument' | 'audio') => { addTrackAction(kind); setOpen(false); };
-  return (
-    <div className="menu-wrap" ref={ref}>
-      <button
-        className="btn solid"
-        onClick={(e) => {
-          // Fixed position, so the menu isn't clipped when the toolbar scrolls sideways on small screens.
-          const r = e.currentTarget.getBoundingClientRect();
-          const z = uiZoom();
-          setAt({ left: Math.max(8, Math.min(r.left / z, window.innerWidth / z - 248)), top: r.bottom / z + 6 });
-          setOpen((o) => !o);
-        }}
-        aria-haspopup="menu" aria-expanded={open} aria-label="Add track" title="Add a drum, instrument, or audio track"
-      ><Plus size={14} /> <span className="btn-label">Add track</span> <ChevronDown size={13} /></button>
-      {open && (
-        <div className="menu fixed" role="menu" style={at}>
-          <button className="menu-item" role="menuitem" onClick={() => pick('drums')}><b><Drum size={13} /> Drums</b><span>Step-sequenced drum kit</span></button>
-          <button className="menu-item" role="menuitem" onClick={() => pick('instrument')}><b><Piano size={13} /> Instrument</b><span>Piano, guitar, 808, synths (change it in Sound &amp; FX)</span></button>
-          <button className="menu-item" role="menuitem" onClick={() => pick('audio')}><b><AudioLines size={13} /> Audio</b><span>For samples and loops you drag in</span></button>
-        </div>
-      )}
-    </div>
-  );
+  return <Dropdown label="Add track" className="solid" content={(close) => {
+    const pick = (kind: 'drums' | 'instrument' | 'audio') => { close(); addTrackAction(kind); };
+    return <>
+      <button className="menu-item" role="menuitem" onClick={() => pick('drums')}><b><Drum size={13} /> Drums</b><span>Step-sequenced drum kit</span></button>
+      <button className="menu-item" role="menuitem" onClick={() => pick('instrument')}><b><Piano size={13} /> Instrument</b><span>Piano, guitar, 808, synths (change it in Sound &amp; FX)</span></button>
+      <button className="menu-item" role="menuitem" onClick={() => pick('audio')}><b><AudioLines size={13} /> Audio</b><span>For samples and loops you drag in</span></button>
+    </>;
+  }}><Plus size={14} /><span className="btn-label">Add track</span></Dropdown>;
 }

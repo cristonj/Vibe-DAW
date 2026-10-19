@@ -40,6 +40,8 @@ npm run build
 
 The wordmark and mark are drawn in code in `src/brand/glyphs.ts`: each letter is its own stroked path, so weight, spacing, and color are a one-line change. `npm run brand` re-exports `public/brand` (each letter, the wordmark, the mark, and the social card) and the favicons from it.
 
+Refresh the landing page images from the live studio with `npm run screenshots` (start `npm run dev` first). Then run `npm run promo` to frame all six captures as 2400 × 1600 PNGs in `public/promo`, including a contact sheet. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using a system Chromium.
+
 ## Sounds and workflow
 
 Vibe includes offline Analog Brass, FM Bass, Marimba, Kalimba, Chip Keys, and Glass Pad alongside the existing instruments. Use the four-band Parametric EQ for precise tone shaping; duplicate effects or move them through the chain. The Producer can reorder effects too.
