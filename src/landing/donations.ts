@@ -7,8 +7,8 @@ const address = (value: string | undefined, fallback = '') => String(value ?? ''
 
 /** Public receiving addresses only. Empty entries are omitted from the page. */
 export const donationWallets = [
-  { name: 'Bitcoin', network: 'Bitcoin', address: address(import.meta.env.VITE_DONATION_BTC_ADDRESS, PROJECT_BTC_ADDRESS), scheme: 'bitcoin:' },
-  { name: 'Monero', network: 'Monero', address: address(import.meta.env.VITE_DONATION_XMR_ADDRESS, PROJECT_XMR_ADDRESS), scheme: 'monero:' },
-  { name: 'Ethereum', network: 'Ethereum mainnet', address: address(import.meta.env.VITE_DONATION_ETH_ADDRESS), scheme: 'ethereum:', suffix: '@1' },
-  { name: 'Solana', network: 'Solana', address: address(import.meta.env.VITE_DONATION_SOL_ADDRESS), scheme: 'solana:' },
+  { name: 'Bitcoin', symbol: 'BTC', network: 'Bitcoin', address: address(import.meta.env.VITE_DONATION_BTC_ADDRESS, PROJECT_BTC_ADDRESS), scheme: 'bitcoin:' },
+  { name: 'Monero', symbol: 'XMR', network: 'Monero', address: address(import.meta.env.VITE_DONATION_XMR_ADDRESS, PROJECT_XMR_ADDRESS), scheme: 'monero:' },
+  { name: 'Ethereum', symbol: 'ETH', network: 'Ethereum mainnet', address: address(import.meta.env.VITE_DONATION_ETH_ADDRESS), scheme: 'ethereum:', suffix: '@1' },
+  { name: 'Solana', symbol: 'SOL', network: 'Solana', address: address(import.meta.env.VITE_DONATION_SOL_ADDRESS), scheme: 'solana:' },
 ].filter((wallet) => wallet.address.length > 0);

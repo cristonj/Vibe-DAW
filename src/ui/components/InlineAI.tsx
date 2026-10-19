@@ -49,7 +49,7 @@ export function InlineAI() {
   };
 
   return (
-    <div className="overlay" style={{ background: 'rgba(0,0,0,0.35)', placeItems: 'start center' }} onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+    <div className="overlay clear" style={{ background: 'rgba(0,0,0,0.35)', placeItems: 'start center' }} onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="inline-ai" role="dialog" aria-modal="true" aria-label="Edit with AI">
         <div className="ctx">
           {selection?.range || selection?.notes?.length ? `${noteCount} selected notes${selection.range ? ` · beats ${selection.range.start}–${selection.range.end}` : ''} · ${found.length} clips` : found.length ? `Editing ${found.map((f) => `“${f.clip.name}” (${f.track.name})`).join(', ')}` : 'No clip selected - this will go to the agent for the whole song'}
