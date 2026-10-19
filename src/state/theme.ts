@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { accentFill, accentFillStrong, accentInk, accentSolid, lightenColor, rgbOf, sanitizeAccent } from './accent';
+import { accentFill, accentFillStrong, accentInk, accentSolid, accentStops, colorAt, lightenColor, rgbOf, sanitizeAccent } from './accent';
 
 // Themes are sets of CSS variable overrides on :root. Accent recolors the agent ink
 // (AI changes, focus rings and primary buttons); see accent.ts. Filled surfaces paint
@@ -68,6 +68,8 @@ export function applyTheme() {
   vars['--agent-fill'] = accentFill(accent);
   vars['--agent-fill-strong'] = accentFillStrong(accent);
   vars['--agent-ink'] = accentInk(accent);
+  const stops = accentStops(accent);
+  [0, 0.5, 1].forEach((t, k) => { vars[`--ink-${k}`] = colorAt(stops, t); });
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
   applied = Object.keys(vars);
   root.dataset.theme = theme;

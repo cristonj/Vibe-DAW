@@ -5,7 +5,7 @@ import { findClip } from '../../model/project';
 import { runAgent, useAgent } from '../../agent/agent';
 import { selectionClips, selectedNotes, type EditSelection } from '../../model/selection';
 import { shuffledSuggestions } from '../../agent/suggestions';
-import { Shuffle } from 'lucide-react';
+import { Shuffle } from '../icons';
 
 // Ctrl+K: Cursor-style inline edit, scoped to the selected clips.
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Square, Ear, Plus, Play, Check, RotateCcw, Paperclip, X, Brain, ListChecks, Eye, Mic, LoaderCircle, Pause, Shuffle, AtSign, Wrench,
-} from 'lucide-react';
+} from '../icons';
 import { useAgent, runAgent, stopAgent, keepChanges, revertTo, type ChatItem } from '../../agent/agent';
 import { analyzeReference } from '../../agent/ears';
 import { useSettings, MODELS, aiAvailable } from '../../state/settings';

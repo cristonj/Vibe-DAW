@@ -1,10 +1,10 @@
 import {
   Archive, AudioLines, Code, Bookmark, CircleStop, Download, Drum, Ear, Eye, FolderOpen, Gauge, Globe, Layers, Library, ListChecks, Music, Pencil, Piano, Play, Plus, Repeat, Scissors, Search, SlidersHorizontal, StickyNote, Trash,
-  type LucideIcon,
-} from 'lucide-react';
+  type Icon,
+} from './icons';
 
 /** The icon each Producer tool row shows in the chat. Every agent tool needs one (see toolIcons.test.ts). */
-export const TOOL_ICONS: Record<string, LucideIcon> = {
+export const TOOL_ICONS: Record<string, Icon> = {
   listen: Ear, audition_samples: Ear, write_drums: Drum, write_notes: Piano, create_track: Plus,
   update_track: Pencil, delete_track: Trash, add_effect: SlidersHorizontal, update_effect: SlidersHorizontal, remove_effect: SlidersHorizontal,
   search_samples: Search, design_sound: AudioLines, set_project: Gauge, copy_bars: Layers, clear_bars: Scissors, play: Play, stop: CircleStop,

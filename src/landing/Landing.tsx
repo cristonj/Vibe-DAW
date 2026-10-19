@@ -99,7 +99,7 @@ export function Landing() {
         <div className="lp-aurora" aria-hidden><i /><i /><i /></div>
         <div className="lp-wordmark-wrap" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" /></div>
         <h1>The open source agentic DAW built to <mark>enhance, not replace,</mark> human creativity.</h1>
-        <div className="lp-actions lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href="#support">Support</a></div>
+        <div className="lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-support-link" href="#support">Support the project</a></div>
         <figure className="lp-hero-shot">
           <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.studio} alt="The Vibe studio: five tracks on the timeline with a new flute part outlined in the agent's gradient, the Producer's run and its Changes to review card on the right, and the mixer below." /></div>
         </figure>

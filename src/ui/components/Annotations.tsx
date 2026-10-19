@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { MessageSquarePlus, Plus, Pencil, Play, Check, Download } from 'lucide-react';
+import { MessageSquarePlus, Plus, Pencil, Play, Check, Download } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
 import type { Annotation, Project } from '../../model/types';
 import { beatToBar, beatsPerBar, mintId } from '../../model/project';

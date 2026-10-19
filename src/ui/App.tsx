@@ -18,6 +18,7 @@ import { Tooltips } from './Tooltips';
 import { HelpModal } from './components/HelpModal';
 import { copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, splitAtPlayhead } from './actions';
 import { matches } from '../state/keymap';
+import { IconDefs } from './icons';
 
 function Toasts() {
   const toasts = useToasts((s) => s.toasts);
@@ -120,6 +121,7 @@ export function App() {
       <ChatContextMenu />
       <Tooltips />
       <Toasts />
+      <IconDefs />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from 'lucide-react';
+import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from '../icons';
 import { useSettings, MODELS, MAX_CUSTOM_INSTRUCTIONS, type Thinking } from '../../state/settings';
 import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
 import { useAuth, signIn, signOut } from '../../cloud/cloud';

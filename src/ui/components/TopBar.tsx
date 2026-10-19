@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark, Ellipsis } from 'lucide-react';
+import { Play, Pause, SkipBack, Repeat, Metronome, Undo2, Redo2, Settings, FolderOpen, Download, PanelLeft, PanelRight, LogIn, Cloud, Square, CircleQuestionMark, Ellipsis } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
 import { usePersist } from '../../state/persistence';
 import { useAuth, signIn } from '../../cloud/cloud';

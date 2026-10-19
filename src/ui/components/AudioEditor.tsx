@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { Ear } from 'lucide-react';
+import { Ear } from '../icons';
 import { useDaw } from '../../state/store';
 import type { AudioClip, Project, Track, WarpMode } from '../../model/types';
 import { beatsPerBar } from '../../model/project';

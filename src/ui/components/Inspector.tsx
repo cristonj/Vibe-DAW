@@ -1,6 +1,6 @@
 import { AddToChat } from './AddToChat';
 import { useMemo, useRef, useState } from 'react';
-import { Play, Trash, Plus, Power, CopyPlus, Bookmark, ChevronUp, ChevronDown, RotateCcw, Code, CircleAlert } from 'lucide-react';
+import { Play, Trash, Plus, Power, CopyPlus, Bookmark, ChevronUp, ChevronDown, RotateCcw, Code, CircleAlert } from '../icons';
 import { openSavePreset } from './SavePreset';
 import { useDaw } from '../../state/store';
 import { EFFECT_BY_TYPE, PRESETS, PRESET_BY_ID, defaultEffectParams, defaultPresetParams, type EffectInfo } from '../../model/catalog';

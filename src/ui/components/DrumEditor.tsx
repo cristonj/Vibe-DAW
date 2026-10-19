@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Play, MousePointer2 } from 'lucide-react';
+import { Play, MousePointer2 } from '../icons';
 import { useDaw } from '../../state/store';
 import type { MidiClip, Project, Track } from '../../model/types';
 import { beatsPerBar, uid } from '../../model/project';

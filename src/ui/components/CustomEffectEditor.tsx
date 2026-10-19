@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { Check, CircleAlert, Code, FlaskConical, Plus, Trash, TriangleAlert, X } from 'lucide-react';
+import { Check, CircleAlert, Code, FlaskConical, Plus, Trash, TriangleAlert, X } from '../icons';
 import { useDaw } from '../../state/store';
 import { findEffect } from '../../model/project';
 import { CUSTOM_BLANK, CUSTOM_EFFECT_API, CUSTOM_LIMITS, CUSTOM_STARTERS, rebaseCustomValues, validateCustomEffect } from '../../model/customEffect';

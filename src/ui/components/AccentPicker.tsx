@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { ArrowLeftRight, Dices, Plus, X } from 'lucide-react';
+import { ArrowLeftRight, Dices, Plus, X } from '../icons';
 import { GRADIENT_PRESETS, MAX_STOPS, SOLID_PRESETS, accentFill, accentStops, colorAt, randomStops, stopsToAccent } from '../../state/accent';
 import { useTheme } from '../../state/theme';
 

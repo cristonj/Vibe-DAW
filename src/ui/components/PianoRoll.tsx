@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { Pencil, MousePointer2, Trash } from 'lucide-react';
+import { Pencil, MousePointer2, Trash } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
 import type { MidiClip, Note, Project, Track } from '../../model/types';
 import { beatsPerBar, uid } from '../../model/project';

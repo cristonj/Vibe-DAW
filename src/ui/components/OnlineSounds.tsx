@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Download, ExternalLink } from 'lucide-react';
+import { Search, Download, ExternalLink } from '../icons';
 import { importOnlineSound, searchOnlineSounds, type OnlineSound } from '../../samples/online';
 import { toast } from '../toast';
 

@@ -1,6 +1,6 @@
 import { AddToChat } from './AddToChat';
 import { useState } from 'react';
-import { Bookmark, Cloud, Plus, Pencil, Trash, RotateCcw } from 'lucide-react';
+import { Bookmark, Cloud, Plus, Pencil, Trash, RotateCcw } from '../icons';
 import { usePresets, editPreset, copyDevicePresetsToAccount, type PresetRecord } from '../../state/presetLibrary';
 import { useDaw } from '../../state/store';
 import { useAuth, signIn } from '../../cloud/cloud';

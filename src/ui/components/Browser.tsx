@@ -1,6 +1,6 @@
 import { AddToChat } from './AddToChat';
 import { useMemo, useRef, useState } from 'react';
-import { Play, Square, Upload, Plus, X, Bookmark } from 'lucide-react';
+import { Play, Square, Upload, Plus, X, Bookmark } from '../icons';
 import { useLibrary, addSample, searchSamples } from '../../samples/library';
 import { previewSample, stopPreview } from '../../engine/api';
 import { PRESETS } from '../../model/catalog';

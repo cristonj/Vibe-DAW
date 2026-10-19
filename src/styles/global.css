@@ -22,6 +22,10 @@
   --agent-fill: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547);
   --agent-fill-strong: linear-gradient(100deg, #cfb5ff, #ffa8e8, #ffce60);
   --agent-ink: #1a1430;
+  /* Three samples of the accent for agent icons (the #vibe-ink gradient in icons.tsx). */
+  --ink-0: #b69cff;
+  --ink-1: #ff8fcf;
+  --ink-2: #ffb547;
   /* The dot on the i: white on dark, ink on light. */
   --logo-dot: #fff;
   /* Depth: panels float on a deeper ground, lit from above. */
@@ -1304,3 +1308,11 @@ body { background: var(--app-bg); }
 .arrange-tools .keep-all { position: sticky; right: 0; z-index: 1; background: var(--panel); box-shadow: -18px 0 14px -6px var(--panel); font-weight: 600; }
 .arrange-tools .keep-all:hover { background: var(--hover); }
 .arrange-tools .keep-all svg { color: var(--agent); }
+
+/* ---------------------------------------------------------------- icons
+   Duotone: each icon's main shape carries a soft fill of its own color, solid when the
+   caller asks for fill. Icons in the agent's contexts paint the accent gradient instead. */
+.icon .tone { fill: currentColor; fill-opacity: 0.14; }
+.icon[fill='currentColor'] .tone { fill-opacity: 1; }
+:is(.tool-row .ico, .heard-label, .listening-review > header, .composer .status, .attach-chip, .voice-note, .msg-user .focus, .inline-ai .ctx, .keep-all, .ink) .icon { stroke: url(#vibe-ink); }
+:is(.tool-row .ico, .heard-label, .listening-review > header, .composer .status, .attach-chip, .voice-note, .msg-user .focus, .inline-ai .ctx, .keep-all, .ink) .icon :is(.tone, .icon-dot, [fill='currentColor']) { fill: url(#vibe-ink); }
