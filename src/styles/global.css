@@ -27,7 +27,12 @@
   --ink-1: #ff8fcf;
   --ink-2: #ffb547;
   /* A glow in the accent's gradient: one soft shadow per color, left to right. */
-  --ink-glow: -16px 10px 26px -16px var(--ink-0), 0 10px 26px -16px var(--ink-1), 16px 10px 26px -16px var(--ink-2);
+  --ink-glow: -16px 10px 22px -16px var(--ink-0), 0 10px 22px -16px var(--ink-1), 16px 10px 22px -16px var(--ink-2);
+  --ink-glow-flip: -16px 10px 22px -16px var(--ink-2), 0 10px 22px -16px var(--ink-1), 16px 10px 22px -16px var(--ink-0);
+  /* Color flow: accent surfaces drift along --agent-flow (the gradient there and back). */
+  --agent-flow: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff);
+  --flow-duration: 24s;
+  --flow-play: running;
   /* The dot on the i: white on dark, ink on light. */
   --logo-dot: #fff;
   /* Depth: panels float on a deeper ground, lit from above. */
@@ -609,6 +614,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--agent-line); }
 .seg { display: flex; padding: 2px; border-radius: var(--radius-s); background: var(--bg); margin-left: auto; }
 .seg button { padding: 3px 10px; border-radius: 3px; color: var(--faint); font-size: 12px; font-weight: 500; }
 .seg button.on { background: var(--raised); color: var(--text); }
+.flow-row { display: flex; align-items: center; gap: 12px; }
+.flow-row input { flex: 1; --fill: var(--agent-flow); }
+.flow-row span { min-width: 36px; text-align: right; font-family: var(--font-lcd); font-size: 11px; color: var(--muted); }
 
 .feed { flex: 1; overflow-y: auto; padding: 12px 12px 4px; display: flex; flex-direction: column; gap: 10px; user-select: text; }
 
@@ -871,7 +879,7 @@ kbd {
 .accent-clip { position: relative; display: flex; align-items: center; gap: 8px; width: 150px; height: 36px; padding: 0 0 0 8px; border-radius: 6px; overflow: hidden; font-size: 11px; font-weight: 600;
   border: 2px solid transparent; background: repeating-linear-gradient(115deg, transparent 0 8px, var(--agent-wash) 8px 10px) padding-box, linear-gradient(var(--panel), var(--panel)) padding-box, var(--agent-fill) border-box; }
 .accent-clip span { flex: 1; }
-.accent-clip i { align-self: stretch; display: grid; place-items: center; padding: 0 5px; font-style: normal; font-size: 9.5px; color: var(--agent-ink); background: var(--agent-fill); }
+.accent-clip i { padding: 0 6px; font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: var(--text); }
 .accent-preview .ai-ink { font-weight: 600; font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .accent-bar, .accent-dot, .accent-stop label { transition: none; } .accent-dice { animation: none; } }
 .keymap-group h4 { margin: 12px 0 4px; font-size: 12px; color: var(--faint); font-weight: 600; }
@@ -1333,3 +1341,29 @@ body { background: var(--app-bg); }
 .icon[fill='currentColor'] .tone { display: none; }
 :is(.tool-row .ico, .heard-label, .listening-review > header, .composer .status, .attach-chip, .voice-note, .msg-user .focus, .inline-ai .ctx, .keep-all, .ink) .icon { stroke: url(#vibe-ink); }
 :is(.tool-row .ico, .heard-label, .listening-review > header, .composer .status, .attach-chip, .voice-note, .msg-user .focus, .inline-ai .ctx, .keep-all, .ink) .icon :is(.tone, .icon-dot, [fill='currentColor']) { fill: url(#vibe-ink); }
+
+/* ---------------------------------------------------------------- color flow
+   Accent surfaces slide slowly along a there-and-back copy of the gradient, and gradient glows
+   trade colors, so the agent's ink is always gently alive. At rest it matches the plain
+   gradient. Appearance > Color flow sets --flow-duration and --flow-play; reduced motion stops it. */
+@keyframes flow-1 { from { background-position: 0 0; } to { background-position: 100% 0; } }
+@keyframes flow-2 { from { background-position: 0 0, 0 0; } to { background-position: 0 0, 100% 0; } }
+@keyframes glow-flow { 50% { box-shadow: var(--ink-glow-flip); } }
+:is(.ai-ink, .agent-dot, .plan-step.done .box, .fx-power.on, .sample-row.generated .name::before, .clip.ai::before) {
+  background-image: var(--agent-flow);
+  background-size: 200% 100%;
+  animation: flow-1 var(--flow-duration) ease-in-out infinite alternate;
+  animation-play-state: var(--flow-play);
+}
+.agent-dot.busy { animation: flow-1 var(--flow-duration) ease-in-out infinite alternate, pulse 1.2s ease-in-out infinite; animation-play-state: var(--flow-play), running; }
+.btn.primary, .send:not(.recording, .stop) {
+  background-image: var(--gloss), var(--agent-flow);
+  background-size: 100% 100%, 200% 100%;
+  animation: flow-2 var(--flow-duration) ease-in-out infinite alternate;
+  animation-play-state: var(--flow-play);
+}
+.btn.primary:hover, .send:not(.recording, .stop):hover { background-image: var(--gloss), var(--agent-flow); filter: brightness(1.07); }
+.changes:not(.kept, .reverted), .inline-ai { background-size: 100% 100%, 200% 100%; animation: flow-2 var(--flow-duration) ease-in-out infinite alternate; animation-play-state: var(--flow-play); }
+.changes:not(.kept, .reverted) { background-image: linear-gradient(var(--panel-2), var(--panel-2)), var(--agent-flow); animation: flow-2 var(--flow-duration) ease-in-out infinite alternate, glow-flow var(--flow-duration) ease-in-out infinite; animation-play-state: var(--flow-play); }
+.inline-ai { background-image: linear-gradient(var(--panel), var(--panel)), var(--agent-flow); }
+@media (prefers-reduced-motion: reduce) { :root { --flow-play: paused !important; } }

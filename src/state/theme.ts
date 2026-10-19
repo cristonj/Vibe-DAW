@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { accentFill, accentFillStrong, accentInk, accentSolid, accentStops, colorAt, lightenColor, rgbOf, sanitizeAccent } from './accent';
+import { accentFill, accentFillStrong, accentFlow, accentInk, accentSolid, accentStops, colorAt, lightenColor, rgbOf, sanitizeAccent } from './accent';
 
 // Themes are sets of CSS variable overrides on :root. Accent recolors the agent ink
 // (AI changes, focus rings and primary buttons); see accent.ts. Filled surfaces paint
@@ -24,11 +24,18 @@ const OLD_THEMES: Record<string, ThemeId> = { midnight: 'dark', graphite: 'dark'
 
 export type ThemeId = keyof typeof THEMES;
 
+/** Color flow speed from 0 (still) to 1, as seconds per pass: about 48 s just above 0, 6 s at 1. */
+export const flowSeconds = (speed: number) => (speed > 0 ? Math.round(48 * 0.125 ** speed * 10) / 10 : 0);
+const OLD_FLOW: Record<string, number> = { off: 0, slow: 0.3, medium: 0.65, fast: 1 };
+const sanitizeFlow = (v: unknown) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : typeof v === 'string' && Object.hasOwn(OLD_FLOW, v) ? OLD_FLOW[v] : 0.3);
+
 interface ThemeState {
   theme: ThemeId;
   accent: string;
   scale: number;
-  set: (patch: Partial<Pick<ThemeState, 'theme' | 'accent' | 'scale'>>) => void;
+  /** How fast accent gradients and glows drift. Kept on this device, like the interface size. */
+  flow: number;
+  set: (patch: Partial<Pick<ThemeState, 'theme' | 'accent' | 'scale' | 'flow'>>) => void;
 }
 
 const KEY = 'vibe:theme';
@@ -45,10 +52,11 @@ export function sanitizeAppearance(v: { theme?: unknown; accent?: unknown }): { 
 export const useTheme = create<ThemeState>((set, get) => ({
   ...sanitizeAppearance(saved),
   scale: typeof saved.scale === 'number' ? saved.scale : 1,
+  flow: sanitizeFlow(saved.flow),
   set: (patch) => {
     set(patch);
-    const { theme, accent, scale } = get();
-    try { localStorage.setItem(KEY, JSON.stringify({ theme, accent, scale })); } catch { /* storage off */ }
+    const { theme, accent, scale, flow } = get();
+    try { localStorage.setItem(KEY, JSON.stringify({ theme, accent, scale, flow })); } catch { /* storage off */ }
     applyTheme();
   },
 }));
@@ -56,7 +64,7 @@ export const useTheme = create<ThemeState>((set, get) => ({
 let applied: string[] = [];
 
 export function applyTheme() {
-  const { theme, accent, scale } = useTheme.getState();
+  const { theme, accent, scale, flow } = useTheme.getState();
   const root = document.documentElement;
   for (const k of applied) root.style.removeProperty(k);
   const vars: Record<string, string> = { ...THEMES[theme].vars };
@@ -68,6 +76,9 @@ export function applyTheme() {
   vars['--agent-fill'] = accentFill(accent);
   vars['--agent-fill-strong'] = accentFillStrong(accent);
   vars['--agent-ink'] = accentInk(accent);
+  vars['--agent-flow'] = accentFlow(accent);
+  vars['--flow-duration'] = `${flowSeconds(flow) || 24}s`;
+  vars['--flow-play'] = flow > 0 ? 'running' : 'paused';
   const stops = accentStops(accent);
   [0, 0.5, 1].forEach((t, k) => { vars[`--ink-${k}`] = colorAt(stops, t); });
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);

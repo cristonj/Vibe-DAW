@@ -8,6 +8,11 @@ type Tone = 'gradient' | 'mono';
 const stops = GRADIENT.map((color, k) => <stop key={color} offset={k / (GRADIENT.length - 1)} stopColor={color} />);
 // useId can contain characters that url(#…) would need escaped.
 const useSvgId = () => `vibe${useId().replace(/[^\w-]/g, '')}`;
+/** Slides a gradient across `span` and back over 2 × `seconds`, like the CSS color flow. */
+function Flow({ span, seconds }: { span: number; seconds: number }) {
+  if (!seconds || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches)) return null;
+  return <animateTransform attributeName="gradientTransform" type="translate" values={`0 0;${span} 0;0 0`} keyTimes="0;0.5;1" calcMode="spline" keySplines="0.42 0 0.58 1;0.42 0 0.58 1" dur={`${seconds * 2}s`} repeatCount="indefinite" />;
+}
 // An empty label hides the drawing from assistive tech, for when a parent already names it.
 const named = (label: string) => label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true };
 
@@ -43,20 +48,20 @@ function DotMark({ dot, tone, sheen }: { dot: Dot; tone: Tone; sheen: string }) 
  * so it can be animated alone, and its own color variable (`--vibe-v` and so on, plus
  * `--vibe-dot`) so it can be restyled alone. Letter positions live in glyphs.ts.
  */
-export function Wordmark({ tone = 'gradient', className = '', label = 'Vibe', style, glow = false }: { tone?: Tone; className?: string; label?: string; style?: CSSProperties; glow?: boolean }) {
+export function Wordmark({ tone = 'gradient', className = '', label = 'Vibe', style, glow = false, flow = 0 }: { tone?: Tone; className?: string; label?: string; style?: CSSProperties; glow?: boolean; flow?: number }) {
   const id = useSvgId();
   return (
     <svg className={`vibe-wordmark ${className}`} viewBox={`-2 -2 ${WORDMARK.width + 4} ${WORDMARK.height + 4}`} {...named(label)} style={style}>
       <defs>
         {tone === 'gradient' && WORDMARK.letters.map(({ name, x }) => (
           // One gradient spans the word; each letter gets it shifted to its own origin.
-          <linearGradient key={name} id={`${id}-${name}`} gradientUnits="userSpaceOnUse" x1={-x} y1={0} x2={WORDMARK.width - x} y2={0}>{stops}</linearGradient>
+          <linearGradient key={name} id={`${id}-${name}`} gradientUnits="userSpaceOnUse" spreadMethod="reflect" x1={-x} y1={0} x2={WORDMARK.width - x} y2={0}>{stops}<Flow span={WORDMARK.width} seconds={flow} /></linearGradient>
         ))}
         <linearGradient id={`${id}-sheen`} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={0} y2={WORDMARK.height}>{sheenStops}</linearGradient>
         <linearGradient id={`${id}-sheen-dot`} x1={0} y1={0} x2={0} y2={1}>{sheenStops}</linearGradient>
         {/* A soft glow made of the letters themselves, blurred, so it carries their gradient. */}
         {glow && <filter id={`${id}-glow`} x="-15%" y="-35%" width="130%" height="170%">
-          <feGaussianBlur stdDeviation="9" /><feComponentTransfer><feFuncA type="linear" slope="0.28" /></feComponentTransfer>
+          <feGaussianBlur stdDeviation="9" /><feComponentTransfer><feFuncA type="linear" slope="0.2" /></feComponentTransfer>
           <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>}
       </defs>
@@ -78,12 +83,12 @@ export function Wordmark({ tone = 'gradient', className = '', label = 'Vibe', st
 }
 
 /** The mark: the V holding the dot. For favicons, avatars, and anywhere the word won't fit. */
-export function VibeMark({ tone = 'gradient', className = '', label = 'Vibe' }: { tone?: Tone; className?: string; label?: string }) {
+export function VibeMark({ tone = 'gradient', className = '', label = 'Vibe', flow = 0 }: { tone?: Tone; className?: string; label?: string; flow?: number }) {
   const id = useSvgId();
   return (
     <svg className={`vibe-mark ${className}`} viewBox={`-4 -4 ${MARK.width + 8} ${MARK.height + 8}`} {...named(label)}>
       <defs>
-        {tone === 'gradient' && <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={MARK.width} y2={MARK.height}>{stops}</linearGradient>}
+        {tone === 'gradient' && <linearGradient id={id} gradientUnits="userSpaceOnUse" spreadMethod="reflect" x1={0} y1={0} x2={MARK.width} y2={MARK.height}>{stops}<Flow span={MARK.width} seconds={flow} /></linearGradient>}
         <linearGradient id={`${id}-sheen`} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={0} y2={MARK.height}>{sheenStops}</linearGradient>
         <linearGradient id={`${id}-sheen-dot`} x1={0} y1={0} x2={0} y2={1}>{sheenStops}</linearGradient>
       </defs>

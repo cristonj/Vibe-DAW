@@ -61,6 +61,11 @@ export const accentSolid = (accent: string) => colorAt(accentStops(accent), 0.5)
 /** The paint for a filled surface. Always an image, so it also works as background-image. */
 export const accentFill = (accent: string) => gradient(accentStops(accent));
 export const accentFillStrong = (accent: string) => gradient(accentStops(accent).map(lighten));
+/** The gradient there and back, twice as wide, so a surface can drift along it and loop smoothly. */
+export function accentFlow(accent: string): string {
+  const stops = accentStops(accent);
+  return stops.length === 1 ? gradient(stops) : gradient([...stops, ...stops.slice(0, -1).reverse()]);
+}
 export const lightenColor = lighten;
 export const rgbOf = toRgb;
 

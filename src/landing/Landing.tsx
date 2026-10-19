@@ -101,7 +101,7 @@ export function Landing() {
     <main>
       <section className="lp-hero lp-wrap">
         <div className="lp-aurora" aria-hidden><i /><i /><i /></div>
-        <div className="lp-wordmark-wrap" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" glow /></div>
+        <div className="lp-wordmark-wrap" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" glow flow={12} /></div>
         <h1>The open source agentic DAW built to <mark>enhance, not replace,</mark> human creativity.</h1>
         <div className="lp-hero-actions"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /></a><a className="lp-support-link" href="#support">Support the project</a></div>
         <figure className="lp-hero-shot">

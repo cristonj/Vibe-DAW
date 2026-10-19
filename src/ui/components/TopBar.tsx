@@ -15,6 +15,7 @@ import { tip, useKeymap } from '../../state/keymap';
 import { exportProjectFile } from '../../state/projectFile';
 import { projectCredits } from '../../samples/credits';
 import { VibeMark, Wordmark } from '../../brand/Wordmark';
+import { flowSeconds, useTheme } from '../../state/theme';
 
 function Position() {
   const pos = useTransport((s) => s.position);
@@ -24,6 +25,7 @@ function Position() {
 
 export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () => void; onOpenHelp: () => void; browserOpen: boolean; agentOpen: boolean; toggleBrowser: () => void; toggleAgent: () => void }) {
   useKeymap((k) => k.overrides);
+  const flow = useTheme((s) => flowSeconds(s.flow));
   const name = useDaw((s) => s.project.name);
   const bpm = useDaw((s) => s.project.bpm);
   const key = useDaw((s) => s.project.key);
@@ -55,7 +57,7 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
   return (
     <header className="topbar">
-      <div className="brand"><VibeMark className="brand-mark" /><Wordmark className="brand-name" /></div>
+      <div className="brand"><VibeMark className="brand-mark" flow={flow} /><Wordmark className="brand-name" flow={flow} /></div>
       <button className="btn icon" title={tip('Show or hide the sound browser', 'toggleBrowser')} onClick={props.toggleBrowser} aria-pressed={props.browserOpen}><PanelLeft size={16} /></button>
       <input
         className="project-name"

@@ -3,5 +3,5 @@
 /* Letters move from their own bottom center. */
 .vibe-letter, .vibe-dot { transform-box: fill-box; transform-origin: 50% 100%; }
 /* The dot glows a little on dark grounds. */
-.vibe-dot { filter: drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.55)); }
+.vibe-dot { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.45)); }
 [data-theme='light'] .vibe-dot { filter: none; }

@@ -5,10 +5,10 @@ import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
 import { useAuth, signIn, signOut } from '../../cloud/cloud';
 import { usePersist, openProject, newProject, deleteProject, duplicateProject, syncNow } from '../../state/persistence';
 import { useDaw } from '../../state/store';
-import { relativeTime } from '../hooks';
+import { rangeFill, relativeTime } from '../hooks';
 import { toast } from '../toast';
 import { ACTIONS, bindings, comboFromEvent, useKeymap, type ActionId } from '../../state/keymap';
-import { THEMES, useTheme, type ThemeId } from '../../state/theme';
+import { THEMES, flowSeconds, useTheme, type ThemeId } from '../../state/theme';
 import { accentFill } from '../../state/accent';
 import { AccentPicker } from './AccentPicker';
 import { importMidiFile } from '../midiActions';
@@ -149,6 +149,8 @@ function AiSettings() {
   );
 }
 
+const flowLabel = (speed: number) => `${Math.round(flowSeconds(speed))} s`;
+
 function AppearanceSettings() {
   const t = useTheme();
   return (
@@ -175,6 +177,14 @@ function AppearanceSettings() {
         <span>Accent</span>
         <small>The agent's ink: AI changes, selection, and primary buttons. Pick one, or build your own gradient.</small>
         <AccentPicker />
+      </div>
+      <div className="field">
+        <span>Color flow</span>
+        <small>How fast the accent's gradients and glows drift. All the way left holds them still.</small>
+        <div className="flow-row">
+          <input type="range" min={0} max={1} step={0.01} value={t.flow} style={rangeFill(t.flow, 0, 1)} onChange={(e) => t.set({ flow: Number(e.target.value) })} aria-label="Color flow speed" aria-valuetext={t.flow > 0 ? `One pass every ${flowLabel(t.flow)}` : 'Off'} />
+          <span>{t.flow > 0 ? flowLabel(t.flow) : 'Off'}</span>
+        </div>
       </div>
       <label className="field">
         <span>Interface size</span>
