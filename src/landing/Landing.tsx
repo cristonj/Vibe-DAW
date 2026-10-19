@@ -66,9 +66,9 @@ function Support() {
     try { await navigator.clipboard.writeText(address); setCopied(address); setStatus('Address copied'); }
     catch { setStatus('Copy is unavailable. Select the address to copy it manually.'); }
   };
-  if (!donationWallets.length) return <p className="lp-support-line">Vibe is free. If it helps you make music, a star or a pull request on <a href={REPO} target="_blank" rel="noreferrer">GitHub</a> helps keep it going.</p>;
+  if (!donationWallets.length) return <p className="lp-support-line">Vibe is built and maintained by one independent developer. If it helps you make music, a star or a pull request on <a href={REPO} target="_blank" rel="noreferrer">GitHub</a> supports its continued development.</p>;
   return <div className="lp-wallets">
-    <p className="lp-support-line">Vibe is free. If it helps you make music, you can help keep it going. Donations are optional. Send each coin only on its own network.</p>
+    <p className="lp-support-line">Vibe is built and maintained by one independent developer. If it helps you make music, a donation supports its continued development. Donations are optional. Send each coin only on its own network.</p>
     {donationWallets.map((wallet) => {
       const open = qr === wallet.name, panel = `qr-${wallet.name.toLowerCase()}`;
       return <div className="lp-wallet" key={wallet.name}>
@@ -136,7 +136,7 @@ export function Landing() {
 
       <section className="lp-band lp-reveal">
         <div className="lp-split lp-wrap reverse">
-          <figure className="lp-frame"><Shot shot={SHOTS.inlineEdit} alt="Four bars of bass and pad selected across two tracks with the inline edit box open: Walk the bass up into the hook." /></figure>
+          <figure className="lp-frame lp-inline"><Shot shot={SHOTS.inlineEdit} alt="Four bars of bass and pad selected across two tracks with the inline edit box open: Walk the bass up into the hook." /></figure>
           <div className="lp-copy">
             <h2>Select. Press <kbd>Ctrl</kbd><kbd>K</kbd>. Say what to change.</h2>
             <p>Select notes or drag across tracks. The agent gets the exact notes and timing and rewrites only your selection, so the rest of the song stays as it was. On touchscreens, use Range and Edit selection.</p>
@@ -147,12 +147,12 @@ export function Landing() {
       <section className="lp-daw lp-wrap">
         <div className="lp-daw-head lp-reveal">
           <h2>A full DAW, not a demo.</h2>
-          <p>Arrangement, piano roll, step sequencer and mixer. 31 instruments and 16 effects, plus any effect the agent writes for you in code. Record audio, freeze tracks, export WAV or MP3. You and the agent edit the same session, so you can take over at any point.</p>
+          <p>Arrangement, piano roll, step sequencer and mixer. 31 instruments and 16 effects, plus any effect the agent writes for you in code. Record audio, freeze tracks, export WAV or MP3. It all runs in your browser, and your projects and preferences sync to the cloud so you can pick up on any device. You and the agent edit the same session, so you can take over at any point.</p>
         </div>
         <div className="lp-grid">
-          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.pianoRoll} alt="The piano roll showing the flute melody with note velocities." /><figcaption>Piano roll</figcaption></figure>
-          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.drums} alt="The step sequencer with kick, snare, hat, rim and shaker lanes." /><figcaption>Step sequencer</figcaption></figure>
-          <figure className="lp-frame lp-mixer lp-reveal"><Shot shot={SHOTS.mixer} alt="The mixer with a channel strip for each track and the master bus." /><figcaption>Mixer</figcaption></figure>
+          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.pianoRoll} alt="The piano roll showing the flute melody with note velocities." /></figure>
+          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.drums} alt="The step sequencer with kick, snare, hat, rim and shaker lanes." /></figure>
+          <figure className="lp-frame lp-mixer lp-reveal"><Shot shot={SHOTS.mixer} alt="The mixer with a channel strip for each track and the master bus." /></figure>
           <div className="lp-promise lp-reveal">
             <h3>No AI-generated audio.</h3>
             <p>Every sound is a sampled instrument, a synth, or your own recording. The agent writes and arranges notes; it never renders a song from a prompt. What you make is yours.</p>

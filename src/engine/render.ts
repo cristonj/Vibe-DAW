@@ -5,7 +5,7 @@ import { EngineGraph, preloadProject } from './graph';
 import type { InstrumentAssets } from './instruments';
 import { contextLock } from './lock';
 import { resample, type PcmData } from './wav';
-import type { ExportFormat } from './exportFormats';
+import { TRIM_TRAILING_SILENCE, trimmedLength, type ExportFormat } from './exportFormats';
 import { activeSpan, audibleTracks, effectTail, trackTail } from './renderPlan';
 import { frozenFor, playbackSampleRate, type Frozen } from './freeze';
 import { planMp3Chunks } from './mp3frames';
@@ -271,6 +271,10 @@ function encodeMp3(pcm: PcmData, kbps: number, onProgress?: (f: number) => void)
 export async function exportAudio(project: Project, format: ExportFormat, onProgress?: (fraction: number, stage: 'render' | 'encode') => void): Promise<Blob> {
   const renderShare = format === 'mp3' ? 0.8 : 0.95;
   let pcm = await renderProject(project, { onProgress: (f) => onProgress?.(f * renderShare, 'render') });
+  if (TRIM_TRAILING_SILENCE) {
+    const keep = trimmedLength(pcm.channels, pcm.sampleRate);
+    pcm = { ...pcm, channels: pcm.channels.map((c) => c.slice(0, keep)) };
+  }
   if (format === 'mp3') {
     // MP3 tops out at 48 kHz; high-rate devices get a band-limited downsample.
     if (pcm.sampleRate > 48000) {
