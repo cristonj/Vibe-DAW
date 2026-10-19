@@ -279,7 +279,7 @@ function DrumKit({ track }: { track: Track }) {
             {options.map((m) => <option key={m.id} value={m.id}>{m.category} · {m.name}</option>)}
           </select>
           <input type="number" step={0.5} value={l.gainDb} onChange={(e) => setLane(l.id, (x) => { x.gainDb = Number(e.target.value); })} aria-label={`${l.name} gain dB`} title="Gain dB" />
-          <button className="btn icon" onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} fill="currentColor" /></button>
+          <button className="btn icon" onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} /></button>
         </div>
       ))}
     </div>

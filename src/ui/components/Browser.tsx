@@ -76,7 +76,7 @@ function SampleRow({ m, playing, onPlay }: { m: SampleMeta; playing: boolean; on
       title={m.aiDescription ?? m.prompt ?? m.name}
     >
       <button className="play-mini" onClick={onPlay} aria-label={playing ? 'Stop preview' : `Preview ${m.name}`}>
-        {playing ? <Square size={11} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+        {playing ? <Square size={11} /> : <Play size={12} />}
       </button>
       <span className="name">{m.name}</span>
       <span className="meta">{bits}</span>

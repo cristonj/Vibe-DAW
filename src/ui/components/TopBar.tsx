@@ -75,9 +75,9 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
       <div className="transport">
         <button className="btn icon" title={tip('Back to start', 'stopRewind')} onClick={() => stop(true)}><SkipBack size={16} /></button>
-        <button className="btn icon hide-narrow" title="Stop" onClick={() => stop(false)}><Square size={14} fill="currentColor" /></button>
+        <button className="btn icon hide-narrow" title="Stop" onClick={() => stop(false)}><Square size={14} /></button>
         <button className={`play ${playing || starting ? 'playing' : ''}`} aria-label={starting ? 'Cancel playback startup' : playing ? 'Pause' : 'Play'} title={starting ? 'Loading audio… Click to cancel' : tip('Play / pause', 'playPause')} onClick={() => void togglePlay().catch((e) => toast(`Playback failed: ${(e as Error).message}`, 'error'))}>
-          {playing || starting ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+          {playing || starting ? <Pause size={17} /> : <Play size={17} />}
         </button>
         {starting && <span className="transport-loading" role="status">Loading audio…</span>}
         <button className={`btn icon ${loop ? 'on' : ''}`} title={tip('Loop', 'toggleLoop')} onClick={() => update('Toggle loop', (d) => { d.loop.enabled = !d.loop.enabled; })}><Repeat size={16} /></button>

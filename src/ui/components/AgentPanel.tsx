@@ -68,7 +68,7 @@ function VoiceNote({ url, seconds }: { url: string; seconds: number }) {
   };
   return (
     <button className="voice-note" onClick={toggle} aria-label={playing ? 'Stop voice message' : 'Play voice message'}>
-      {playing ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+      {playing ? <Pause size={12} /> : <Play size={12} />}
       <Mic size={12} /> Voice message · {clock(seconds)}
     </button>
   );
@@ -274,7 +274,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
               <span>{recording ? `Recording ${clock(recorder.seconds)}` : 'Preparing…'}</span>
               {recording && recorder.seconds > MAX_VOICE_SECONDS - 15 && <span className="rec-limit">stops at {clock(MAX_VOICE_SECONDS)}</span>}
               <div className="spacer" />
-              {recording && <button className="btn" onClick={() => void recorder.stop().then((clip) => clip && setDraft(clip))} aria-label="Stop recording to listen back" title="Stop and listen back before sending"><Square size={11} fill="currentColor" /> Stop</button>}
+              {recording && <button className="btn" onClick={() => void recorder.stop().then((clip) => clip && setDraft(clip))} aria-label="Stop recording to listen back" title="Stop and listen back before sending"><Square size={11} /> Stop</button>}
               {recording && <button className="btn" onClick={recorder.cancel} aria-label="Discard voice message"><X size={13} /> Discard</button>}
             </div>
           )}
@@ -347,7 +347,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
               </button>
             )}
             {running && (
-              <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} fill="currentColor" /></button>
+              <button className="send stop" onClick={stopAgent} title="Stop" aria-label="Stop"><Square size={13} /></button>
             )}
             <button className={`send ${recording ? 'recording' : ''}`} onClick={() => void send()} disabled={(!text.trim() && !recording && !draft && !pending.length && !attachments.length) || analyzing || recorder.state === 'encoding'} title={recording || draft ? 'Send voice message (Enter)' : running ? 'Send steering (Enter)' : 'Send (Enter)'} aria-label={recording || draft ? 'Send voice message' : running ? 'Send steering' : 'Send'}><ArrowUp size={16} /></button>
           </div>

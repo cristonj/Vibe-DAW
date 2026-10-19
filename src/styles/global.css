@@ -1334,13 +1334,9 @@ body { background: var(--app-bg); }
 .arrange-tools .keep-all svg { color: var(--agent); }
 
 /* ---------------------------------------------------------------- icons
-   Offset duotone: a soft fill of each main shape printed slightly off register. Icons in the
-   agent's contexts paint the accent gradient instead. */
-.icon .tone { fill: currentColor; fill-opacity: 0.3; transform: translate(1.6px, 1.6px); }
-/* Asked to be solid (play, pause, stop): the shapes fill themselves, so no offset print. */
-.icon[fill='currentColor'] .tone { display: none; }
+   Icons take the text color; in the agent's contexts they paint the accent gradient. */
 :is(.tool-row .ico, .heard-label, .listening-review > header, .composer .status, .attach-chip, .voice-note, .msg-user .focus, .inline-ai .ctx, .keep-all, .ink) .icon { stroke: url(#vibe-ink); }
-:is(.tool-row .ico, .heard-label, .listening-review > header, .composer .status, .attach-chip, .voice-note, .msg-user .focus, .inline-ai .ctx, .keep-all, .ink) .icon :is(.tone, .icon-dot, [fill='currentColor']) { fill: url(#vibe-ink); }
+:is(.tool-row .ico, .heard-label, .listening-review > header, .composer .status, .attach-chip, .voice-note, .msg-user .focus, .inline-ai .ctx, .keep-all, .ink) .icon [fill='currentColor'] { fill: url(#vibe-ink); }
 
 /* ---------------------------------------------------------------- color flow
    Accent surfaces slide slowly along a there-and-back copy of the gradient, and gradient glows

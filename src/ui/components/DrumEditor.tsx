@@ -93,7 +93,7 @@ export function DrumEditor({ clip, track, project }: { clip: MidiClip; track: Tr
         {lanes.map((l, laneIndex) => (
           <div className="drum-row" key={l.id}>
             <div className="lname">
-              <button className="btn icon" style={{ width: 22, height: 22 }} onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} fill="currentColor" /></button>
+              <button className="btn icon" style={{ width: 22, height: 22 }} onClick={() => previewNote(track.id, l.note, 0.9)} aria-label={`Preview ${l.name}`}><Play size={11} /></button>
               {l.name}
             </div>
             <div className="steps">
