@@ -9,7 +9,7 @@ const REPO = 'https://github.com/cristonj/Vibe-DAW';
 const SHOTS = {
   studio: { src: '/screenshots/studio.webp', width: 2880, height: 1800 },
   producer: { src: '/screenshots/producer.webp', width: 784, height: 1660 },
-  inlineEdit: { src: '/screenshots/inline-edit.webp', width: 1124, height: 846 },
+  inlineEdit: { src: '/screenshots/inline-edit.webp', width: 1124, height: 854 },
   pianoRoll: { src: '/screenshots/piano-roll.webp', width: 2060, height: 558 },
   drums: { src: '/screenshots/drums.webp', width: 2088, height: 332 },
   mixer: { src: '/screenshots/mixer.webp', width: 1220, height: 850 },
@@ -73,6 +73,10 @@ function Support() {
   </div>;
 }
 
+function Arrow() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5" /></svg>;
+}
+
 /** Things people ask the Producer, for the ticker. */
 const PROMPTS = [
   ['sad trap beat with guitar', 'add hi-hat rolls', 'walk the bass up into the hook', 'lo-fi study beat at 82 BPM', 'give the hook a breathy flute', 'make the drums hit harder', 'leave room for a vocal'],
@@ -97,9 +101,9 @@ export function Landing() {
     <main>
       <section className="lp-hero lp-wrap">
         <div className="lp-aurora" aria-hidden><i /><i /><i /></div>
-        <div className="lp-wordmark-wrap" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" /></div>
+        <div className="lp-wordmark-wrap" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" glow /></div>
         <h1>The open source agentic DAW built to <mark>enhance, not replace,</mark> human creativity.</h1>
-        <div className="lp-hero-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-support-link" href="#support">Support the project</a></div>
+        <div className="lp-hero-actions"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /></a><a className="lp-support-link" href="#support">Support the project</a></div>
         <figure className="lp-hero-shot">
           <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.studio} alt="The Vibe studio: five tracks on the timeline with a new flute part outlined in the agent's gradient, the Producer's run and its Changes to review card on the right, and the mixer below." /></div>
         </figure>
@@ -149,7 +153,7 @@ export function Landing() {
       <section className="lp-end lp-wrap" id="support">
         <h2>Free and open source.</h2>
         <p>MIT licensed. Runs in your browser with no install and no account. Every music tool works without AI. The Producer uses your own Gemini key, which has a free tier.</p>
-        <div className="lp-actions"><a className="lp-btn" href="/studio">Open the studio</a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">Star it on GitHub</a></div>
+        <div className="lp-actions"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /></a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">Star it on GitHub</a></div>
         <Support />
       </section>
     </main>

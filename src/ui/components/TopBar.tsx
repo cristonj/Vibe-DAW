@@ -42,6 +42,8 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
   const sampleSyncError = useAuth((s) => s.sampleSyncError);
   const cloudSyncError = useAuth((s) => s.lastSyncError);
   const [bpmDraft, setBpmDraft] = useState<string | null>(null);
+  const tempoInput = useRef<HTMLInputElement>(null);
+  const tempoDrag = useRef<{ y: number; bpm: number; moved: boolean } | null>(null);
 
   const commitBpm = () => {
     if (bpmDraft === null) return;
@@ -82,8 +84,35 @@ export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () =
 
       <div className="lcd">
         <Position />
-        <div title="Tempo">
+        {/* Drag up or down to change the tempo (Shift for tenths); a click without a drag types instead. */}
+        <div
+          className="tempo"
+          title="Tempo · drag up or down, or click to type"
+          onPointerDown={(e) => {
+            if (document.activeElement === tempoInput.current) return;
+            e.preventDefault();
+            tempoDrag.current = { y: e.clientY, bpm, moved: false };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const d = tempoDrag.current;
+            if (!d) return;
+            const dy = d.y - e.clientY;
+            if (!d.moved && Math.abs(dy) < 3) return;
+            d.moved = true;
+            const fine = e.shiftKey, v = Math.max(40, Math.min(220, d.bpm + dy * (fine ? 0.1 : 0.5)));
+            const next = fine ? Math.round(v * 10) / 10 : Math.round(v);
+            if (next !== useDaw.getState().project.bpm) update('Tempo', (p) => { p.bpm = next; }, { coalesce: true });
+          }}
+          onPointerUp={() => {
+            const d = tempoDrag.current;
+            tempoDrag.current = null;
+            if (d && !d.moved) { tempoInput.current?.focus(); tempoInput.current?.select(); }
+          }}
+          onPointerCancel={() => { tempoDrag.current = null; }}
+        >
           <input
+            ref={tempoInput}
             aria-label="Tempo"
             value={bpmDraft ?? String(bpm)}
             onChange={(e) => setBpmDraft(e.target.value)}

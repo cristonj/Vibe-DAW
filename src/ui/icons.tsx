@@ -1,14 +1,26 @@
-import type { ComponentType, ReactNode, SVGProps } from 'react';
+import { Children, Fragment, cloneElement, isValidElement, type ComponentType, type ReactElement, type ReactNode, type SVGProps } from 'react';
 
-// Vibe's icon set, drawn to match the wordmark: round-capped strokes on a 24px grid, with the
-// brand's filled dot for punctuation. Icons take the text color. Inside an agent context
-// (see .ink in global.css) they paint the accent gradient from <IconDefs /> instead.
+// Vibe's icon set, drawn to match the wordmark: round-capped strokes on a 24px grid, the brand's
+// filled dot for punctuation, and an offset duotone: each icon's main shape (marked "tone") gets
+// a soft fill printed slightly off register, down and to the right. Icons take the text color.
+// In the agent's contexts (see global.css) they paint the accent gradient from <IconDefs />.
 
 export type IconProps = Omit<SVGProps<SVGSVGElement>, 'ref'> & { size?: number | string; color?: string };
 export type Icon = ComponentType<IconProps>;
 
-function icon(name: string, body: ReactNode): Icon {
-  const Component = ({ size = 24, color = 'currentColor', strokeWidth = 1.75, className, ...rest }: IconProps) => (
+/** Puts a fill-only copy behind each shape marked "tone", for the offset print. */
+function withTones(body: ReactNode): ReactNode {
+  const parts = isValidElement<{ children?: ReactNode }>(body) && body.type === Fragment ? body.props.children : body;
+  return Children.toArray(parts).flatMap((child) => {
+    if (!isValidElement<{ className?: string }>(child) || child.props.className !== 'tone') return [child];
+    const el = child as ReactElement<{ className?: string; stroke?: string; key?: string }>;
+    return [cloneElement(el, { key: `${el.key}-tone`, className: 'tone', stroke: 'none' }), cloneElement(el, { key: `${el.key}-line`, className: undefined })];
+  });
+}
+
+function icon(name: string, drawing: ReactNode): Icon {
+  const body = withTones(drawing);
+  const Component = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...rest }: IconProps) => (
     <svg
       xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
       stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
@@ -55,14 +67,14 @@ export const Square = icon('Square', <rect className="tone" x="5.5" y="5.5" widt
 export const CircleStop = icon('CircleStop', <><circle className="tone" cx="12" cy="12" r="9" /><rect x="9" y="9" width="6" height="6" rx="1.2" /></>);
 export const SkipBack = icon('SkipBack', <><path className="tone" d="M18.5 6v12a1 1 0 0 1-1.6.8L9 12.8a1 1 0 0 1 0-1.6l7.9-6a1 1 0 0 1 1.6.8z" /><path d="M5.5 5v14" /></>);
 export const Repeat = icon('Repeat', <><path d="M17 3.5l3 3-3 3" /><path d="M4 11.5V10a3.5 3.5 0 0 1 3.5-3.5H20" /><path d="M7 20.5l-3-3 3-3" /><path d="M20 12.5V14a3.5 3.5 0 0 1-3.5 3.5H4" /></>);
-export const Metronome = icon('Metronome', <><path className="tone" d="M9.6 3.5h4.8a1 1 0 0 1 1 .8l3.5 15a1 1 0 0 1-1 1.2H6.1a1 1 0 0 1-1-1.2l3.5-15a1 1 0 0 1 1-.8z" /><path d="M12 15.5l5-8" /><path d="M7.3 15.5h9.4" /></>);
+export const Metronome = icon('Metronome', <><path className="tone" d="M9.6 3.5h4.8a1 1 0 0 1 1 .8l3.5 15a1 1 0 0 1-1 1.2H6.1a1 1 0 0 1-1-1.2l3.5-15a1 1 0 0 1 1-.8z" /><path d="M12 15.5l5-8" /><path d="M7.3 15.5h9.4" />{dot(15.3, 10.2, 1.5)}</>);
 export const Gauge = icon('Gauge', <><path className="tone" d="M4.6 18a9 9 0 1 1 14.8 0" /><path d="M12 14l4-4.5" />{dot(12, 14, 1.6)}</>);
 export const AudioLines = icon('AudioLines', <path d="M3.5 10.5v3M7.5 7v10M11.5 3.5v17M15.5 7.5v9M19.5 10v4" />);
 export const Music = icon('Music', <><path d="M9 17.5V5.8a1 1 0 0 1 .8-1l9.2-1.7a1 1 0 0 1 1 1v11.4" /><circle cx="6.5" cy="17.5" r="2.5" /><circle cx="17.5" cy="15.5" r="2.5" /></>);
 export const Piano = icon('Piano', <><rect className="tone" x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 20v-6M15 20v-6" /><rect x="7.9" y="4" width="2.2" height="9" rx="0.7" fill="currentColor" stroke="none" /><rect x="13.9" y="4" width="2.2" height="9" rx="0.7" fill="currentColor" stroke="none" /></>);
 export const Drum = icon('Drum', <><ellipse className="tone" cx="12" cy="10" rx="8" ry="3" /><path d="M4 10v6.5c0 1.7 3.6 3 8 3s8-1.3 8-3V10" /><path d="M4 16.5l3 2M20 16.5l-3 2" /><path d="M6.5 3.5l4.5 5.5M17.5 3.5L13 9" /></>);
 export const Mic = icon('Mic', <><rect className="tone" x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></>);
-export const Ear = icon('Ear', <><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 2.6-1.6 3.7-2.6 4.8-.9 1-1.4 1.8-1.4 3.2a3 3 0 0 1-5.6 1.5" /><path d="M9.5 10a2.5 2.5 0 0 1 5 0c0 1.2-.9 1.8-1.5 2.4" /></>);
+export const Ear = icon('Ear', <><path d="M20.5 7.5a6 6 0 0 1 0 5M22.5 5.5a9 9 0 0 1 0 9" opacity="0.55" /><path d="M5 9.5a5.5 5.5 0 0 1 11 0c0 2.6-1.6 3.7-2.6 4.8-.9 1-1.4 1.8-1.4 3.2a3 3 0 0 1-5.6 1.5" /><path d="M8 10a2.5 2.5 0 0 1 5 0c0 1.2-.9 1.8-1.5 2.4" /></>);
 
 // Editing
 export const Plus = icon('Plus', <path d="M12 5v14M5 12h14" />);
@@ -79,9 +91,9 @@ export const Undo2 = icon('Undo2', <><path d="M9 4.5L4.5 9 9 13.5" /><path d="M4
 export const Redo2 = icon('Redo2', <><path d="M15 4.5L19.5 9 15 13.5" /><path d="M19.5 9h-10a5 5 0 0 0 0 10H13" /></>);
 export const MousePointer2 = icon('MousePointer2', <path d="M5.2 4.3l13.3 5.5a.6.6 0 0 1 0 1.1l-5.6 2-2 5.6a.6.6 0 0 1-1.1 0L4.3 5.2a.7.7 0 0 1 .9-.9z" />);
 export const SlidersHorizontal = icon('SlidersHorizontal', <><path d="M4 7h8.5M16.5 7H20M4 17h3.5M11.5 17H20" /><circle cx="14.5" cy="7" r="2" /><circle cx="9.5" cy="17" r="2" /></>);
-export const ZoomIn = icon('ZoomIn', <><circle className="tone" cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20M10.5 8v5M8 10.5h5" /></>);
-export const ZoomOut = icon('ZoomOut', <><circle className="tone" cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20M8 10.5h5" /></>);
-export const Search = icon('Search', <><circle className="tone" cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></>);
+export const ZoomIn = icon('ZoomIn', <><circle className="tone" cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20M10.5 8v5M8 10.5h5" /><path d="M8.2 9a2.8 2.8 0 0 1 1.9-1.6" /></>);
+export const ZoomOut = icon('ZoomOut', <><circle className="tone" cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20M8 10.5h5" /><path d="M8.2 9a2.8 2.8 0 0 1 1.9-1.6" /></>);
+export const Search = icon('Search', <><circle className="tone" cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /><path d="M8.2 9a2.8 2.8 0 0 1 1.9-1.6" /></>);
 export const Shuffle = icon('Shuffle', <><path d="M3.5 7h3c1.9 0 3 .9 4.1 2.6l2.8 4.8c1.1 1.7 2.2 2.6 4.1 2.6h3" /><path d="M3.5 17h3c1.1 0 2-.3 2.7-.9M14.8 7.9c.7-.6 1.6-.9 2.7-.9h3" /><path d="M18 4l2.5 3L18 10M18 14l2.5 3-2.5 3" /></>);
 export const ArrowLeftRight = icon('ArrowLeftRight', <><path d="M4 8h15.5M16 4.5L19.5 8 16 11.5" /><path d="M20 16H4.5M8 12.5L4.5 16 8 19.5" /></>);
 export const ArrowUp = icon('ArrowUp', <path d="M12 19.5v-15M6.5 10L12 4.5 17.5 10" />);
@@ -115,7 +127,7 @@ export const MessageSquarePlus = icon('MessageSquarePlus', <><path className="to
 export const StickyNote = icon('StickyNote', <><path className="tone" d="M6 4h12a2 2 0 0 1 2 2v8.2a2 2 0 0 1-.6 1.4l-3.8 3.8a2 2 0 0 1-1.4.6H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" /><path d="M14 20v-4.5a1.5 1.5 0 0 1 1.5-1.5H20" /></>);
 export const ListChecks = icon('ListChecks', <><path d="M3.5 6.5L5.2 8 8.5 4.8M3.5 15.5L5.2 17l3.3-3.2" /><path d="M12 7h8.5M12 16h8.5" /></>);
 export const Brain = icon('Brain', <><path className="tone" d="M12 5c-.9-1.6-3.9-1.8-4.9.3-2.2-.2-3.6 1.9-2.8 3.8-1.6 1-1.6 3.6 0 4.6-.8 1.9.6 4 2.8 3.8 1 2.1 4 1.9 4.9.3z" /><path className="tone" d="M12 5c.9-1.6 3.9-1.8 4.9.3 2.2-.2 3.6 1.9 2.8 3.8 1.6 1 1.6 3.6 0 4.6.8 1.9-.6 4-2.8 3.8-1 2.1-4 1.9-4.9.3z" /><path d="M12 5v12.8M8.5 9.5c1.2.1 1.8.9 1.8 2M15.5 9.5c-1.2.1-1.8.9-1.8 2" /></>);
-export const Eye = icon('Eye', <><path d="M2.5 12C5 7.6 8.2 5.5 12 5.5s7 2.1 9.5 6.5c-2.5 4.4-5.7 6.5-9.5 6.5S5 16.4 2.5 12z" /><circle className="tone" cx="12" cy="12" r="3" /></>);
+export const Eye = icon('Eye', <><path d="M2.5 12C5 7.6 8.2 5.5 12 5.5s7 2.1 9.5 6.5c-2.5 4.4-5.7 6.5-9.5 6.5S5 16.4 2.5 12z" /><circle className="tone" cx="12" cy="12" r="3" />{dot(13.1, 10.9, 0.9)}</>);
 export const Dices = icon('Dices', <><rect className="tone" x="4" y="4" width="16" height="16" rx="4" />{dot(8.5, 8.5, 1.4)}{dot(12, 12, 1.4)}{dot(15.5, 15.5, 1.4)}</>);
 
 // Status

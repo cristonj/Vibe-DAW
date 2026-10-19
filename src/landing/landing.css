@@ -1,6 +1,6 @@
 /* Landing. Same ink-navy palette as the studio (global.css :root), with the brand gradient
    kept for what it means in the app: the agent's ink. */
-.landing { height: 100%; overflow-y: auto; overflow-x: hidden; background: var(--bg); color: var(--text); font-size: 17px; line-height: 1.6; user-select: text; scroll-behavior: smooth; }
+.landing { color-scheme: dark; height: 100%; overflow-y: auto; overflow-x: hidden; background: var(--bg); color: var(--text); font-size: 17px; line-height: 1.6; user-select: text; scroll-behavior: smooth; }
 .landing a { color: inherit; text-decoration: none; }
 :where(.landing figure) { margin: 0; }
 :where(.landing img) { display: block; width: 100%; height: auto; }
@@ -10,7 +10,25 @@
 .lp-brand { display: flex; align-items: center; }
 
 .lp-btn { display: inline-flex; align-items: center; height: 48px; padding: 0 22px; border-radius: var(--radius-m); background: var(--agent-fill); color: var(--agent-ink) !important; font-size: 15px; font-weight: 600; transition: transform 200ms, box-shadow 200ms; }
-.lp-btn:hover { background: var(--agent-fill-strong); transform: translateY(-1px); box-shadow: 0 14px 36px -14px var(--agent); }
+.lp-btn:hover { background: var(--agent-fill-strong); transform: translateY(-1px); box-shadow: -14px 14px 32px -16px var(--ink-0), 0 14px 32px -16px var(--ink-1), 14px 14px 32px -16px var(--ink-2); }
+/* The call to action: a flowing gradient with a glossy top, a breathing glow behind it, and a
+   sheen that sweeps across now and then. */
+.landing .lp-cta { position: relative; isolation: isolate; gap: 10px; height: 58px; padding: 0 24px 0 30px; border-radius: 14px; font-size: 17px; font-weight: 650;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05) 50%, rgba(0, 0, 0, 0.14)), linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff);
+  background-size: 100% 100%, 220% 100%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -2px 0 rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.5), -22px 18px 36px -18px rgba(182, 156, 255, 0.85), 0 18px 36px -18px rgba(255, 143, 207, 0.8), 22px 18px 36px -18px rgba(255, 181, 71, 0.85);
+  animation: lp-cta-flow 7s ease-in-out infinite alternate; }
+.landing .lp-cta:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.08) 50%, rgba(0, 0, 0, 0.1)), linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff); background-size: 100% 100%, 220% 100%; transform: translateY(-2px); }
+.landing .lp-cta:active { transform: translateY(1px); }
+.lp-cta > * { position: relative; z-index: 1; }
+.lp-cta::before { content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 20px; background: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547); filter: blur(20px); opacity: 0.5; animation: lp-cta-glow 3.4s ease-in-out infinite; }
+.lp-cta::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.6) 50%, transparent 62%) -150% 0 / 250% 100% no-repeat; animation: lp-cta-sheen 5s ease-in-out 1.8s infinite; }
+.lp-cta svg { transition: transform 200ms ease; }
+.lp-cta:hover svg { transform: translateX(4px); }
+@keyframes lp-cta-flow { to { background-position: 0 0, 100% 0; } }
+@keyframes lp-cta-glow { 50% { opacity: 0.85; transform: scale(1.05); } }
+@keyframes lp-cta-sheen { 0% { background-position: -150% 0; } 35%, 100% { background-position: 250% 0; } }
 .lp-btn.ghost { background: var(--panel); color: var(--text) !important; box-shadow: inset 0 0 0 1px var(--line); }
 .lp-btn.ghost:hover { background: var(--raised); }
 .lp-actions { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -21,9 +39,13 @@
 .landing h3 { font-size: 30px; line-height: 1.1; letter-spacing: -0.025em; }
 :where(.landing p) { color: var(--muted); margin: 0; }
 /* The promise, in the wordmark's ink and glow. The gradient runs there and back so it can drift. */
-.landing mark { color: transparent; background: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text;
-  filter: drop-shadow(0 0 0.32em rgba(255, 143, 207, 0.35)); animation: lp-drift 9s ease-in-out infinite alternate; }
-@keyframes lp-drift { to { background-position: 100% 0; } }
+.landing mark { color: transparent; -webkit-background-clip: text; background-clip: text; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  /* A slight raise, like the wordmark: a soft sheen down the letters and a thin lip below. */
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0) 56%, rgba(0, 0, 0, 0.14)), linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff);
+  background-size: 100% 100%, 200% 100%;
+  filter: drop-shadow(0 0.03em 0 rgba(96, 56, 110, 0.85)) drop-shadow(-0.14em 0 0.3em rgba(182, 156, 255, 0.26)) drop-shadow(0.14em 0 0.3em rgba(255, 181, 71, 0.2));
+  animation: lp-drift 9s ease-in-out infinite alternate; }
+@keyframes lp-drift { to { background-position: 0 0, 100% 0; } }
 .landing kbd { font: 600 0.56em/1 var(--font-ui); display: inline-block; vertical-align: 0.2em; padding: 0.32em 0.45em; margin: 0 0.08em; border-radius: 6px; background: var(--raised); box-shadow: inset 0 -2px 0 var(--line), 0 0 0 1px var(--line); color: var(--text); letter-spacing: 0; }
 
 /* The hero: centered, under a slow aurora in the brand colors. */
@@ -37,7 +59,7 @@
 @keyframes lp-aurora-a { to { transform: translate(20%, 16%) scale(1.15); } }
 @keyframes lp-aurora-b { to { transform: translate(-24%, -12%) scale(0.88); } }
 @keyframes lp-aurora-c { to { transform: translate(-14%, 22%) scale(1.2); } }
-.lp-wordmark { font-size: clamp(104px, 34vw, 300px); filter: drop-shadow(0 0 0.22em rgba(255, 143, 207, 0.2)); }
+.lp-wordmark { font-size: clamp(104px, 34vw, 300px); }
 .lp-hero h1 { margin-top: 52px; font-size: clamp(30px, 3.9vw, 54px); line-height: 1.08; max-width: 980px; }
 .lp-hero-actions { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-top: 40px; }
 .landing .lp-support-link { font-size: 14px; color: var(--faint); text-decoration: underline transparent; text-underline-offset: 4px; transition: color 150ms, text-decoration-color 150ms; }
@@ -59,7 +81,7 @@
   100% { transform: none; opacity: 1; }
 }
 @keyframes lp-wave { 0%, 10%, 100% { transform: none; } 3.5% { transform: translateY(-5%) scale(0.99, 1.03); } 7% { transform: translateY(0.6%); } }
-@keyframes lp-beat { 0% { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); } 12% { filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.85)); } 100% { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); } }
+@keyframes lp-beat { 0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.6)); } 12% { filter: drop-shadow(0 0 9px rgba(255, 255, 255, 0.95)); } }
 /* Each letter bounces on its own when you touch it. Keeping the other two in the list stops them restarting. */
 .lp-wordmark .vibe-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 520ms cubic-bezier(0.3, 0, 0.3, 1); animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms), 0ms; }
 @keyframes lp-bop { 30% { transform: translateY(-9%) scale(0.97, 1.04); } 60% { transform: translateY(1.5%) scale(1.03, 0.97); } 100% { transform: none; } }
@@ -72,13 +94,13 @@
 .lp-ticker ul { display: flex; gap: 14px; margin: 0; padding: 0 14px 0 0; list-style: none; }
 .lp-ticker li { display: flex; align-items: center; gap: 10px; padding: 11px 20px 11px 16px; border-radius: 999px; white-space: nowrap; font-size: 15px; color: var(--muted);
   background: linear-gradient(var(--panel), var(--panel-2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px var(--line-soft); }
-.lp-ticker li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--agent-fill); box-shadow: 0 0 10px var(--agent); }
+.lp-ticker li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--agent-fill); box-shadow: -3px 0 8px var(--ink-0), 3px 0 8px var(--ink-2); }
 @keyframes lp-tick { to { transform: translateX(-50%); } }
 #support { scroll-margin-top: 48px; }
 
 .lp-hero-shot { position: relative; width: 100%; margin-top: 76px; text-align: left; }
 .lp-frame { border-radius: var(--radius-l); overflow: hidden; background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 40px 100px rgba(0, 0, 0, 0.6); }
-.lp-hero-shot .lp-frame { box-shadow: 0 0 0 1px var(--line), 0 40px 120px rgba(0, 0, 0, 0.7), 0 0 160px -40px var(--agent-wash); }
+.lp-hero-shot .lp-frame { box-shadow: 0 0 0 1px var(--line), 0 40px 120px rgba(0, 0, 0, 0.7), -120px 0 160px -60px rgba(182, 156, 255, 0.16), 0 0 160px -50px rgba(255, 143, 207, 0.12), 120px 0 160px -60px rgba(255, 181, 71, 0.12); }
 
 .lp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 88px; align-items: center; padding-top: 160px; padding-bottom: 40px; }
 .lp-copy h2 { margin-bottom: 24px; }
@@ -168,7 +190,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing { scroll-behavior: auto; }
-  .landing mark, .lp-aurora i, .lp-btn { animation: none; transition: none; }
+  .landing mark, .lp-aurora i, .lp-btn, .lp-cta::before, .lp-cta::after { animation: none; transition: none; }
   .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop { animation: none; }
   /* The ticker holds still and wraps instead. */
   .lp-ticker { mask-image: none; -webkit-mask-image: none; }

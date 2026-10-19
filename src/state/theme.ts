@@ -74,5 +74,7 @@ export function applyTheme() {
   applied = Object.keys(vars);
   root.dataset.theme = theme;
   root.style.colorScheme = theme;
+  // The installed app's title bar and the mobile browser chrome match the ground the panels sit on.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#dfe3eb' : '#000000');
   (document.getElementById('root') as HTMLElement | null)?.style.setProperty('zoom', String(scale));
 }

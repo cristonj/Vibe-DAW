@@ -243,7 +243,7 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
   return (
     <aside className={`agent ${open ? '' : 'collapsed'}`} aria-label="Agent">
       <div className="agent-head">
-        <div className="agent-title"><span className={`agent-dot ${running ? 'busy' : ''}`} /> Producer</div>
+        <div className="agent-title">Producer</div>
         <div className="seg" role="radiogroup" aria-label="Agent mode">
           <button className={mode === 'agent' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('agent')} role="radio" aria-checked={mode === 'agent'} title="The agent edits your project">Agent</button>
           <button className={mode === 'ask' ? 'on' : ''} disabled={running} onClick={() => useAgent.getState().setMode('ask')} role="radio" aria-checked={mode === 'ask'} title="Read-only: questions and feedback">Ask</button>
