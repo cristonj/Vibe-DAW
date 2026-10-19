@@ -2,7 +2,7 @@
 
 ## Your library
 
-Use the sound browser's **Library** tab to search clips, sounds, effect profiles and project templates. Save selected clips with the bookmark in the arrangement toolbar; save a track sound or effect chain from **Sound & FX**. Sample rows also have a bookmark. Templates save the whole arrangement and open as a new project, preserving the source.
+Use the sound browser's **Library** tab to search clips, sounds, effect profiles and project templates. Save selected clips from **Clips → Save selected clips to library** in the arrangement toolbar; save a track sound or effect chain from **Sound & FX**. Sample rows also have a bookmark. Templates save the whole arrangement and open as a new project, preserving the source.
 
 Clips retain their notes/audio, sounds, effects and overlapping notes/lyrics. Loading a phrase creates fresh IDs and is undoable. Choose **Use selected track** to keep that track's existing sound while adding a phrase. Applying a saved sound replaces the selected track's instrument/kit/effects while keeping its clips. Effect profiles can append or explicitly replace a chain. External sidechain sources are disabled when their original track is absent.
 

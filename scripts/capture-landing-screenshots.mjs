@@ -169,7 +169,7 @@ const union = (...boxes) => {
   await dialog.locator('input').fill('Walk the bass up into the hook');
   const regions = await page.locator('.selection-region').evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }));
   const d = await dialog.boundingBox();
-  const bottom = Math.max(...regions.map((r) => r.y + r.height)) + 24;
+  const bottom = Math.max(...regions.map((r) => r.y + r.height));
   await save(page, 'inline-edit', { x: d.x - 1, y: d.y - 1, width: d.width + 2, height: bottom - d.y + 1 });
   await page.close();
 }

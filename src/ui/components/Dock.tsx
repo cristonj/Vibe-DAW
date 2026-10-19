@@ -31,7 +31,7 @@ export function Dock() {
     <div className="dock-empty">
       <div>
         <span className="hide-touch">Double-click</span><span className="only-touch">Tap</span> a clip on the timeline to edit it here.<br />
-        No clips yet? Select a track and <span className="hide-touch">click</span><span className="only-touch">tap</span> <b>New clip</b> in the toolbar.
+        No clips yet? Select a track and <span className="hide-touch">click</span><span className="only-touch">tap</span> <b>Clips → New clip</b> in the toolbar.
       </div>
     </div>
   );

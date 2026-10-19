@@ -7,6 +7,7 @@ import { analyzeReference } from '../../agent/ears';
 import { useSettings, MODELS, aiAvailable } from '../../state/settings';
 import { useDaw } from '../../state/store';
 import { Markdown } from '../Markdown';
+import { Dropdown } from './Dropdown';
 import { shuffledSuggestions } from '../../agent/suggestions';
 import { useLibrary } from '../../samples/library';
 import { usePresets } from '../../state/presetLibrary';
@@ -326,14 +327,9 @@ export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focu
             <button className="btn icon" aria-label="Mention a project item" title="Attach tracks, clips, effects, sounds, notes and Producer reviews (@)" onClick={() => { const next = text + (text && !/\s$/.test(text) ? ' ' : '') + '@'; setText(next); setCaret(next.length); requestAnimationFrame(() => { taRef.current?.focus(); taRef.current?.setSelectionRange(next.length, next.length); }); }}><AtSign size={15} /></button>
             <button className="btn icon" title="Attach a reference track - the agent listens and matches its style" onClick={() => fileRef.current?.click()} disabled={analyzing}><Paperclip size={15} /></button>
             <input ref={fileRef} type="file" accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = ''; }} />
-            <select
-              value={model}
-              onChange={(e) => useSettings.getState().set({ model: e.target.value as typeof model })}
-              aria-label="Model"
-              style={{ border: 0, background: 'transparent', color: 'var(--faint)', fontSize: 12, padding: '2px 4px' }}
-            >
-              {MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
+            <Dropdown label="Model" className="model-selector" role="listbox" content={(close) => <>
+              {MODELS.map((m) => <button key={m.id} className="menu-item" role="option" aria-selected={model === m.id} onClick={() => { useSettings.getState().set({ model: m.id }); close(); }}><b>{m.name}{model === m.id && <Check size={13} />}</b><span>{m.blurb}</span></button>)}
+            </>}>{MODELS.find((m) => m.id === model)?.name}</Dropdown>
             <div className="spacer" />
             {voiceSupported() && !recording && (
               <button

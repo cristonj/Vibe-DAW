@@ -6,7 +6,7 @@ const HOW_TO: Array<[string, string]> = [
   ['Make a beat with AI', 'Type what you want in the Producer panel on the right, e.g. “sad trap beat with guitar”. Everything it adds is outlined in the agent colors until you click Keep.'],
   ['Talk instead of typing', 'Tap the mic in the Producer panel, say what you want, then tap send. The Producer hears your voice directly; you can also type a note to go with it. Humming a tune? Turn off Mic noise suppression in Settings so held notes come through clean.'],
   ['Add a track', 'Use Add track in the toolbar, or drag an instrument or sound from the left panel onto the timeline.'],
-  ['Write notes or drums', 'Select a track and click New clip (or double-click an empty spot on its lane). The editor opens at the bottom.'],
+  ['Write notes or drums', 'Select a track and choose Clips → New clip (or double-click an empty spot on its lane). The editor opens at the bottom.'],
   ['Edit just a phrase with AI', 'Shift-drag across track lanes to select a time range, or select individual notes in the piano roll or drum grid. Press Ctrl+K (⌘K on Mac). On touch screens use Range / Select, then Edit selection or Edit with AI. The Producer receives the exact selected notes.'],
   ['Find audio online', 'Open Online in the sound browser, or ask the Producer to search. Import a result to use it like any sample. Author, license, and source stay attached; download Sound credits from Export when sharing a song.'],
   ['Lengthen a pattern', 'Drag its right edge on the timeline. It snaps to whole bars and repeats what is inside (hold Shift for fine steps).'],
