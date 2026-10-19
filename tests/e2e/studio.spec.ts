@@ -392,8 +392,8 @@ test('toolbar menus fit, edit clips, and keep timeline controls reachable', asyn
   await page.getByRole('button', { name: 'Clip actions', exact: true }).press('ArrowDown');
   const bounds = (await page.getByRole('menu', { name: 'Clip actions', exact: true }).boundingBox())!;
   expect(bounds.x).toBeGreaterThanOrEqual(7);
-  expect(bounds.x + bounds.width).toBeLessThanOrEqual(313);
-  expect(bounds.y + bounds.height).toBeLessThanOrEqual(893);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width - 7);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(page.viewportSize()!.height - 7);
   await page.keyboard.press('Escape');
 });
 

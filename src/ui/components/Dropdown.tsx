@@ -21,11 +21,13 @@ export function Dropdown({ label, children, content, className = '', role = 'men
   useLayoutEffect(() => {
     if (!open) return;
     const r = trigger.current!.getBoundingClientRect(), z = uiZoom();
+    // Mobile innerWidth can include overflowing page content at larger UI sizes.
+    const { clientWidth: viewportWidth, clientHeight: viewportHeight } = document.documentElement;
     const height = menu.current!.getBoundingClientRect().height;
-    const below = innerHeight - r.bottom - 14;
+    const below = viewportHeight - r.bottom - 14;
     const top = height > below && r.top > below ? Math.max(8, r.top - height - 6) : r.bottom + 6;
     const width = menu.current!.getBoundingClientRect().width;
-    setAt({ left: Math.max(8, Math.min(r.left, innerWidth - width - 8)) / z, top: top / z, maxHeight: (innerHeight - top - 8) / z });
+    setAt({ left: Math.max(8, Math.min(r.left, viewportWidth - width - 8)) / z, top: top / z, maxHeight: (viewportHeight - top - 8) / z });
     const selected = menu.current!.querySelector<HTMLElement>('[aria-selected="true"]');
     (selected ?? menu.current!.querySelector<HTMLElement>('button:not(:disabled), select'))?.focus();
   }, [open]);
@@ -52,7 +54,7 @@ export function Dropdown({ label, children, content, className = '', role = 'men
       onClick={() => setOpen(!open)} onKeyDown={(e) => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setOpen(true); } }}>
       {children}<ChevronDown size={12} />
     </button>
-    {open && createPortal(<div ref={menu} id={id} className="menu dropdown-menu" role={role} aria-label={label} style={{ ...at, maxWidth: (innerWidth - 16) / uiZoom(), maxHeight: at.maxHeight || undefined }}
+    {open && createPortal(<div ref={menu} id={id} className="menu dropdown-menu" role={role} aria-label={label} style={{ ...at, maxWidth: (document.documentElement.clientWidth - 16) / uiZoom(), maxHeight: at.maxHeight || undefined }}
       onKeyDown={(e) => {
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
         if (e.key === 'Tab') setOpen(false);
