@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 
 // Tiny, safe markdown for agent replies: paragraphs, bullet/numbered lists, **bold**, *italic*, `code`.
-// No HTML injection — everything renders as React text nodes.
+// No HTML injection - everything renders as React text nodes.
 
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = [];

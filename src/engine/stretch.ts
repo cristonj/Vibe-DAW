@@ -1,6 +1,6 @@
 // Time-stretch without changing pitch (WSOLA: waveform-similarity overlap-add).
 // Runs once per (sample, ratio) and is cached, so stretched loops sound identical in
-// playback and in bounces — and at full level, unlike granular playback.
+// playback and in bounces - and at full level, unlike granular playback.
 
 const FRAME = 2048;
 const HOP_OUT = FRAME / 2;

@@ -38,7 +38,7 @@ function setLoading(v: boolean) {
   loadingListeners.forEach((f) => f(v));
 }
 
-/** Create the graph (no audio yet — browsers need a gesture before the context runs). */
+/** Create the graph (no audio yet - browsers need a gesture before the context runs). */
 export function initEngine() {
   if (graph) return;
   // A larger output buffer ('playback') trades a few ms of latency for no dropouts

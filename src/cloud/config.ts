@@ -1,5 +1,5 @@
 // Firebase web config comes from VITE_FIREBASE_* env vars at build time.
-// These values are public identifiers, not secrets — security comes from
+// These values are public identifiers, not secrets - security comes from
 // Firestore/Storage rules and App Check.
 
 export const firebaseConfig = {

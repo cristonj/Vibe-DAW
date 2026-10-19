@@ -2,7 +2,7 @@ import type { EffectType } from './types';
 
 // Single source of truth for what instruments and effects exist.
 // The engine implements them, the UI lists them, and the agent reads these
-// descriptions in its system prompt — so write them for a producer.
+// descriptions in its system prompt - so write them for a producer.
 
 export interface PresetInfo {
   id: string;

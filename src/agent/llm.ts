@@ -173,7 +173,7 @@ export async function streamGenerate(req: LlmRequest, h: StreamHandlers = {}): P
   } catch (e) {
     if (req.signal?.aborted) throw e;
     const msg = String((e as Error)?.message ?? e);
-    // Some models don't accept every thinking level — retry with the model's default.
+    // Some models don't accept every thinking level - retry with the model's default.
     if (req.thinking && /thinking/i.test(msg) && /400|INVALID_ARGUMENT|not supported|invalid/i.test(msg)) {
       return attempt({ ...req, thinking: undefined });
     }

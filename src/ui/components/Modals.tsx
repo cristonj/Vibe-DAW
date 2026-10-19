@@ -84,16 +84,16 @@ function AiSettings() {
       <label className="field">
         <span>Model</span>
         <select value={s.model} onChange={(e) => s.set({ model: e.target.value as typeof s.model })}>
-          {MODELS.map((m) => <option key={m.id} value={m.id}>{m.name} — {m.blurb}</option>)}
+          {MODELS.map((m) => <option key={m.id} value={m.id}>{m.name} - {m.blurb}</option>)}
         </select>
       </label>
       <label className="field">
         <span>Thinking</span>
         <select value={s.thinking} onChange={(e) => s.set({ thinking: e.target.value as Thinking })}>
-          <option value="MINIMAL">Minimal — fastest</option>
+          <option value="MINIMAL">Minimal - fastest</option>
           <option value="LOW">Low</option>
-          <option value="MEDIUM">Medium — balanced</option>
-          <option value="HIGH">High — best musical decisions, slower</option>
+          <option value="MEDIUM">Medium - balanced</option>
+          <option value="HIGH">High - best musical decisions, slower</option>
         </select>
       </label>
       <label className="field">

@@ -13,7 +13,7 @@ import { audioBudget, renderWorkers } from './budget';
 import { encodeWavOffThread } from './wavEncode';
 import { withRenderSlot } from './renderQueue';
 
-// Offline bounce. Used for exports and — more importantly — for the agent's ears:
+// Offline bounce. Used for exports and - more importantly - for the agent's ears:
 // it renders exactly what the user would hear and hands it to Gemini.
 //
 // Speed comes from three things:
@@ -132,7 +132,7 @@ async function nativeRenderPass(spec: PassSpec): Promise<Float32Array[]> {
       for (let t = WINDOW_SEC; t < duration - block; t += WINDOW_SEC) {
         const at = Math.round((t * sampleRate) / 128) * 128 / sampleRate;
         nativeCtx.suspend(at).then(() => {
-          // Always resume, even if a scheduled callback throws — otherwise the bounce hangs.
+          // Always resume, even if a scheduled callback throws - otherwise the bounce hangs.
           try {
             if (!failure) advance(at + WINDOW_SEC + AHEAD_SEC);
           } catch (e) {

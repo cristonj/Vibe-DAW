@@ -162,7 +162,7 @@ export function findEffect(p: Project, effectId: string): { owner: Track | 'mast
   return undefined;
 }
 
-/** True if any track is soloed and this one isn't — i.e. it should be silent. */
+/** True if any track is soloed and this one isn't - i.e. it should be silent. */
 export function isSilencedBySolo(p: Project, t: Track): boolean {
   return p.tracks.some((x) => x.solo) && !t.solo;
 }

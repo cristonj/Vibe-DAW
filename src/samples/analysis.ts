@@ -126,7 +126,7 @@ export function estimateTempo(pcm: PcmData): { bpm: number; confidence: number; 
   return { bpm: Math.round(best.bpm * 2) / 2, confidence: Math.min(1, (best.score / mean - 1) / 3), alternatives };
 }
 
-/** Time in seconds of the first strong transient — where a loop's downbeat probably is. */
+/** Time in seconds of the first strong transient - where a loop's downbeat probably is. */
 export function firstOnset(pcm: PcmData, threshold = 0.2): number {
   const mono = monoOf(pcm);
   const { env, hopSec } = onsetEnvelope(mono, pcm.sampleRate, 256, 512);

@@ -108,7 +108,7 @@ function ClipView({ clip, track, project, zoom, selected, onPointerDown, onDoubl
       style={{ left: clip.start * zoom, width: Math.max(4, w), ['--c' as string]: track.color }}
       onPointerDown={(e) => onPointerDown(e, 'move')}
       onDoubleClick={onDoubleClick}
-      title={`${clip.name}${clip.aiPending ? ' — made by the agent (not reviewed yet)' : ''} · drag to move, drag the right edge to resize (Shift = fine), double-click to edit`}
+      title={`${clip.name}${clip.aiPending ? ' - made by the agent (not reviewed yet)' : ''} · drag to move, drag the right edge to resize (Shift = fine), double-click to edit`}
     >
       <div className="cname"><span>{clip.name}</span>{selected && <AddToChat referenceId={`clip:${clip.id}`} label={clip.name} mini />}</div>
       {clip.type === 'midi' ? <MidiBody clip={clip} track={track} /> : <AudioBody clip={clip} project={project} widthPx={w} />}

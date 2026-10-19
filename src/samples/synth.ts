@@ -1,5 +1,5 @@
 // Procedural sound design. Every built-in drum sound is synthesized here at startup,
-// so the app ships a full, royalty-free kit with zero downloads — and the agent can
+// so the app ships a full, royalty-free kit with zero downloads - and the agent can
 // design new one-shots (a longer 808, a crunchier snare) through the same functions.
 
 export const SR = 44100;
