@@ -33,7 +33,7 @@ Authentication uses GitHub OIDC and Google Workload Identity Federation with sho
 3. Grant that identity `roles/iam.workloadIdentityUser` on the deployment service account. Give the service account Firebase Rules Admin and Cloud Datastore Index Admin on the target project, plus the read/service-usage permissions required for Firebase CLI project and bucket discovery (Firebase Viewer, Storage Viewer, Service Usage Consumer).
 4. Enable the Firebase Rules, Firestore, Storage, and required Google APIs in the target Firebase project. Test with **Run workflow** on `main`, then inspect the rules in Firebase Console.
 
-The workflow validates that the three variables exist before authenticating. Its actions are pinned to commit SHAs and Firebase CLI is pinned to `15.34.0`. Deployment runs are serialized without cancelling an in-progress rules update. Keep environment approval settings consistent with your desired automatic deployment policy.
+The workflow validates that the three variables exist before authenticating. Its actions are pinned to commit SHAs and Firebase CLI is pinned to `15.34.0`. Deployment runs are serialized without canceling an in-progress rules update. Keep environment approval settings consistent with your desired automatic deployment policy.
 
 No live Firebase deployment is performed when developing or testing this PR. The actual project/provider/account must be configured by an administrator before the workflow can deploy.
 
