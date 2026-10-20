@@ -5,6 +5,7 @@ import type { ExportFormat } from './exportFormats';
 import type { PcmData } from './wav';
 import { contextLock } from './lock';
 import { unlockAudio, unlockAudioOnGestures } from './unlock';
+import {haptic} from '../native/native-haptics';
 
 // Everything outside src/engine talks to audio through this file. It never imports
 // Tone directly: Tone creates an AudioContext the moment it's imported, and browsers
@@ -40,10 +41,12 @@ export async function play(fromBeat?: number) {
     const loaded = await loadEngine();
     if (request !== playRequest) return;
     await loaded.play(fromBeat);
+    haptic('press');
   } finally { if (request === playRequest) useTransport.getState().setStarting(false); }
 }
 
 export function stop(rewind = false) {
+  if(useTransport.getState().playing || useTransport.getState().starting)haptic('selection');
   ++playRequest;
   useTransport.getState().setStarting(false);
   if (engine) engine.stop(rewind);
@@ -52,7 +55,7 @@ export function stop(rewind = false) {
 
 export async function togglePlay() {
   if (useTransport.getState().starting) stop();
-  else if (useTransport.getState().playing) await (await loadEngine()).togglePlay();
+  else if (useTransport.getState().playing) {await (await loadEngine()).togglePlay();haptic('selection');}
   else await play();
 }
 

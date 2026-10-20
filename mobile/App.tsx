@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, NativeModules, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Linking, NativeModules, Platform, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Apple from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
@@ -46,15 +46,24 @@ function capabilities() {
   };
 }
 
-export default function App() {
+export default function App(){return <SafeAreaProvider><NativeShell /></SafeAreaProvider>;}
+
+function NativeShell() {
+  const safeArea=useSafeAreaInsets();
   const web = useRef<WebView>(null);
   const [source, setSource] = useState(APP_URL);
   const [webKey, setWebKey] = useState(0);
   const [failed, setFailed] = useState(false);
-  const [background, setBackground] = useState(identity.background);
+  const systemTheme=useColorScheme();
+  const pageThemeReceived=useRef(false);
+  const [background, setBackground] = useState(systemTheme === 'dark' ? '#000000' : identity.background);
+  useEffect(()=>{if(!pageThemeReceived.current)setBackground(systemTheme === 'dark' ? '#000000' : identity.background);},[systemTheme]);
+  const shellDark=[1,3,5].map((at)=>parseInt(background.slice(at,at+2),16)).reduce((sum,n,i)=>sum+n*[0.2126,0.7152,0.0722][i],0)<140;
   const [sensitivity, setSensitivity] = useState(70);
   const liveIndex = useRef<number | null>(null);
   const authBusy = useRef(false);
+  const bridgeBootstrap=`(function(){if(!${JSON.stringify(ORIGINS)}.includes(location.origin))return;window.__NATIVE_APP__=true;window.__NATIVE_CAPABILITIES__=${JSON.stringify(capabilities())};var s=${JSON.stringify(safeArea)};window.__NATIVE_SAFE_AREA__=s;function apply(){if(!document.documentElement)return;document.documentElement.dataset.nativeApp='true';for(var side of ['top','right','bottom','left'])document.documentElement.style.setProperty('--native-safe-'+side,s[side]+'px');}apply();document.addEventListener('DOMContentLoaded',apply,{once:true});})();true;`;
+  useEffect(()=>{web.current?.injectJavaScript(bridgeBootstrap);},[bridgeBootstrap]);
   const googlePending = useRef<string | null>(null);
   const queuedDeepLink = useRef<string | null>(null);
   const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
@@ -166,7 +175,7 @@ export default function App() {
         MODULES.AppIntentsStorage?.clearAuthToken?.();
         MODULES.LiveActivityModule?.endActivity?.();
       },
-      applyTheme: m => {const color = (m.colors as {background?:unknown})?.background; if(typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)) setBackground(color);},
+      applyTheme: m => {const color = (m.colors as {background?:unknown})?.background; if(typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)) {pageThemeReceived.current=true;setBackground(color);}},
       haptic: p => {void performNativeHaptic(p,sensitivity);},
       applyHapticSensitivity: n => {setSensitivity(n); void persistHapticSensitivity(n).catch(() => {});},
       requestAppleSignIn: () => {void signInApple(message.requestId);},
@@ -196,26 +205,26 @@ export default function App() {
     return false;
   }
 
-  return <SafeAreaProvider><SafeAreaView style={[styles.root,{backgroundColor:background}]}>
-    <StatusBar style={background === '#050505' || background === '#000000' ? 'light' : 'dark'} />
+  return <View style={[styles.root,{backgroundColor:background}]}>
+    <StatusBar style={shellDark ? 'light' : 'dark'} />
     {failed ? <View style={styles.error}>
       <Text style={styles.title}>Can’t connect to {identity.name}</Text>
       <Text>Check your connection, then try again. Your saved data stays on this device.</Text>
       <Pressable accessibilityRole="button" onPress={() => {setFailed(false);setWebKey(k=>k+1);}} style={styles.button}><Text>Try again</Text></Pressable>
     </View> : <WebView ref={web} key={webKey} source={{uri:source}} style={{backgroundColor:background}}
       applicationNameForUserAgent={`${identity.slug}_Native/1.0`} originWhitelist={['https://*']}
-      injectedJavaScriptBeforeContentLoaded={`(function(){if(!${JSON.stringify(ORIGINS)}.includes(location.origin))return;window.__NATIVE_APP__=true;window.__NATIVE_CAPABILITIES__=${JSON.stringify(capabilities())};})();true;`}
+      injectedJavaScriptBeforeContentLoaded={bridgeBootstrap}
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly={true}
       onMessage={onMessage} onShouldStartLoadWithRequest={allowNavigation}
       onNavigationStateChange={nav => {if(nav.url && !isAppOriginUrl(nav.url,ORIGINS)) {setSource(APP_URL);setWebKey(k=>k+1);}}}
       onOpenWindow={event => {if(isOpenableUrl(event.nativeEvent.targetUrl)) void WebBrowser.openBrowserAsync(event.nativeEvent.targetUrl).catch(()=>{});}}
       onError={() => setFailed(true)} onHttpError={event => {if(event.nativeEvent.statusCode >= 400) setFailed(true);}}
       onContentProcessDidTerminate={() => setWebKey(k=>k+1)}
-      onLoadEnd={() => {send({type:'NATIVE_CAPABILITIES',capabilities:capabilities()});queuedDeepLink.current=null;}}
+      onLoadEnd={() => {web.current?.injectJavaScript(bridgeBootstrap);send({type:'NATIVE_CAPABILITIES',capabilities:capabilities()});queuedDeepLink.current=null;}}
       startInLoadingState renderLoading={() => <ActivityIndicator style={StyleSheet.absoluteFill} />}
       javaScriptEnabled domStorageEnabled sharedCookiesEnabled allowsInlineMediaPlayback
       mediaPlaybackRequiresUserAction={false} mediaCapturePermissionGrantType="prompt"
       allowsBackForwardNavigationGestures bounces={false} contentInsetAdjustmentBehavior="never" />}
-  </SafeAreaView></SafeAreaProvider>;
+  </View>;
 }
 const styles = StyleSheet.create({root:{flex:1},error:{flex:1,justifyContent:'center',gap:20,padding:28,backgroundColor:'#f6f7f4'},title:{fontSize:22,fontWeight:'600'},button:{padding:16,backgroundColor:'#dededb',borderRadius:12,alignSelf:'flex-start'}});

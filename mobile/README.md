@@ -69,3 +69,5 @@ so website CI tests them without installing Expo.
 Use the manual **iOS Store Screenshots** workflow to compile a standalone
 Simulator app on macOS and capture real iPhone Pro Max and large iPad screens.
 Inspect the screenshot artifact before uploading it to App Store Connect.
+
+Native feedback: transport play uses a press pulse and agent completion uses a double pulse; other buttons use restrained selection feedback. Settings > Touch feedback disables it on this device. The WebView fills the display while CSS safe-area variables inset controls. Page RGB backgrounds synchronize the shell and status bar. This change preserves the existing audio rendering pipeline and .vibe project format.

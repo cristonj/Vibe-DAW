@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import {haptic} from '../native/native-haptics';
 import { produce } from 'immer';
 import type { Project } from '../model/types';
 import { beatToBar } from '../model/project';
@@ -184,6 +185,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   let planId: string | null = null;
   let plan: PlanStep[] = [];
   let malformedRetried = false;
+  let completed = false;
   const baseGoal = text.trim() ? text : 'The user asked by voice (see the voice message in the conversation).';
   let goal = baseGoal;
   let requestedSummary: string | undefined;
@@ -253,6 +255,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
       const calls = res.content.parts.filter((p) => p.functionCall).map((p) => p.functionCall!);
       if (!calls.length) {
         if (useAgent.getState().steering.length) continue;
+        completed = true;
         break;
       }
 
@@ -294,6 +297,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
     }
   } finally {
     if (active()) {
+    if(completed && !abort.signal.aborted)haptic('message-complete');
     // Also bound persisted conversation memory when this run finishes or stops.
     history = retireVoices(history);
     try { history = compactHistory(history).history; } catch { history = [{ role: 'user', parts: [{ text: `<context_summary>\n${summarizeHistory(history)}\n</context_summary>` }] }]; }

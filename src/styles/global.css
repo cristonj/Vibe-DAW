@@ -6,7 +6,7 @@
   grid-template-columns: auto 1fr auto;
   grid-template-areas: 'top top top' 'browser main agent';
   height: 100%;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
 }
 
 .topbar { grid-area: top; }
@@ -652,7 +652,7 @@
 .inline-ai input { width: 100%; border: 0; background: transparent; font-size: 15px; padding: 4px 0; }
 .inline-ai .hint { color: var(--faint); font-size: 11px; margin-top: 6px; }
 
-.toast-wrap { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); max-width: calc(100% - 24px); left: 50%; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.toast-wrap { position: fixed; bottom: calc(16px + var(--safe-bottom)); max-width: calc(100% - 24px); left: 50%; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 6px; align-items: center; }
 .toast { background: var(--raised); box-shadow: var(--shadow-pop); padding: 8px 14px; border-radius: var(--radius-m); font-size: 12.5px; }
 .toast.error { color: var(--rec); }
 
@@ -877,8 +877,8 @@ kbd {
     box-shadow: var(--shadow-pop);
     transition: transform 0.22s ease, visibility 0.22s;
   }
-  .browser { left: 0; width: min(300px, 86%); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  .agent { right: 0; width: min(420px, 100%); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0; }
+  .browser { left: 0; width: min(300px, 86%); padding: var(--safe-top) 0 var(--safe-bottom) var(--safe-left); }
+  .agent { right: 0; width: min(420px, 100%); padding: var(--safe-top) var(--safe-right) var(--safe-bottom) 0; }
   .browser.collapsed, .agent.collapsed { visibility: hidden; box-shadow: none; }
   .browser.collapsed { width: min(300px, 86%); transform: translateX(-100%); }
   .agent.collapsed { width: min(420px, 100%); transform: translateX(100%); }
@@ -951,7 +951,7 @@ kbd {
   .val-input { width: 64px; }
 
   .overlay { align-items: end; }
-  .modal { width: 100%; max-height: 92%; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); border-radius: var(--radius-l) var(--radius-l) 0 0; }
+  .modal { width: 100%; max-height: 92%; padding: 16px 16px calc(16px + var(--safe-bottom)); border-radius: var(--radius-l) var(--radius-l) 0 0; }
   .modal.help { width: 100%; }
   .settings-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .settings-tabs::-webkit-scrollbar { display: none; }
@@ -961,7 +961,7 @@ kbd {
   .howto div { grid-template-columns: 1fr; gap: 2px; }
   .shortcuts td:first-child { width: auto; padding-right: 10px; }
   .key-capture { min-width: 0; }
-  .inline-ai { top: calc(12px + env(safe-area-inset-top)); }
+  .inline-ai { top: calc(12px + var(--safe-top)); }
 }
 
 
@@ -1114,7 +1114,7 @@ body { background: var(--app-bg); }
 
 /* On wide screens the regions become floating panels with gutters between them. */
 @media (min-width: 1025px) {
-  .app { --gutter: 6px; grid-template-rows: calc(52px + var(--gutter)) 1fr; padding: max(var(--gutter), env(safe-area-inset-top)) max(var(--gutter), env(safe-area-inset-right)) max(var(--gutter), env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left)); }
+  .app { --gutter: 6px; grid-template-rows: calc(52px + var(--gutter)) 1fr; padding: max(var(--gutter), var(--safe-top)) max(var(--gutter), var(--safe-right)) max(var(--gutter), var(--safe-bottom)) max(var(--gutter), var(--safe-left)); }
   .topbar { margin-bottom: var(--gutter); }
   .topbar, .browser, .agent, .arrange, .dock { border: 0; border-radius: var(--radius-l); box-shadow: inset 0 1px 0 var(--edge), var(--lift); }
   .browser.collapsed, .agent.collapsed { box-shadow: none; }
@@ -1259,3 +1259,11 @@ body { background: var(--app-bg); }
 .toggle-item.on .toggle-switch::after { transform: translateX(12px); background: var(--bg); }
 .model-selector { max-width: 190px; min-width: 0; font-size: 12px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
 .arrange-tools > .spacer { flex: 1; }
+
+/* Native pages paint edge-to-edge; only interactive content is inset. */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--native-safe-right, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--native-safe-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--native-safe-left, 0px));
+}
