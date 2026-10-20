@@ -141,8 +141,8 @@ function AiSettings() {
         <div className="field">
           <span>Account</span>
           {user ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Cloud size={14} /> {user.email ?? user.name}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, overflowWrap: 'anywhere' }}><Cloud size={14} style={{ flex: 'none' }} /> {user.email ?? user.name}</span>
               <button className="btn" onClick={() => void syncNow().then(() => toast('Synced'))}>Sync now</button>
               <button className="btn" onClick={() => void signOut()}><LogOut size={14} /> Sign out</button>
               <button className="btn danger" onClick={() => {if(confirm('Permanently delete your Vibe account, cloud projects, samples, library, and settings? Local project copies stay on this device. This cannot be undone.')) void deleteAccount().then(()=>toast('Account deleted')).catch(e=>toast(e.message,'error'));}}>Delete account</button>
