@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type AnimationEvent, type PointerEvent } from 'react';
 import { Wordmark } from '../brand/Wordmark';
+import { MusicTheoryIdentity } from './MusicTheoryIdentity';
 import { donationWallets } from './donations';
 import './landing.css';
 
@@ -202,10 +203,7 @@ export function Landing() {
 
       <section className="lp-theory lp-wrap lp-reveal" aria-labelledby="lp-theory-title">
         <div className="lp-theory-brand">
-          <picture>
-            <source media="(prefers-reduced-motion: reduce)" srcSet="/related/musictheory-wordmark.svg" />
-            <img src="/related/musictheory-morph.svg" width="1120" height="530" loading="lazy" decoding="async" alt="MusicTheory.Work, with its MTW mark transforming into the wordmark" />
-          </picture>
+          <MusicTheoryIdentity />
           <picture className="lp-theory-screen"><source media="(max-width:720px)" srcSet="/related/musictheory-lesson-phone.webp" /><img className="lp-theory-shot" src="/related/musictheory-lesson.webp" width="1280" height="900" loading="lazy" decoding="async" alt="A real MusicTheory.Work lesson teaching C with a playable piano keyboard" /></picture>
         </div>
         <div className="lp-copy">
