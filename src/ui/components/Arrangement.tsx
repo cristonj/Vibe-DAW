@@ -22,6 +22,7 @@ import { tip, useKeymap } from '../../state/keymap';
 import { toast } from '../toast';
 import { useTheme } from '../../state/theme';
 import { addTrack as addTrackAction, copySelectedClips, deleteSelectedClips, duplicateSelectedClips, newClipOnSelectedTrack, pasteClips, placeSample, splitAtPlayhead } from '../actions';
+import {isNativeApp} from '../../native/native-bridge';
 
 const HEADER_W = 200;
 const HEADER_W_PHONE = 124;
@@ -304,7 +305,9 @@ function EmptyHero() {
     setDismissed(true);
     try { localStorage.setItem(HERO_DISMISSED, '1'); } catch { /* storage disabled */ }
   };
-  if (dismissed || aiAvailable().ok) return null;
+  // The native studio is usable without AI or an external account/key.
+  // Key setup remains available when the user chooses the Producer or Settings.
+  if (isNativeApp() || dismissed || aiAvailable().ok) return null;
   // Portaled to <body>: the arrangement's container query contains fixed descendants.
   return createPortal(
     <div className="empty-arrange">
