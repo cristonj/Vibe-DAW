@@ -23,7 +23,7 @@ test('landing opens the studio without loading its audio engine', async ({ page 
   const requests: string[] = [];
   page.on('request', (req) => requests.push(req.url()));
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The open source agentic DAW built to enhance, not replace, human creativity.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Make music\.\s*Make it yours\./);
   await expect(page.getByRole('main').getByRole('img', { name: 'Vibe', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation')).toHaveCount(0);
   expect(requests.some((url) => /tone|firebase|studio\.tsx|genai/.test(url))).toBe(false);
@@ -366,7 +366,6 @@ test('tooltips stay inside viewport edges with a zoomed interface and disappear 
   await page.mouse.move(0, 0); await expect(tip).not.toBeVisible();
 });
 
-
 test('toolbar menus fit, edit clips, and keep timeline controls reachable', async ({ page }) => {
   await fixture(page);
   for (const width of [1440, 1100, 820, 390, 320]) {
@@ -412,7 +411,7 @@ test('model menu uses the shared UI and preserves the selected model', async ({ 
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText('Gemini 4 Argon');
 });
 
-test('landing mixer fits its frame and prompts continue moving on hover', async ({ page }, info) => {
+test('landing mixer fits and brand animation continues on hover', async ({ page }, info) => {
   await page.goto('/');
   const mixer = page.locator('.lp-mixer');
   await mixer.scrollIntoViewIfNeeded();
@@ -422,7 +421,8 @@ test('landing mixer fits its frame and prompts continue moving on hover', async 
   expect(await mixer.locator('img').evaluate((el) => Math.abs((el as HTMLElement).offsetWidth - el.parentElement!.clientWidth) < 2)).toBe(true);
   expect(await page.locator('.landing').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   if (info.project.name === 'desktop') {
-    await page.locator('.lp-ticker').hover();
-    expect(await page.locator('.lp-ticker-row').first().evaluate((el) => getComputedStyle(el).animationPlayState)).toBe('running');
+    await page.locator('.lp-wordmark-wrap').hover();
+    await expect(page.locator('.lp-wordmark-wrap')).toHaveAttribute('data-lp-motion', 'running');
+    expect(await page.locator('.lp-wordmark .vibe-letter').first().evaluate((el) => getComputedStyle(el).animationPlayState.split(',').every(state => state.trim() === 'running'))).toBe(true);
   }
 });

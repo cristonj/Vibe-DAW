@@ -16,7 +16,7 @@ const PIECES: Piece[] = [];
 let order = 0;
 for (const [text, width, top] of [['MusicTheory', 1120, 0], ['.Work', 800, 215]] as const) {
   const scale = width / [...text].reduce((sum, letter) => sum + BRAND_GLYPHS[letter].width + 5, 0);
-  let left = 0;
+  let left = (1120 - width) / 2;
   for (const [index, letter] of [...text].entries()) {
     const glyph = BRAND_GLYPHS[letter];
     const anchor = letter === 'M' ? 0 : letter === 'T' ? 1 : letter === 'W' ? 2 : -1;
