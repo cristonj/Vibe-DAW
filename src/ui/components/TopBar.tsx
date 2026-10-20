@@ -18,9 +18,10 @@ import { VibeMark, Wordmark } from '../../brand/Wordmark';
 import { flowSeconds, useTheme } from '../../state/theme';
 
 function Position() {
-  const pos = useTransport((s) => s.position);
   const ts = useDaw((s) => s.project.timeSignature);
-  return <div className="pos" title="Bar . beat . sixteenth">{formatPosition({ timeSignature: ts }, pos)}</div>;
+  // The display changes at sixteenths, while the playhead moves every frame.
+  const label = useTransport((s) => formatPosition({ timeSignature: ts }, s.position));
+  return <div className="pos" title="Bar . beat . sixteenth">{label}</div>;
 }
 
 export function TopBar(props: { onOpenSettings: () => void; onOpenProjects: () => void; onOpenHelp: () => void; browserOpen: boolean; agentOpen: boolean; toggleBrowser: () => void; toggleAgent: () => void }) {

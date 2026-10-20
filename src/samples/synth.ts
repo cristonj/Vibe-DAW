@@ -2,6 +2,8 @@
 // so the app ships a full, royalty-free kit with zero downloads - and the agent can
 // design new one-shots (a longer 808, a crunchier snare) through the same functions.
 
+import { withRenderSlot } from '../engine/renderQueue';
+
 export const SR = 44100;
 
 type Ctx = OfflineAudioContext;
@@ -51,13 +53,17 @@ function env(param: AudioParam, t0: number, peak: number, attack: number, decay:
   param.exponentialRampToValueAtTime(Math.max(floor, 0.0001), t0 + attack + Math.max(0.005, decay));
 }
 
-async function render(seconds: number, build: (ctx: Ctx, out: AudioNode) => void, channels = 1): Promise<AudioBuffer> {
-  const ctx = new OfflineAudioContext(channels, Math.ceil(seconds * SR), SR);
-  const out = ctx.createGain();
-  out.connect(ctx.destination);
-  build(ctx, out);
-  const buf = await ctx.startRendering();
-  return normalize(buf, 0.89);
+function render(seconds: number, build: (ctx: Ctx, out: AudioNode) => void, channels = 1): Promise<AudioBuffer> {
+  // Startup requests the entire kit together. Share the native rendering budget
+  // with exports/freezes instead of allocating 32 contexts at once on a phone.
+  return withRenderSlot(async () => {
+    const ctx = new OfflineAudioContext(channels, Math.ceil(seconds * SR), SR);
+    const out = ctx.createGain();
+    out.connect(ctx.destination);
+    build(ctx, out);
+    const buf = await ctx.startRendering();
+    return normalize(buf, 0.89);
+  });
 }
 
 export function normalize(buf: AudioBuffer, target = 0.89): AudioBuffer {

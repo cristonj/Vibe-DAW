@@ -1,4 +1,4 @@
-/* Landing. Same ink-navy palette as the studio (global.css :root), with the brand gradient
+/* Landing. Same ink-navy palette as the studio (base.css :root), with the brand gradient
    kept for what it means in the app: the agent's ink. */
 .landing { --flow-duration: 12s; color-scheme: dark; height: 100%; overflow-y: auto; overflow-x: hidden; background: var(--bg); color: var(--text); font-size: 17px; line-height: 1.6; user-select: text; scroll-behavior: smooth; }
 .landing a { color: inherit; text-decoration: none; }
@@ -17,14 +17,16 @@
 .landing .lp-cta:hover { transform: translateY(-2px); }
 .landing .lp-cta:active { transform: translateY(1px); }
 .lp-cta > * { position: relative; z-index: 1; }
-.lp-cta::before { content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 20px; background: var(--agent-flow) 0 0 / 200% 100%; filter: blur(20px); opacity: 0.36; animation: lp-cta-glow 3.4s ease-in-out infinite, flow-1 var(--flow-duration) ease-in-out infinite alternate; }
-.lp-cta::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.6) 50%, transparent 62%) -150% 0 / 250% 100% no-repeat; animation: lp-cta-sheen 5s ease-in-out 1.8s infinite; }
+.lp-cta::before { content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 20px; background: var(--agent-flow) 0 0 / 200% 100%; filter: blur(20px); opacity: 0.36; animation: lp-cta-glow 3.4s ease-in-out infinite, lp-glow-flow var(--flow-duration) ease-in-out infinite alternate; }
+.lp-cta > .lp-sheen { position: absolute; inset: 0; z-index: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.lp-sheen::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 250%;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.6) 50%, transparent 62%); transform: translateX(90%); animation: lp-cta-sheen 5s ease-in-out 1.8s infinite; }
 .lp-cta svg { transition: transform 200ms ease; }
 .lp-cta:hover svg { transform: translateX(4px); }
 @keyframes lp-cta-flow { to { background-position: 0 0, 100% 0; } }
+@keyframes lp-glow-flow { to { background-position: 100% 0; } }
 @keyframes lp-cta-glow { 50% { opacity: 0.58; transform: scale(1.04); } }
-@keyframes lp-cta-sheen { 0% { background-position: -150% 0; } 35%, 100% { background-position: 250% 0; } }
+@keyframes lp-cta-sheen { 0% { transform: translateX(90%); } 35%, 100% { transform: translateX(-150%); } }
 .lp-btn.ghost { background: var(--panel); color: var(--text) !important; box-shadow: inset 0 0 0 1px var(--line); }
 .lp-btn.ghost:hover { background: var(--raised); }
 .lp-actions { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -47,8 +49,10 @@
 /* The hero: centered, under a slow aurora in the brand colors. */
 .lp-hero { position: relative; overflow-x: clip; overflow-clip-margin: 0; display: flex; flex-direction: column; align-items: center; padding-top: 104px; text-align: center; }
 .lp-hero > * { position: relative; }
-.lp-aurora { position: absolute !important; z-index: 0; top: -100px; left: 50%; width: min(1240px, 140vw); height: 780px; translate: -50% 0; pointer-events: none; filter: blur(80px); opacity: 0.3; }
-.lp-aurora i { position: absolute; border-radius: 50%; }
+.lp-aurora { position: absolute !important; z-index: 0; top: -100px; left: 50%; width: min(1240px, 140vw); height: 780px; translate: -50% 0; pointer-events: none; opacity: 0.3; }
+/* Blur each blob once, then composite its movement. Blurring their moving parent
+   rerasterized the whole 1240 x 780 surface on every frame, especially costly at phone DPR. */
+.lp-aurora i { position: absolute; border-radius: 50%; filter: blur(80px); will-change: transform; }
 .lp-aurora i:nth-child(1) { left: 12%; top: 6%; width: 44%; height: 60%; background: #b69cff; animation: lp-aurora-a 19s ease-in-out infinite alternate; }
 .lp-aurora i:nth-child(2) { left: 36%; top: 22%; width: 38%; height: 50%; background: #ff8fcf; animation: lp-aurora-b 23s ease-in-out infinite alternate; }
 .lp-aurora i:nth-child(3) { left: 54%; top: 2%; width: 34%; height: 46%; background: #ffb547; opacity: 0.5; animation: lp-aurora-c 17s ease-in-out infinite alternate; }
@@ -89,6 +93,10 @@
 .lp-ticker ul { display: flex; gap: 56px; margin: 0; padding: 0 56px 0 0; list-style: none; }
 .lp-ticker li { white-space: nowrap; font-size: 17px; color: var(--muted); }
 @keyframes lp-tick { to { transform: translateX(-50%); } }
+/* Offscreen and background-tab motion retains its place without painting. */
+[data-lp-motion] { --lp-play: running; }
+[data-lp-motion='paused'] { --lp-play: paused; }
+:is(.landing mark, .lp-aurora i, .lp-cta, .lp-cta::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-letter.bop, .lp-wordmark .vibe-dot, .lp-ticker-row) { animation-play-state: var(--lp-play, running); }
 #support { scroll-margin-top: 48px; }
 
 .lp-hero-shot { position: relative; width: 100%; margin-top: 76px; text-align: left; }
@@ -180,8 +188,10 @@
    the scroll position itself. Browsers without scroll timelines show everything still. */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    .lp-reveal { animation: lp-reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
-    .lp-hero-shot .lp-frame { transform-origin: 50% 0; animation: lp-tilt linear both; animation-timeline: view(); animation-range: entry 40% cover 55%; }
+    /* Start just before entry and finish near the viewport edge. These ranges depend
+       on viewport height, so tall sections don't stay hidden on landscape phones. */
+    .lp-reveal { animation: lp-reveal linear both; animation-timeline: view(); animation-range: entry -120px entry min(160px, 25svh); }
+    .lp-hero-shot .lp-frame { transform-origin: 50% 0; animation: lp-tilt linear both; animation-timeline: view(); animation-range: entry -120px entry min(360px, 65svh); }
   }
 }
 @keyframes lp-reveal { from { opacity: 0; transform: translateY(64px) scale(0.98); } }
@@ -189,7 +199,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing { scroll-behavior: auto; }
-  .landing mark, .lp-aurora i, .lp-btn, .lp-cta::before, .lp-cta::after { animation: none; transition: none; }
+  .landing mark, .lp-aurora i, .lp-btn, .lp-cta::before, .lp-sheen::after { animation: none; transition: none; }
+  .lp-aurora i { will-change: auto; }
   /* Still opens and closes, just without the motion. */
   .lp-qr-panel, .lp-qr-panel .lp-qr { animation-duration: 1ms; }
   .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop { animation: none; }

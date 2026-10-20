@@ -70,6 +70,18 @@ describe('sample transfer between devices', () => {
     expect(lib.getSampleMeta('s-local')?.storagePath).toBe(remote.storagePath);
   });
 
+  it('publishes a cloud snapshot once and preserves existing fields across repeated IDs', async () => {
+    lib.useLibrary.getState().upsert({ ...meta(), storagePath: 'users/a/samples/s-local' });
+    const changed = vi.fn();
+    const unsubscribe = lib.useLibrary.subscribe(changed);
+    lib.mergeRemoteSamples([{ ...meta(), name: 'Renamed' }, meta('s-new'), { ...meta('s-new'), name: 'Latest' }]);
+    unsubscribe();
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(lib.getSampleMeta('s-local')).toMatchObject({ name: 'Renamed', storagePath: 'users/a/samples/s-local' });
+    expect(lib.getSampleMeta('s-new')?.name).toBe('Latest');
+    await vi.waitFor(() => expect(mocks.data.get('vibe:samples:index')).toHaveLength(2));
+  });
+
   it('backfills referenced local audio and skips already uploaded files on later saves', async () => {
     lib.useLibrary.getState().upsert(meta());
     const bytes = audio();

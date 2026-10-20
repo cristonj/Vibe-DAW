@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { getLoadedBuffer, loadBuffer, useLibrary } from '../samples/library';
-import { waveformPeaks } from '../samples/analysis';
+import { cachedPeaks, peaksForBuffer } from './waveform';
 
 /** Requests animation frames while mounted, calling `fn` each frame. */
 export function useAnimationFrame(fn: () => void, active = true) {
@@ -15,31 +15,25 @@ export function useAnimationFrame(fn: () => void, active = true) {
   }, [active]);
 }
 
-const peakCache = new Map<string, Float32Array>();
-
 /** Waveform peaks for a sample (2048 buckets), loading the audio if needed. */
 export function usePeaks(sampleId: string | undefined, reverse = false): Float32Array | null {
   const meta = useLibrary((s) => sampleId ? s.samples[sampleId] : undefined);
   const key = `${sampleId}|${reverse}`;
-  const [peaks, setPeaks] = useState<Float32Array | null>(() => peakCache.get(key) ?? null);
+  const readCached = () => cachedPeaks(sampleId ? getLoadedBuffer(sampleId) : undefined, reverse);
+  const [result, setResult] = useState(() => ({ key, peaks: readCached() }));
   useEffect(() => {
-    setPeaks(peakCache.get(key) ?? null);
-    if (!sampleId) return;
-    const cached = peakCache.get(key);
-    if (cached) { setPeaks(cached); return; }
+    if (!sampleId) { setResult({ key, peaks: null }); return; }
+    const cached = cachedPeaks(getLoadedBuffer(sampleId), reverse);
+    if (cached) { setResult({ key, peaks: cached }); return; }
     let alive = true;
     (async () => {
       const buf = getLoadedBuffer(sampleId) ?? (await loadBuffer(sampleId));
       if (!buf || !alive) return;
-      let p = waveformPeaks(buf, 2048);
-      if (reverse) p = p.slice().reverse();
-      peakCache.set(key, p);
-      if (peakCache.size > 256) peakCache.delete(peakCache.keys().next().value!);
-      setPeaks(p);
+      setResult({ key, peaks: peaksForBuffer(buf, reverse) });
     })().catch((e) => console.warn('Waveform could not load', e));
     return () => { alive = false; };
   }, [sampleId, key, reverse, meta]);
-  return peaks;
+  return result.key === key ? result.peaks : readCached();
 }
 
 export function isTypingTarget(t: EventTarget | null): boolean {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Square, Ear, Plus, Play, Check, RotateCcw, Paperclip, X, Brain, ListChecks, Eye, Mic, LoaderCircle, Pause, Shuffle, AtSign, Wrench,
 } from '../icons';
@@ -75,7 +75,7 @@ function VoiceNote({ url, seconds }: { url: string; seconds: number }) {
   );
 }
 
-function Item({ item }: { item: ChatItem }) {
+const Item = memo(function Item({ item }: { item: ChatItem }) {
   switch (item.kind) {
     case 'user':
       return (
@@ -121,7 +121,7 @@ function Item({ item }: { item: ChatItem }) {
     case 'error':
       return <div className="err">{item.text}</div>;
   }
-}
+});
 
 export function AgentPanel({ open, focusSignal, onClose }: { open: boolean; focusSignal: number; onClose: () => void }) {
   const items = useAgent((s) => s.items);

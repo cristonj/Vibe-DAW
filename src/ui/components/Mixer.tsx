@@ -12,9 +12,34 @@ function levelToPct(db: number) {
 function Meter({ read }: { read: () => number }) {
   const fill = useRef<HTMLDivElement>(null);
   useAnimationFrame(() => {
-    if (fill.current) fill.current.style.height = `${levelToPct(read())}%`;
+    paintMeter(fill.current, read());
   });
   return <div className="meter" aria-hidden><div className="fill" ref={fill} /></div>;
+}
+
+const paintedLevels = new WeakMap<HTMLDivElement, number>();
+
+function paintMeter(el: HTMLDivElement | null, db: number) {
+  if (!el) return;
+  // Clip the full-height gradient so its colors stay fixed as the level moves.
+  // Updating height forced layout for every channel on every animation frame.
+  const pct = levelToPct(db);
+  if (paintedLevels.get(el) === pct) return;
+  paintedLevels.set(el, pct);
+  el.style.clipPath = `inset(${100 - pct}% 0 0)`;
+}
+
+function MasterMeter() {
+  const left = useRef<HTMLDivElement>(null), right = useRef<HTMLDivElement>(null);
+  useAnimationFrame(() => {
+    const levels = getMasterLevels();
+    paintMeter(left.current, levels[0]);
+    paintMeter(right.current, levels[1]);
+  });
+  return <>
+    <div className="meter" aria-hidden><div className="fill" ref={left} /></div>
+    <div className="meter" aria-hidden><div className="fill" ref={right} /></div>
+  </>;
 }
 
 const Strip = memo(function Strip({ track, selected }: { track: Track; selected: boolean }) {
@@ -53,8 +78,7 @@ export function Mixer() {
         <span className="fx-count">{master.effects.length} fx</span>
         <div className="fader-wrap">
           <input className="fader" type="range" min={-24} max={6} step={0.5} value={master.volumeDb} style={rangeFill(master.volumeDb, -24, 6)} onChange={(e) => update('Master volume', (d) => { d.master.volumeDb = Number(e.target.value); }, { coalesce: true })} aria-label="Master volume" />
-          <Meter read={() => getMasterLevels()[0]} />
-          <Meter read={() => getMasterLevels()[1]} />
+          <MasterMeter />
         </div>
         <span className="db">{master.volumeDb.toFixed(1)} dB</span>
       </div>

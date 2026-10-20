@@ -132,7 +132,14 @@ async function persistIndex() {
 
 /** Cloud metadata can arrive after the project; persist it and notify audio/UI. */
 export function mergeRemoteSamples(samples: SampleMeta[]) {
-  for (const meta of samples) useLibrary.getState().upsert({ ...getSampleMeta(meta.id), ...meta });
+  if (!samples.length) return;
+  // A cloud snapshot can contain hundreds of sounds. Publish it once so the
+  // browser and audio graph don't repeat their work for each individual entry.
+  useLibrary.setState((s) => {
+    const merged = { ...s.samples };
+    for (const meta of samples) merged[meta.id] = { ...merged[meta.id], ...meta };
+    return { samples: merged };
+  });
   void persistIndex();
 }
 

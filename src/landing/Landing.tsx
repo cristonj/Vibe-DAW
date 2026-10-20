@@ -1,4 +1,4 @@
-import { useEffect, useState, type AnimationEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type AnimationEvent, type PointerEvent } from 'react';
 import { Wordmark } from '../brand/Wordmark';
 import { donationWallets } from './donations';
 import './landing.css';
@@ -94,7 +94,7 @@ const PROMPTS = [
 ];
 
 function Ticker() {
-  return <section className="lp-ticker" aria-label="Things you can ask the Producer">
+  return <section className="lp-ticker" data-lp-motion="running" aria-label="Things you can ask the Producer">
     {PROMPTS.map((row, k) => <div key={k} className="lp-ticker-row">
       {/* Two copies, so the row can loop seamlessly. The second is for the eye only. */}
       {[0, 1].map((copy) => <ul key={copy} aria-hidden={copy === 1 || undefined}>{row.map((p) => <li key={p}>{p}</li>)}</ul>)}
@@ -106,14 +106,54 @@ function Ticker() {
 const bop = (e: PointerEvent) => (e.target as Element).closest('.vibe-letter')?.classList.add('bop');
 const unbop = (e: AnimationEvent) => { if (e.animationName === 'lp-bop') (e.target as Element).classList.remove('bop'); };
 
+/** Keep each animation's place while it is offscreen, including SVG color flow. */
+function useVisibleMotion() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || typeof IntersectionObserver === 'undefined') return;
+    const groups = [...root.querySelectorAll<HTMLElement>('[data-lp-motion]')];
+    const visible = new Set<Element>();
+    const update = (el: Element) => {
+      const active = visible.has(el) && !document.hidden;
+      el.setAttribute('data-lp-motion', active ? 'running' : 'paused');
+      for (const svg of el.querySelectorAll('svg')) {
+        if (active) svg.unpauseAnimations?.();
+        else svg.pauseAnimations?.();
+      }
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) visible.add(entry.target);
+        else visible.delete(entry.target);
+        update(entry.target);
+      }
+    }, { root, rootMargin: '160px' });
+    groups.forEach((el) => observer.observe(el));
+    const visibility = () => groups.forEach(update);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', visibility);
+      // StrictMode remounts effects in development without remounting the SVG.
+      for (const el of groups) {
+        el.setAttribute('data-lp-motion', 'running');
+        el.querySelectorAll('svg').forEach((svg) => svg.unpauseAnimations?.());
+      }
+    };
+  }, []);
+  return ref;
+}
+
 export function Landing() {
-  return <div className="landing">
+  const ref = useVisibleMotion();
+  return <div className="landing" ref={ref}>
     <main>
       <section className="lp-hero lp-wrap">
-        <div className="lp-aurora" aria-hidden><i /><i /><i /></div>
-        <div className="lp-wordmark-wrap" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" glow flow={12} /></div>
-        <h1>The open source agentic DAW built to <mark>enhance, not replace,</mark> human creativity.</h1>
-        <div className="lp-hero-actions"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /></a><a className="lp-support-link" href="#support">Support the project</a></div>
+        <div className="lp-aurora" data-lp-motion="running" aria-hidden><i /><i /><i /></div>
+        <div className="lp-wordmark-wrap" data-lp-motion="running" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" glow flow={12} /></div>
+        <h1 data-lp-motion="running">The open source agentic DAW built to <mark>enhance, not replace,</mark> human creativity.</h1>
+        <div className="lp-hero-actions" data-lp-motion="running"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /><span className="lp-sheen" aria-hidden /></a><a className="lp-support-link" href="#support">Support the project</a></div>
         <figure className="lp-hero-shot">
           <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.studio} alt="The Vibe studio: five tracks on the timeline with a new flute part outlined in the agent's gradient, the Producer's run and its Changes to review card on the right, and the mixer below." /></div>
         </figure>
@@ -163,7 +203,7 @@ export function Landing() {
       <section className="lp-end lp-wrap" id="support">
         <h2>Free and open source.</h2>
         <p>MIT licensed. Runs in your browser with no install and no account. Every music tool works without AI. The Producer uses your own Gemini key, which has a free tier.</p>
-        <div className="lp-actions"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /></a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">Star it on GitHub</a></div>
+        <div className="lp-actions" data-lp-motion="running"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /><span className="lp-sheen" aria-hidden /></a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">Star it on GitHub</a></div>
         <Support />
       </section>
     </main>

@@ -1,7 +1,7 @@
 import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Landing } from './landing/Landing';
-import './styles/global.css';
+import './styles/base.css';
 
 // The landing route never initializes IndexedDB, Firebase, AI, or audio.
 const Studio = lazy(() => import('./studio'));

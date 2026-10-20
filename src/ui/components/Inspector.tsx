@@ -10,7 +10,7 @@ import { useLibrary } from '../../samples/library';
 import { previewNote } from '../../engine/api';
 import { rangeFill } from '../hooks';
 import { CUSTOM_BLANK, CUSTOM_STARTERS, customDefaults, effectName, newCustomEffect } from '../../model/customEffect';
-import { useCustomFxErrors } from '../../engine/customFx';
+import { useCustomFxErrors } from '../../state/customFxErrors';
 import { usePresets } from '../../state/presetLibrary';
 import { libraryPlugins, loadFromLibrary } from '../presetActions';
 import { openCustomEffectEditor } from './CustomEffectEditor';

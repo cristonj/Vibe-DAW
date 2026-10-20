@@ -37,29 +37,29 @@ function snapBeat(beat: number, snap: number, bpb: number) {
 
 // ---------------------------------------------------------------- clip bodies
 
-const MidiBody = memo(function MidiBody({ clip, track }: { clip: MidiClip; track: Track }) {
-  if (!clip.notes.length) return null;
-  if (track.kind === 'drums') {
-    const lanes = track.drumLanes ?? [];
+const MidiBody = memo(function MidiBody({ notes, length, kind, drumLanes }: { notes: MidiClip['notes']; length: number; kind: Track['kind']; drumLanes: Track['drumLanes'] }) {
+  if (!notes.length) return null;
+  if (kind === 'drums') {
+    const lanes = drumLanes ?? [];
     const idx = new Map(lanes.map((l, i) => [l.note, i]));
     const rows = Math.max(1, lanes.length);
     return (
-      <svg viewBox={`0 0 ${clip.length} ${rows}`} preserveAspectRatio="none" aria-hidden>
-        {clip.notes.map((n) => {
+      <svg viewBox={`0 0 ${length} ${rows}`} preserveAspectRatio="none" aria-hidden>
+        {notes.map((n) => {
           const r = idx.get(n.pitch);
-          if (r === undefined || n.start >= clip.length) return null;
-          return <rect key={n.id} x={n.start} y={r + 0.15} width={Math.min(0.12, clip.length / 64)} height={0.7} fill="rgba(255,255,255,0.75)" opacity={0.4 + n.velocity * 0.6} />;
+          if (r === undefined || n.start >= length) return null;
+          return <rect key={n.id} x={n.start} y={r + 0.15} width={Math.min(0.12, length / 64)} height={0.7} fill="rgba(255,255,255,0.75)" opacity={0.4 + n.velocity * 0.6} />;
         })}
       </svg>
     );
   }
   let lo = 127, hi = 0;
-  for (const n of clip.notes) { lo = Math.min(lo, n.pitch); hi = Math.max(hi, n.pitch); }
+  for (const n of notes) { lo = Math.min(lo, n.pitch); hi = Math.max(hi, n.pitch); }
   const span = Math.max(12, hi - lo + 3);
   const top = hi + 2;
   return (
-    <svg viewBox={`0 0 ${clip.length} ${span}`} preserveAspectRatio="none" aria-hidden>
-      {clip.notes.map((n) => (n.start < clip.length ? <rect key={n.id} x={n.start} y={top - n.pitch - 1} width={Math.max(0.05, Math.min(n.duration, clip.length - n.start))} height={0.9} rx={0.08} fill="rgba(255,255,255,0.82)" /> : null))}
+    <svg viewBox={`0 0 ${length} ${span}`} preserveAspectRatio="none" aria-hidden>
+      {notes.map((n) => (n.start < length ? <rect key={n.id} x={n.start} y={top - n.pitch - 1} width={Math.max(0.05, Math.min(n.duration, length - n.start))} height={0.9} rx={0.08} fill="rgba(255,255,255,0.82)" /> : null))}
     </svg>
   );
 });
@@ -69,6 +69,8 @@ function AudioBody({ clip, project, widthPx }: { clip: AudioClip; project: Proje
   const ref = useRef<HTMLCanvasElement>(null);
   const meta = getSampleMeta(clip.sampleId);
   const theme = useTheme((s) => s.theme);
+  const rate = audioClipRate(project, clip, meta?.bpm);
+  const { length, offset, loop, gainDb } = clip;
   useLayoutEffect(() => {
     const cv = ref.current;
     if (!cv || !peaks || !meta) return;
@@ -79,18 +81,18 @@ function AudioBody({ clip, project, widthPx }: { clip: AudioClip; project: Proje
     const g = cv.getContext('2d')!;
     g.scale(devicePixelRatio, devicePixelRatio);
     g.fillStyle = getComputedStyle(cv).color; // --clip-ink, via .clip > canvas
-    const rate = audioClipRate(project, clip, meta.bpm);
-    const secPerPx = ((clip.length * 60) / project.bpm / w) * rate;
+    const secPerPx = ((length * 60) / project.bpm / w) * rate;
     const dur = meta.duration;
+    const gain = Math.pow(10, gainDb / 20);
     for (let x = 0; x < w; x++) {
-      let t = clip.offset + x * secPerPx;
-      if (clip.loop && dur > 0) t = t % dur;
+      let t = offset + x * secPerPx;
+      if (loop && dur > 0) t = t % dur;
       if (t >= dur) break;
       const idx = Math.floor((t / dur) * peaks.length);
-      const v = peaks[Math.min(peaks.length - 1, idx)] * (h / 2 - 1) * Math.pow(10, clip.gainDb / 20);
+      const v = peaks[Math.min(peaks.length - 1, idx)] * (h / 2 - 1) * gain;
       g.fillRect(x, h / 2 - v, 1, Math.max(1, v * 2));
     }
-  }, [peaks, widthPx, clip, project.bpm, meta, theme]);
+  }, [peaks, widthPx, length, offset, loop, gainDb, rate, project.bpm, meta, theme]);
   if (!meta) return null;
   return <canvas ref={ref} aria-hidden />;
 }
@@ -113,7 +115,7 @@ function ClipView({ clip, track, project, zoom, selected, onPointerDown, onDoubl
       title={`${clip.name}${clip.aiPending ? ' - made by the agent (not reviewed yet)' : ''} · drag to move, drag the right edge to resize (Shift = fine), double-click to edit`}
     >
       <div className="cname"><span>{clip.name}</span>{selected && <AddToChat referenceId={`clip:${clip.id}`} label={clip.name} mini />}</div>
-      {clip.type === 'midi' ? <MidiBody clip={clip} track={track} /> : <AudioBody clip={clip} project={project} widthPx={w} />}
+      {clip.type === 'midi' ? <MidiBody notes={clip.notes} length={clip.length} kind={track.kind} drumLanes={track.drumLanes} /> : <AudioBody clip={clip} project={project} widthPx={w} />}
       <div className="resize" onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, 'resize'); }} />
     </div>
   );
@@ -207,25 +209,33 @@ function scrub(e: RPointerEvent, toBeat: (ev: PointerEvent | RPointerEvent) => n
 }
 
 function Playhead({ zoom, headerW, scroller }: { zoom: number; headerW: number; scroller: React.RefObject<HTMLDivElement | null> }) {
-  const pos = useTransport((s) => s.position);
-  const playing = useTransport((s) => s.playing);
-  const follow = useDaw((s) => s.followPlayhead);
-  const x = headerW + pos * zoom;
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el || !playing || !follow) return;
-    const visibleRight = el.scrollLeft + el.clientWidth;
-    if (x > visibleRight - 60 || x < el.scrollLeft + headerW) el.scrollLeft = Math.max(0, x - headerW - 80);
-  }, [x, playing, follow, scroller, headerW]);
-  const bpb = beatsPerBar(useDaw.getState().project);
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    // Position is visual state: keep 60fps transport updates out of React/layout.
+    const paint = () => {
+      const { position, playing } = useTransport.getState();
+      const el = scroller.current;
+      // Read scrolling geometry before changing styles; transform itself needs no layout.
+      if (el && playing && useDaw.getState().followPlayhead) {
+        const x = headerW + position * zoom;
+        const visibleRight = el.scrollLeft + el.clientWidth;
+        if (x > visibleRight - 60 || x < el.scrollLeft + headerW) el.scrollLeft = Math.max(0, x - headerW - 80);
+      }
+      if (ref.current) ref.current.style.transform = `translateX(${position * zoom}px)`;
+    };
+    paint();
+    const transport = useTransport.subscribe((s, prev) => { if (s.position !== prev.position || s.playing !== prev.playing) paint(); });
+    const daw = useDaw.subscribe((s, prev) => { if (s.followPlayhead !== prev.followPlayhead) paint(); });
+    return () => { transport(); daw(); };
+  }, [zoom, headerW, scroller]);
   return (
-    <div className="playhead" style={{ left: x }}>
+    <div className="playhead" ref={ref} style={{ left: headerW }}>
       <div
         className="playhead-grip"
         title="Drag to move the playhead"
         onPointerDown={(e) => {
           const timeline = (e.currentTarget.closest('.timeline') as HTMLElement).getBoundingClientRect();
-          scrub(e, (ev) => ((ev.clientX - timeline.left) / uiZoom() - headerW) / useDaw.getState().zoom, bpb);
+          scrub(e, (ev) => ((ev.clientX - timeline.left) / uiZoom() - headerW) / useDaw.getState().zoom, beatsPerBar(useDaw.getState().project));
         }}
       />
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { Pencil, MousePointer2, Trash } from '../icons';
 import { useDaw, useTransport } from '../../state/store';
 import type { MidiClip, Note, Project, Track } from '../../model/types';
@@ -355,9 +355,19 @@ export function PianoRoll({ clip, track, project }: { clip: MidiClip; track: Tra
 }
 
 function RollPlayhead({ clipStart, clipLength, ppb }: { clipStart: number; clipLength: number; ppb: number }) {
-  const pos = useTransport((s) => s.position) - clipStart;
-  if (pos < 0 || pos > clipLength) return null;
-  return <div className="roll-playhead" style={{ left: pos * ppb }} />;
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const paint = () => {
+      const el = ref.current;
+      if (!el) return;
+      const pos = useTransport.getState().position - clipStart;
+      el.style.display = pos < 0 || pos > clipLength ? 'none' : '';
+      el.style.transform = `translateX(${pos * ppb}px)`;
+    };
+    paint();
+    return useTransport.subscribe((s, prev) => { if (s.position !== prev.position) paint(); });
+  }, [clipStart, clipLength, ppb]);
+  return <div className="roll-playhead" ref={ref} style={{ left: 0 }} />;
 }
 
 function VelocityLane({ clip, ppb, width, color, selected, onEdit }: { clip: MidiClip; ppb: number; width: number; color: string; selected: string[]; onEdit: (label: string, fn: (ns: Note[]) => void) => void }) {

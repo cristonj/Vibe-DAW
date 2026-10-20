@@ -1,15 +1,11 @@
 import * as Tone from 'tone';
-import { create } from 'zustand';
+import { reportCustomFxError as report } from '../state/customFxErrors';
 import type { Effect } from '../model/types';
 import { customValues } from '../model/customEffect';
 import { compileCustomFx, runCustomBlock, workletMain } from './customRuntime';
 import type { EffectUnit } from './effects';
 
-/** Live errors per effect id, shown on the effect's card. Only the realtime context reports. */
-export const useCustomFxErrors = create<Record<string, string | undefined>>(() => ({}));
-const report = (id: string, error: string | undefined) => {
-  if (useCustomFxErrors.getState()[id] !== error) useCustomFxErrors.setState({ [id]: error });
-};
+export { useCustomFxErrors } from '../state/customFxErrors';
 
 const workletSource = `(${workletMain})(${compileCustomFx}, ${runCustomBlock});`;
 let workletUrl: string | null = null;
