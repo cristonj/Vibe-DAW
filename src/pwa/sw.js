@@ -42,15 +42,18 @@ self.addEventListener('fetch', (event) => {
   else if (FONT_HOSTS.has(url.hostname)) event.respondWith(staleWhileRevalidate(request, PAGES));
 });
 
-/** Every route is the same single-page app, so pages share one cached copy. */
+/** App routes share a shell; legal pages keep their own offline copies. */
 async function page(request) {
   const cache = await caches.open(PAGES);
+  const pathname = new URL(request.url).pathname;
+  const legal = pathname.match(/^\/(terms|privacy)(?:\/|\/index\.html)?$/);
+  const key = legal ? `/${legal[1]}/` : '/index.html';
   try {
     const response = await fetch(request);
-    if (response.ok) await cache.put('/index.html', response.clone());
+    if (response.ok) await cache.put(key, response.clone());
     return response;
   } catch {
-    return (await cache.match('/index.html')) ?? (await caches.match('/index.html')) ?? Response.error();
+    return (await cache.match(key)) ?? (await caches.match(key)) ?? Response.error();
   }
 }
 

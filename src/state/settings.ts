@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { hostedAiEnabled } from '../cloud/config';
+import { hasAiConsent } from '../legal/acceptance';
 
 // User preferences, persisted to localStorage. When signed in, they also sync to the
 // user's own Firestore tree (see cloud/prefs.ts); the API key is otherwise only sent
@@ -86,6 +87,7 @@ export function effectiveApiKey(): string {
 }
 
 export function aiAvailable(): { ok: boolean; reason?: string } {
+  if (!hasAiConsent()) return { ok: false, reason: 'Review the AI terms and data notice in Settings before using the agent.' };
   const s = useSettings.getState();
   if (s.connection === 'firebase') {
     return hostedAiEnabled ? { ok: true } : { ok: false, reason: 'Add your Gemini API key in Settings to use the agent.' };

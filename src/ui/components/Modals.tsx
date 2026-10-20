@@ -14,6 +14,7 @@ import { AccentPicker } from './AccentPicker';
 import { importMidiFile } from '../midiActions';
 import { openSavePreset } from './SavePreset';
 import { importProjectFile } from '../../state/projectFile';
+import { acknowledgeAi, hasAiConsent } from '../../legal/acceptance';
 
 function Modal({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -47,6 +48,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         {tab === 'keyboard' && <KeyboardSettings />}
         {tab === 'playback' && <PlaybackSettings />}
       </div>
+      <nav className="legal-links" aria-label="Legal"><a href="/terms/" target="_blank" rel="noopener noreferrer">Terms of Service</a><a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy Policy</a></nav>
       <div className="modal-actions"><button className="btn primary" onClick={onClose}>Done</button></div>
     </Modal>
   );
@@ -56,6 +58,7 @@ function AiSettings() {
   const s = useSettings();
   const user = useAuth((x) => x.user);
   const [key, setKey] = useState(s.apiKey);
+  const [aiConsent, setAiConsent] = useState(hasAiConsent);
   // Pick up a key that arrives from another signed-in device while Settings is open.
   useEffect(() => { setKey(s.apiKey); }, [s.apiKey]);
   return (
@@ -83,6 +86,11 @@ function AiSettings() {
           {user ? 'Saved in this browser and synced to your account so your other devices have it. Only sent to Google.' : 'Saved only in this browser and sent only to Google.'}
         </small>
       </label>
+      <div className="ai-data-notice">
+        <strong>Before using AI</strong>
+        <p>Prompts, project details, instructions, and audio you attach or let the agent listen to go to Google. Voice messages include your recording. Unpaid Gemini requests may be reviewed by people and used to improve Google products. Avoid personal, confidential, or sensitive material.</p>
+        <label className="toggle"><input type="checkbox" checked={aiConsent} onChange={event => { acknowledgeAi(event.target.checked); setAiConsent(hasAiConsent()); }} /><span>I am 18 or older, agree to Vibe's <a href="/terms/" target="_blank" rel="noopener noreferrer">Terms</a>, acknowledge its <a href="/privacy/" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and will use Gemini for professional or business purposes in a <a href="https://ai.google.dev/gemini-api/docs/available-regions" target="_blank" rel="noopener noreferrer">supported region</a>. I understand the data notice and will use a billing-enabled Google project if I am in the EEA, UK, or Switzerland. <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener noreferrer">Google's AI terms</a></span></label>
+      </div>
       <label className="field">
         <span>Model</span>
         <select value={s.model} onChange={(e) => s.set({ model: e.target.value as typeof s.model })}>

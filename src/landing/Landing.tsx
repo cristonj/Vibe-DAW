@@ -200,6 +200,21 @@ export function Landing() {
         </div>
       </section>
 
+      <section className="lp-theory lp-wrap lp-reveal" aria-labelledby="lp-theory-title">
+        <div className="lp-theory-brand">
+          <picture>
+            <source media="(prefers-reduced-motion: reduce)" srcSet="/related/musictheory-wordmark.svg" />
+            <img src="/related/musictheory-morph.svg" width="1120" height="530" loading="lazy" decoding="async" alt="MusicTheory.Work, with its MTW mark transforming into the wordmark" />
+          </picture>
+          <picture className="lp-theory-screen"><source media="(max-width:720px)" srcSet="/related/musictheory-lesson-phone.webp" /><img className="lp-theory-shot" src="/related/musictheory-lesson.webp" width="1280" height="900" loading="lazy" decoding="async" alt="A real MusicTheory.Work lesson teaching C with a playable piano keyboard" /></picture>
+        </div>
+        <div className="lp-copy">
+          <h2 id="lp-theory-title">Learn music theory.</h2>
+          <p>Free, interactive lessons from your first note to jazz harmony.</p>
+          <a className="lp-btn ghost" href="https://musictheory.work/" target="_blank" rel="noopener noreferrer">Start learning <Arrow /></a>
+        </div>
+      </section>
+
       <section className="lp-end lp-wrap" id="support">
         <h2>Free and open source.</h2>
         <p>MIT licensed. Runs in your browser with no install and no account. Every music tool works without AI. The Producer uses your own Gemini key, which has a free tier.</p>
@@ -207,5 +222,6 @@ export function Landing() {
         <Support />
       </section>
     </main>
+    <footer className="lp-legal lp-wrap" aria-label="Legal"><a href="/terms/">Terms of Service</a><a href="/privacy/">Privacy Policy</a></footer>
   </div>;
 }

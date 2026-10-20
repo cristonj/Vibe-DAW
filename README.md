@@ -130,6 +130,10 @@ How a run works: the user's message plus a compact text snapshot of the session 
 | Alt-drag | Copy a clip |
 | Ctrl+scroll | Zoom the arrangement |
 
+## Policies and accounts
+
+Terms and Privacy pages are generated from `legal/operator.json` with `node scripts/generate-policies.mjs legal/operator.json`. The Netlify check verifies the operator details and signup version before deploying. New Google sign-ins require adult confirmation and agreement, saved privately as a server-timestamped record at `users/{uid}/legal/current`. AI has a separate per-browser acknowledgement covering Google processing, age, professional/business use, and regional billing requirements. See `docs/privacy-operations.md` for privacy request handling and `legal/versions/` for policy copies.
+
 ## Credits
 
 - [Tone.js](https://tonejs.github.io) (MIT) powers the audio engine.

@@ -1,5 +1,10 @@
 import { useSettings, effectiveApiKey, type Thinking } from '../state/settings';
 import { getFirebaseApp } from '../cloud/firebase';
+import { hasAiConsent } from '../legal/acceptance';
+
+function requireAiConsent() {
+  if (!hasAiConsent()) throw new Error('Review the AI terms and data notice in Settings before using the agent.');
+}
 
 // Provider-neutral Gemini client. Two transports, one wire format:
 //  - 'apikey'   → @google/genai straight to the Gemini API (dev / bring-your-own-key)
@@ -87,6 +92,7 @@ function compact(parts: Part[]): Part[] {
 let genaiCache: { key: string; client: import('@google/genai').GoogleGenAI } | null = null;
 
 export async function getGenAI() {
+  requireAiConsent();
   const key = effectiveApiKey();
   if (!key) throw new Error('No Gemini API key. Add one in Settings.');
   if (genaiCache?.key === key) return genaiCache.client;
@@ -166,6 +172,7 @@ export function setLlmOverride(fn: Override | null) {
 
 export async function streamGenerate(req: LlmRequest, h: StreamHandlers = {}): Promise<LlmResult> {
   if (override) return override(req, h);
+  requireAiConsent();
   const connection = useSettings.getState().connection;
   const attempt = (r: LlmRequest) => (connection === 'firebase' ? streamFirebase(r, h) : streamDirect(r, h));
   try {

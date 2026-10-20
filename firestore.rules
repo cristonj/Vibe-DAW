@@ -7,6 +7,16 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    match /users/{uid}/legal/current {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['termsVersion', 'privacyVersion', 'adult', 'acceptedAt'])
+        && request.resource.data.termsVersion == '2026-10-19'
+        && request.resource.data.privacyVersion == '2026-10-19'
+        && request.resource.data.adult == true
+        && request.resource.data.acceptedAt == request.time;
+    }
+
     match /users/{uid}/projects/{projectId} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid)

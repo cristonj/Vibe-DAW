@@ -4,6 +4,7 @@ import type { Project, SampleMeta } from '../model/types';
 import { getFirebaseApp } from './firebase';
 import { firebaseConfigured } from './config';
 import { mergeRemoteSamples, setRemoteSampleFetcher, setRemoteSampleUploader, syncSamples } from '../samples/library';
+import { legalReceipt, requestLegalAcceptance } from '../legal/acceptance';
 
 // Firebase-backed sync: Google sign-in, projects in Firestore, sample audio in Storage.
 // Everything is scoped under users/{uid} and locked down by the rules in firestore.rules
@@ -50,10 +51,13 @@ export async function initCloud() {
 }
 
 export async function signIn() {
+  if (!await requestLegalAcceptance()) return;
   const app = await getFirebaseApp();
   if (!app) throw new Error('Cloud sync isn’t configured for this build.');
   const { getAuth, GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
-  await signInWithPopup(getAuth(app), new GoogleAuthProvider());
+  const result = await signInWithPopup(getAuth(app), new GoogleAuthProvider());
+  const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+  await setDoc(doc(await db(), 'users', result.user.uid, 'legal', 'current'), { ...legalReceipt(), acceptedAt: serverTimestamp() });
 }
 
 export async function signOut() {

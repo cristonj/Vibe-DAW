@@ -1,10 +1,11 @@
 import { after, before, test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, deleteDoc, serverTimestamp } from 'firebase/firestore';
 let env;
 before(async () => {
-  env = await initializeTestEnvironment({ projectId: 'demo-vibe-tests', firestore: { host: '127.0.0.1', port: 8080, rules: await readFile('firestore.rules', 'utf8') } });
+  if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Run through Firebase emulators:exec.');
+  env = await initializeTestEnvironment({ projectId: 'demo-vibe-tests', firestore: { rules: await readFile('firestore.rules', 'utf8') } });
 });
 after(async () => { await env?.cleanup(); });
 const item = (id) => ({ id, name: 'Warm keys', kind: 'sound', tags: ['warm'], data: '{}', updatedAt: 1, revision: 'a', deleted: false });
@@ -37,4 +38,19 @@ test('custom instructions remain in the owner-only preference document', async (
   const ai = { data: JSON.stringify({ customInstructions: 'Use warm keys.' }), updatedAt: 1 };
   await assertSucceeds(setDoc(doc(env.authenticatedContext('alice').firestore(), path), { ai }));
   await assertFails(getDoc(doc(env.authenticatedContext('bob').firestore(), path)));
+});
+
+test('agreement receipts require current policies, adult confirmation, and a server timestamp and stay private', async () => {
+  const alice = env.authenticatedContext('alice').firestore();
+  const bob = env.authenticatedContext('bob').firestore();
+  const path = 'users/alice/legal/current';
+  const receipt = () => ({ termsVersion: '2026-10-19', privacyVersion: '2026-10-19', adult: true, acceptedAt: serverTimestamp() });
+  await assertSucceeds(setDoc(doc(alice, path), receipt()));
+  await assertSucceeds(getDoc(doc(alice, path)));
+  await assertFails(getDoc(doc(bob, path)));
+  await assertFails(setDoc(doc(bob, path), receipt()));
+  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), path), receipt()));
+  for (const patch of [{ adult:false }, { termsVersion:'old' }, { privacyVersion:'old' }, { acceptedAt:1 }, { unrelated:true }]) {
+    await assertFails(setDoc(doc(alice, path), { ...receipt(), ...patch }));
+  }
 });
