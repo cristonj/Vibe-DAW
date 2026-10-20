@@ -1,4 +1,4 @@
-import { useId, type CSSProperties } from 'react';
+import { useEffect, useId, useState, type CSSProperties } from 'react';
 import { GLYPHS, GRADIENT, MARK, WORDMARK, type Dot, type Glyph } from './glyphs';
 import './brand.css';
 
@@ -10,7 +10,10 @@ const stops = GRADIENT.map((color, k) => <stop key={color} offset={k / (GRADIENT
 const useSvgId = () => `vibe${useId().replace(/[^\w-]/g, '')}`;
 /** Slides a gradient across `span` and back over 2 × `seconds`, like the CSS color flow. */
 function Flow({ span, seconds }: { span: number; seconds: number }) {
-  if (!seconds || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches)) return null;
+  // Read after mount, so a prerendered landing page hydrates with the same tree.
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => { setReduced(matchMedia('(prefers-reduced-motion: reduce)').matches); }, []);
+  if (!seconds || reduced) return null;
   return <animateTransform attributeName="gradientTransform" type="translate" values={`0 0;${span} 0;0 0`} keyTimes="0;0.5;1" calcMode="spline" keySplines="0.42 0 0.58 1;0.42 0 0.58 1" dur={`${seconds * 2}s`} repeatCount="indefinite" />;
 }
 // An empty label hides the drawing from assistive tech, for when a parent already names it.
