@@ -1,0 +1,44 @@
+name: iOS Store Screenshots
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-screenshots
+  cancel-in-progress: false
+jobs:
+  screenshots:
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Generate native project
+        run: npx expo prebuild --platform ios --no-install
+      - name: Install CocoaPods
+        run: pod install --project-directory=ios
+      - name: Compile standalone Simulator app
+        run: |
+          WORKSPACE=$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          test -n "$WORKSPACE"
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath simulator-build CODE_SIGNING_ALLOWED=NO ARCHS="$(uname -m)" > xcodebuild.log 2>&1 || { tail -100 xcodebuild.log; exit 1; }
+      - name: Capture real iPhone and iPad screens
+        run: node scripts/capture-ios-screenshots.mjs
+      - name: Upload screenshots and build log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-store-screenshots
+          path: |
+            mobile/screenshots/*.png
+            mobile/xcodebuild.log
+          retention-days: 30

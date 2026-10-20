@@ -65,3 +65,7 @@ EXPO_PUBLIC_. No private keys or signing files belong in Git.
 
 Pure trust-boundary helpers live in bridge/ with an independent TypeScript config,
 so website CI tests them without installing Expo.
+
+Use the manual **iOS Store Screenshots** workflow to compile a standalone
+Simulator app on macOS and capture real iPhone Pro Max and large iPad screens.
+Inspect the screenshot artifact before uploading it to App Store Connect.
