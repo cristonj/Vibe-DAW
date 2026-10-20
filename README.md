@@ -4,7 +4,7 @@ The open source agentic DAW built to enhance, not replace, human creativity.
 
 [vibedaw.org](https://vibedaw.org/)
 
-Vibe is a full digital audio workstation - arrangement, piano roll, step sequencer, mixer, effects - with a producer agent built in. Type *"make a Lil Peep type beat"* and it plans the track, picks and **listens to** sounds, writes the parts, arranges and mixes them, then bounces the song and listens back to fix what it hears. Everything it does is ordinary DAW state: you can edit any of it by hand, and one undo takes back a whole agent run.
+Vibe is a full digital audio workstation - arrangement, piano roll, step sequencer, mixer, effects - with a producer agent built in. Type *"make a simple boom bap drumline"* and it plans the track, picks and **listens to** sounds, writes the parts, arranges and mixes them, then bounces the song and listens back to fix what it hears. Everything it does is ordinary DAW state: you can edit any of it by hand, and one undo takes back a whole agent run.
 
 It's Cursor for music: the agent edits your session the way Cursor edits your code, with reviewable changes, checkpoints, and inline edits on a selection.
 
