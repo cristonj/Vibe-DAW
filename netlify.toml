@@ -5,10 +5,11 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# Single-page app: every route serves index.html
+# Single-page app: "/" is the prerendered landing page (dist/index.html). Every other route
+# serves the empty app shell, so the studio never flashes landing markup.
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/app.html"
   status = 200
 
 # The service worker must always be fresh, or a deploy could hide behind an old one.

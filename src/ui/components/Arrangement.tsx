@@ -556,7 +556,7 @@ export function Arrangement() {
     if (touch) abortTouchDrag.current = abort;
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
-    // A touch that turns into a scroll is cancelled by the browser.
+    // A touch that turns into a scroll is canceled by the browser.
     el.addEventListener('pointercancel', onUp);
   };
 

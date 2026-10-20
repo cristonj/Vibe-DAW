@@ -32,7 +32,7 @@ async function toClip(blob: Blob): Promise<VoiceClip | null> {
 }
 
 /**
- * `start()` opens the mic; `stop()` resolves with the clip (null if cancelled or empty);
+ * `start()` opens the mic; `stop()` resolves with the clip (null if canceled or empty);
  * `cancel()` discards. `onAutoStop` fires with the clip when the length limit is reached.
  */
 export function useVoiceRecorder(onAutoStop: (clip: VoiceClip) => void, onError: (message: string) => void) {

@@ -42,12 +42,12 @@ self.addEventListener('fetch', (event) => {
   else if (FONT_HOSTS.has(url.hostname)) event.respondWith(staleWhileRevalidate(request, PAGES));
 });
 
-/** App routes share a shell; legal pages keep their own offline copies. */
+/** "/" is the prerendered landing page, other app routes share the empty shell, and legal pages keep their own offline copies. */
 async function page(request) {
   const cache = await caches.open(PAGES);
   const pathname = new URL(request.url).pathname;
   const legal = pathname.match(/^\/(terms|privacy)(?:\/|\/index\.html)?$/);
-  const key = legal ? `/${legal[1]}/` : '/index.html';
+  const key = legal ? `/${legal[1]}/` : pathname === '/' || pathname === '/index.html' ? '/index.html' : '/app.html';
   try {
     const response = await fetch(request);
     if (response.ok) await cache.put(key, response.clone());

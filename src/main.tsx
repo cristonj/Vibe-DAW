@@ -1,5 +1,5 @@
 import { StrictMode, Suspense, lazy } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { Landing } from './landing/Landing';
 import './styles/base.css';
 
@@ -13,6 +13,9 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => { void navigator.serviceWorker.register('/sw.js'); });
 }
 
-createRoot(document.getElementById('root')!).render(
+const root = document.getElementById('root')!;
+// Production builds prerender the landing page (scripts/prerender-landing.mjs), so it hydrates.
+if (landing && root.hasChildNodes()) hydrateRoot(root, <StrictMode><Landing /></StrictMode>);
+else createRoot(root).render(
   <StrictMode>{landing ? <Landing /> : <Suspense fallback={<div className="boot">Opening your studio…</div>}><Studio /></Suspense>}</StrictMode>,
 );

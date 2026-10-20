@@ -11,7 +11,7 @@ function serviceWorker(): Plugin {
     enforce: 'post',
     generateBundle(_, bundle) {
       const files = Object.keys(bundle).filter((f) => !f.endsWith('.map')).map((f) => `/${f}`);
-      const precache = [...files, '/favicon.svg', '/manifest.webmanifest', '/brand/icon-192.png', '/terms/', '/privacy/'];
+      const precache = [...files, '/app.html', '/favicon.svg', '/manifest.webmanifest', '/brand/icon-192.png', '/terms/', '/privacy/'];
       const version = createHash('sha256').update(precache.join('\n')).update(readFileSync('public/terms/index.html')).update(readFileSync('public/privacy/index.html')).digest('hex').slice(0, 12);
       const source = readFileSync('src/pwa/sw.js', 'utf8').replace('__VERSION__', version).replace('__PRECACHE__', JSON.stringify(precache));
       this.emitFile({ type: 'asset', fileName: 'sw.js', source });

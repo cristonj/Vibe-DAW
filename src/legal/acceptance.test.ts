@@ -8,7 +8,7 @@ beforeEach(() => {
   finishLegalAcceptance(false);
 });
 describe('agreement decisions', () => {
-  it('does not infer acceptance from opening or cancelling the prompt', async () => {
+  it('does not infer acceptance from opening or canceling the prompt', async () => {
     const decision = requestLegalAcceptance();
     expect(useLegalConsent.getState().open).toBe(true);
     finishLegalAcceptance(false);
