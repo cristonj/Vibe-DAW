@@ -1,3 +1,5 @@
+import {nativeThemeColor} from './native-theme';
+import {startNativeHaptics} from './native-haptics';
 /** ChatRPE's native bridge contract, adapted for this app. Native build changes
  * ship through the App Store; the web must gate optional features by capability.
  * Auth replies require both the sending origin and an unpredictable request ID.
@@ -64,6 +66,7 @@ export async function nativeAuthCredential(provider:'apple'|'google') {
 export async function startNativeSession(auth:import('firebase/auth').Auth):Promise<()=>void> {
   if(!isNativeApp()) return ()=>{};
   const {onIdTokenChanged}=await import('firebase/auth');
+  const stopHaptics=startNativeHaptics();
   const stop=onIdTokenChanged(auth,async user=>{
     if(!user) {postToNative({type:'AUTH_TOKEN_CLEAR'});return;}
     try {
@@ -73,11 +76,12 @@ export async function startNativeSession(auth:import('firebase/auth').Auth):Prom
     } catch { /* Offline auth stays in Firebase's own persistent session. */ }
   });
   const theme=()=>{
-    const color=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || getComputedStyle(document.body).backgroundColor;
-    if(/^#[0-9a-f]{6}$/i.test(color))postToNative({type:'THEME_UPDATE',colors:{background:color}});
+    const root=getComputedStyle(document.documentElement);
+    const color=[getComputedStyle(document.body).backgroundColor,root.getPropertyValue('--bg'),root.getPropertyValue('--paper'),root.getPropertyValue('--background')].map(nativeThemeColor).find(Boolean);
+    if(color)postToNative({type:'THEME_UPDATE',colors:{background:color}});
   };
   const observer=new MutationObserver(theme);observer.observe(document.documentElement,{attributes:true,attributeFilter:['class','style','data-theme']});theme();
-  return ()=>{stop();observer.disconnect();};
+  return ()=>{stop();stopHaptics();observer.disconnect();};
 }
 /** Native export uses iOS's share sheet (Files, AirDrop, other apps). */
 export async function shareNativeFile(blob:Blob,filename:string) {

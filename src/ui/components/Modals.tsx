@@ -3,6 +3,7 @@ import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from '../icons';
 import { useSettings, MODELS, MAX_CUSTOM_INSTRUCTIONS, type Thinking } from '../../state/settings';
 import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
 import { useAuth, signIn, signOut, deleteAccount } from '../../cloud/cloud';
+import {NativeHapticsControl} from './NativeHapticsControl';
 import { usePersist, openProject, newProject, deleteProject, duplicateProject, syncNow } from '../../state/persistence';
 import { useDaw } from '../../state/store';
 import { rangeFill, relativeTime } from '../hooks';
@@ -154,6 +155,7 @@ function AiSettings() {
           )}
         </div>
       )}
+      <NativeHapticsControl />
     </>
   );
 }
