@@ -15,7 +15,8 @@
     "screenshots": "node scripts/capture-landing-screenshots.mjs",
     "brand": "node scripts/build-brand.mjs",
     "test:rules": "npx --yes firebase-tools@14.26.0 emulators:exec --only firestore --project demo-vibe-tests \"node --test tests/rules/library.test.mjs\"",
-    "promo": "node scripts/frame-promo-images.mjs"
+    "promo": "node scripts/frame-promo-images.mjs",
+    "appstore-screenshots": "node scripts/screenshots/generate.cjs"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
@@ -37,6 +38,8 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "playwright-core": "^1.64.1",
+    "sharp": "^0.35.4",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"

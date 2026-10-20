@@ -28,3 +28,6 @@ mobile/credentials.json
 **/*.p8
 **/*.p12
 **/*.mobileprovision
+
+# App Store screenshot pipeline output (scripts/screenshots/)
+/screenshots
