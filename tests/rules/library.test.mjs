@@ -44,7 +44,7 @@ test('agreement receipts require current policies, adult confirmation, and a ser
   const alice = env.authenticatedContext('alice').firestore();
   const bob = env.authenticatedContext('bob').firestore();
   const path = 'users/alice/legal/current';
-  const receipt = () => ({ termsVersion: '2026-10-19', privacyVersion: '2026-10-19', adult: true, acceptedAt: serverTimestamp() });
+  const receipt = () => ({ termsVersion: '2026-10-20', privacyVersion: '2026-10-20', adult: true, acceptedAt: serverTimestamp() });
   await assertSucceeds(setDoc(doc(alice, path), receipt()));
   await assertSucceeds(getDoc(doc(alice, path)));
   await assertFails(getDoc(doc(bob, path)));

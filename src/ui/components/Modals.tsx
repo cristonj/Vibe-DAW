@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Trash, Plus, Copy, Cloud, LogOut, RotateCcw } from '../icons';
 import { useSettings, MODELS, MAX_CUSTOM_INSTRUCTIONS, type Thinking } from '../../state/settings';
 import { firebaseConfigured, hostedAiEnabled } from '../../cloud/config';
-import { useAuth, signIn, signOut } from '../../cloud/cloud';
+import { useAuth, signIn, signOut, deleteAccount } from '../../cloud/cloud';
 import { usePersist, openProject, newProject, deleteProject, duplicateProject, syncNow } from '../../state/persistence';
 import { useDaw } from '../../state/store';
 import { rangeFill, relativeTime } from '../hooks';
@@ -144,10 +144,11 @@ function AiSettings() {
               <Cloud size={14} /> {user.email ?? user.name}
               <button className="btn" onClick={() => void syncNow().then(() => toast('Synced'))}>Sync now</button>
               <button className="btn" onClick={() => void signOut()}><LogOut size={14} /> Sign out</button>
+              <button className="btn danger" onClick={() => {if(confirm('Permanently delete your Vibe account, cloud projects, samples, library, and settings? Local project copies stay on this device. This cannot be undone.')) void deleteAccount().then(()=>toast('Account deleted')).catch(e=>toast(e.message,'error'));}}>Delete account</button>
             </div>
           ) : (
             <>
-              <button className="btn solid" onClick={() => signIn().catch((e) => toast(e.message, 'error'))}>Sign in with Google to sync</button>
+              <button className="btn solid" onClick={() => signIn().catch((e) => toast(e.message, 'error'))}>Sign in to sync</button>
               <small>Syncs projects, your library, API key, custom instructions, AI settings, theme and keyboard shortcuts across devices. Interface size and output latency stay per device.</small>
             </>
           )}

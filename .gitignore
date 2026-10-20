@@ -16,3 +16,15 @@ gha-creds-*.json
 *-debug.log
 /.qa/
 dist-prerender
+
+# Native iOS package and account backend have separate dependency trees.
+**/node_modules/
+mobile/ios/
+mobile/android/
+mobile/.expo/
+mobile/dist/
+
+mobile/credentials.json
+**/*.p8
+**/*.p12
+**/*.mobileprovision

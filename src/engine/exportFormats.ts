@@ -1,5 +1,6 @@
 // Export options and the browser download helper. No audio imports here, so the UI
 // can show the export menu without loading the engine.
+import {hasNativeCapability,shareNativeFile} from '../native/native-bridge';
 
 export type ExportFormat = 'mp3' | 'wav16' | 'wav24' | 'midi';
 
@@ -33,6 +34,10 @@ export function trimmedLength(channels: Float32Array[], sampleRate: number, thre
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
+  if(hasNativeCapability('fileSharing')) {
+    void shareNativeFile(blob,filename).catch(error=>alert(error.message));
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
