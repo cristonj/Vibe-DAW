@@ -8,10 +8,10 @@ import {
   type HapticImpactStyle,
   type HapticNotificationType,
   type NativeHapticPattern,
-} from "./haptic-feedback";
+} from "./bridge/haptic-feedback";
 
-export { DEFAULT_HAPTIC_SENSITIVITY } from "./haptic-feedback";
-export type { NativeHapticPattern } from "./haptic-feedback";
+export { DEFAULT_HAPTIC_SENSITIVITY } from "./bridge/haptic-feedback";
+export type { NativeHapticPattern } from "./bridge/haptic-feedback";
 const HAPTIC_SENSITIVITY_KEY = "@vibedaw_haptic_sensitivity";
 
 const IMPACT_STYLES: Record<HapticImpactStyle, Haptics.ImpactFeedbackStyle> = {

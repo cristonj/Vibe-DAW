@@ -45,8 +45,7 @@ must persist it to an authenticated backend before sending pushes.
 The copied START/UPDATE/END_LIVE_ACTIVITY and dashboard-widget routing hooks call
 optional native LiveActivityModule/AppIntentsStorage adapters. Their capabilities
 are false until those Swift modules and extension targets are added. Do not expose
-feature UI based solely on __NATIVE_APP__: use hasNativeCapability. Siri's current
-Open App Intent is real; authenticated background Siri actions, widgets, and Live
+feature UI based solely on __NATIVE_APP__: use hasNativeCapability. Siri's Open App Intent is available on iOS 18 and later; authenticated background Siri actions, widgets, and Live
 Activities are future additions. They require App Groups/keychain access groups,
 extension provisioning, and device validation when implemented.
 
@@ -63,3 +62,6 @@ recreating deleted data. Failed deletions remain retryable. Apple revocation run
 in netlify/functions/revoke-apple.mjs using server-only APPLE_SIGN_IN_PRIVATE_KEY
 and APPLE_SIGN_IN_KEY_ID. Never prefix these secrets with VITE_, NEXT_PUBLIC_, or
 EXPO_PUBLIC_. No private keys or signing files belong in Git.
+
+Pure trust-boundary helpers live in bridge/ with an independent TypeScript config,
+so website CI tests them without installing Expo.

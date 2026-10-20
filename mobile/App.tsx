@@ -13,8 +13,8 @@ import * as Sharing from 'expo-sharing';
 import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import identity from './app-identity.json';
-import { appOriginsFor, isAppOriginUrl, isOpenableUrl } from './bridge-urls';
-import { parseTrustedWebMessage, routeWebViewMessage } from './webview-message-routing';
+import { appOriginsFor, isAppOriginUrl, isOpenableUrl } from './bridge/bridge-urls';
+import { parseTrustedWebMessage, routeWebViewMessage } from './bridge/webview-message-routing';
 import { loadHapticSensitivity, performNativeHaptic, persistHapticSensitivity } from './native-haptics';
 import { recordNativeReviewMoment } from './native-review-prompt';
 

@@ -1,7 +1,7 @@
 
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {appOriginsFor} from '../../mobile/bridge-urls';
-import {parseTrustedWebMessage} from '../../mobile/webview-message-routing';
+import {appOriginsFor} from '../../mobile/bridge/bridge-urls';
+import {parseTrustedWebMessage} from '../../mobile/bridge/webview-message-routing';
 import {requestNative} from './native-bridge';
 afterEach(()=>vi.unstubAllGlobals());
 describe('native bridge trust boundary',()=>{
