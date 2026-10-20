@@ -5,6 +5,8 @@ import { getFirebaseApp } from './firebase';
 import { firebaseConfigured } from './config';
 import { mergeRemoteSamples, setRemoteSampleFetcher, setRemoteSampleUploader, syncSamples } from '../samples/library';
 import { legalReceipt, requestLegalAcceptance } from '../legal/acceptance';
+import { useLegalConsent } from '../legal/acceptance';
+import { isNativeApp, nativeAuthCredential, postToNative, startNativeSession } from '../native/native-bridge';
 
 // Firebase-backed sync: Google sign-in, projects in Firestore, sample audio in Storage.
 // Everything is scoped under users/{uid} and locked down by the rules in firestore.rules
@@ -30,6 +32,7 @@ export async function initCloud() {
   if (!app) return;
   const { getAuth, onAuthStateChanged } = await import('firebase/auth');
   const auth = getAuth(app);
+  if(isNativeApp()) void startNativeSession(auth);
   let stopSamples: (() => void) | undefined;
   onAuthStateChanged(auth, (u) => {
     stopSamples?.();
@@ -54,8 +57,11 @@ export async function signIn() {
   if (!await requestLegalAcceptance()) return;
   const app = await getFirebaseApp();
   if (!app) throw new Error('Cloud sync isn’t configured for this build.');
-  const { getAuth, GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
-  const result = await signInWithPopup(getAuth(app), new GoogleAuthProvider());
+  const { getAuth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signInWithCredential } = await import('firebase/auth');
+  const provider = useLegalConsent.getState().provider;
+  const result = isNativeApp()
+    ? await signInWithCredential(getAuth(app), (await nativeAuthCredential(provider)).credential)
+    : await signInWithPopup(getAuth(app), provider === 'apple' ? new OAuthProvider('apple.com') : new GoogleAuthProvider());
   const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
   await setDoc(doc(await db(), 'users', result.user.uid, 'legal', 'current'), { ...legalReceipt(), acceptedAt: serverTimestamp() });
 }
@@ -65,6 +71,26 @@ export async function signOut() {
   if (!app) return;
   const { getAuth, signOut: so } = await import('firebase/auth');
   await so(getAuth(app));
+  postToNative({type:'AUTH_TOKEN_CLEAR'});
+}
+
+export async function deleteAccount() {
+  const app = await getFirebaseApp();
+  if (!app || !currentUser) return;
+  const uid = currentUser.uid;
+  const { getAuth } = await import('firebase/auth');
+  const { deleteOwnAccount } = await import('../native/delete-account');
+  await deleteOwnAccount(getAuth(app), await db(), {
+    collections: ['projects', 'samples', 'library'], documents: ['legal/current', 'prefs/main'],
+    stopSync: () => useAuth.setState({user:null}),
+    storage: async () => {
+      const {getStorage,ref,listAll,deleteObject}=await import('firebase/storage');
+      const files=await listAll(ref(getStorage(app),`users/${uid}/samples`));
+      for (const file of files.items) await deleteObject(file);
+    },
+  });
+  const {useSettings}=await import('../state/settings');
+  useSettings.getState().set({apiKey:'',customInstructions:''});
 }
 
 async function db() {

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 
-export const LEGAL_VERSION = '2026-10-19';
-interface ConsentState { open: boolean; resolve: ((accepted: boolean) => void) | null; }
-export const useLegalConsent = create<ConsentState>(() => ({ open: false, resolve: null }));
+export const LEGAL_VERSION = '2026-10-20';
+interface ConsentState { open: boolean; provider:'apple'|'google'; resolve: ((accepted: boolean) => void) | null; }
+export const useLegalConsent = create<ConsentState>(() => ({ open: false, provider:'google', resolve: null }));
 export function requestLegalAcceptance(): Promise<boolean> {
   if (useLegalConsent.getState().open) return Promise.resolve(false);
   return new Promise(resolve => useLegalConsent.setState({ open: true, resolve }));
