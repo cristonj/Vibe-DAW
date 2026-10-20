@@ -5,3 +5,6 @@ android/
 dist/
 .env*
 credentials.json
+simulator-build/
+screenshots/
+xcodebuild.log

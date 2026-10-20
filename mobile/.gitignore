@@ -8,3 +8,7 @@ credentials.json
 *.mobileprovision
 *.p8
 .env*
+
+simulator-build/
+screenshots/
+xcodebuild.log
