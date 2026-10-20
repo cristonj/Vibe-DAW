@@ -35,15 +35,16 @@ browser while it captures.
 
 ## Sizes
 
-Only the required ones: iPhone 6.9" (1320x2868) and iPad 13" (2064x2752).
+Only the required ones: iPhone 6.9" (1320x2868), iPhone 6.3" (1206x2622,
+App Store Connect's "6.1" or 6.3"" slot) and iPad 13" (2064x2752).
 App Store Connect scales these down for every smaller display class.
 
 ## Output
 
 - `screenshots/raw/<device>/<shot>.png`, plus `<shot>.popout.json`, the rect
   of the element the poster lifts out.
-- `screenshots/appstore/iPhone 6.9 inch/` and `iPad 13 inch/`: the upload
-  sets, numbered in listing order. A full run replaces the set; a `--shot` run
+- `screenshots/appstore/iPhone 6.9 inch/`, `iPhone 6.3 inch/` and `iPad 13 inch/`:
+  the upload sets, numbered in listing order. A full run replaces the set; a `--shot` run
   leaves the others in place and recomposes its neighbours so seams still line up.
 - `screenshots/appstore/creative/`: the product page header (21:9, 3840x1646),
   the search result image (3:2, 3840x2560) and the universal asset (16:9,

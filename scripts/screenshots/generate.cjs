@@ -39,8 +39,8 @@ const CHROME_PATH = process.env.CHROME_PATH ||
     darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }[process.platform] || '/usr/bin/google-chrome';
 
 /**
- * The two sizes App Store Connect requires: iPhone 6.9" and iPad 13". Every
- * smaller display class is filled from these. `captureZoom` (from the story)
+ * The sizes App Store Connect requires: iPhone 6.9" and 6.3" and iPad 13".
+ * Every other display class is filled from these. `captureZoom` (from the story)
  * shrinks the logical viewport and raises the scale factor by the same amount,
  * so the raw lands at the output size while the app lays out narrower and its
  * text stays readable once the screen is scaled into the poster.
@@ -51,6 +51,15 @@ const DEVICES = [
     uploadDir: 'iPhone 6.9 inch',
     viewport: { width: 440, height: 956, deviceScaleFactor: 3 },
     output: { width: 1320, height: 2868 },
+    kind: 'phone',
+  },
+  {
+    // App Store Connect's "6.1" or 6.3"" slot (iPhone 17 / 16 Pro class),
+    // required alongside 6.9".
+    name: 'iphone-6-3',
+    uploadDir: 'iPhone 6.3 inch',
+    viewport: { width: 402, height: 874, deviceScaleFactor: 3 },
+    output: { width: 1206, height: 2622 },
     kind: 'phone',
   },
   {
