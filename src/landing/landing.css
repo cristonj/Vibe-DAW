@@ -48,11 +48,13 @@
   background-repeat: no-repeat, repeat-x; background-size: 100% 100%, calc(var(--w) * 2) 100%;
   background-position: 0 0, calc(var(--lp-flow) * var(--w) - var(--x)) 0; }
 .lp-letter { --ink: linear-gradient(90deg, #b69cff, #ff8fcf 25%, #ffb547 50%, #ff8fcf 75%, #b69cff);
-  position: relative; z-index: 0; display: inline-block; padding: 0.14em 0.08em; margin: -0.14em -0.08em; transform-origin: 50% 100%; }
+  position: relative; z-index: 0; display: inline-block; transform-origin: 50% 100%; }
 /* The face: the letter in its slice of the gradient, under the sheen. */
-.lp-face { position: relative; display: inline-block; padding: inherit; margin: inherit;
+.lp-face { position: relative; display: inline-block;
   background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0) 56%, rgba(0, 0, 0, 0.14)), var(--ink); }
-.lp-letter::before, .lp-letter::after { content: attr(data-ch); position: absolute; inset: 0; padding: inherit; pointer-events: none; }
+/* Every layer pads past the advance so tails and overhangs keep their paint, and shares one box. */
+.lp-face, .lp-letter::before, .lp-letter::after { padding: 0.14em 0.08em; margin: -0.14em -0.08em; }
+.lp-letter::before, .lp-letter::after { content: attr(data-ch); position: absolute; inset: 0; pointer-events: none; }
 /* The lip: the letter again, a touch lower, in its own gradient under 40% black. */
 .lp-letter::before { z-index: -1; transform: translateY(0.035em); background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), var(--ink); }
 /* The glow: the letter blurred at a fifth strength, so it carries the gradient. */
