@@ -626,13 +626,22 @@
 .toggle input:checked { background: var(--agent-fill); box-shadow: none; }
 .toggle input:checked::after { content: ''; width: 3px; height: 7px; margin-top: -2px; border: solid var(--agent-ink); border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .toggle small { display: block; color: var(--faint); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
 .project-list { display: flex; flex-direction: column; gap: 2px; max-height: 50vh; overflow: auto; margin-bottom: 12px; }
 .project-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-m); text-align: left; }
 .project-item:hover { background: var(--panel-2); }
 .project-item.current { box-shadow: inset 0 0 0 1px var(--line); }
 .project-item .when { margin-left: auto; color: var(--faint); font-size: 11.5px; }
+
+/* Keep the project list scrollable while its header and actions remain visible. */
+.projects-overlay { padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left)); }
+.projects-overlay .modal { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
+.projects-overlay .modal > h2, .projects-overlay .sub, .projects-overlay .modal-actions { flex-shrink: 0; }
+.projects-overlay .project-list { min-height: 0; }
+.project-item > button:first-child { min-width: 0; }
+.project-item b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-item svg, .project-item .when { flex-shrink: 0; }
 
 .inline-ai {
   position: fixed;
@@ -956,6 +965,9 @@ kbd {
 
   .overlay { align-items: end; }
   .modal { width: 100%; max-height: 92%; padding: 16px 16px calc(16px + var(--safe-bottom)); border-radius: var(--radius-l) var(--radius-l) 0 0; }
+  .projects-overlay { align-items: center; }
+  .projects-overlay .modal { padding: 16px; border-radius: var(--radius-l); }
+  .projects-overlay .modal-actions > .btn { flex: 1 1 45%; }
   .modal.help { width: 100%; }
   .settings-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .settings-tabs::-webkit-scrollbar { display: none; }

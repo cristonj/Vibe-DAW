@@ -17,14 +17,14 @@ import { openSavePreset } from './SavePreset';
 import { importProjectFile } from '../../state/projectFile';
 import { acknowledgeAi, hasAiConsent } from '../../legal/acceptance';
 
-function Modal({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, sub, onClose, children, className = '' }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode; className?: string }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, [onClose]);
   return (
-    <div className="overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={`overlay ${className}`} onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" role="dialog" aria-label={title}>
         <h2>{title}</h2>
         {sub && <p className="sub">{sub}</p>}
@@ -299,7 +299,7 @@ export function ProjectsModal({ onClose }: { onClose: () => void }) {
     try { await openProject(id); onClose(); } catch (e) { toast((e as Error).message, 'error'); }
   };
   return (
-    <Modal title="Projects" sub="Saved on this device, and in the cloud when you're signed in." onClose={onClose}>
+    <Modal className="projects-overlay" title="Projects" sub="Saved on this device, and in the cloud when you're signed in." onClose={onClose}>
       <div className="project-list">
         {projects.map((p) => (
           <div key={p.id} className={`project-item ${p.id === current ? 'current' : ''}`}>
