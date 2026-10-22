@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type AnimationEvent, type PointerEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type AnimationEvent, type CSSProperties, type PointerEvent } from 'react';
 import { Wordmark } from '../brand/Wordmark';
 import { MusicTheoryIdentity } from './MusicTheoryIdentity';
 import { donationWallets } from './donations';
@@ -89,7 +89,7 @@ function Arrow() {
 }
 
 /** Bounce the letter under the pointer. A class rather than :hover, so it finishes the bounce. */
-const bop = (e: PointerEvent) => (e.target as Element).closest('.vibe-letter')?.classList.add('bop');
+const bop = (e: PointerEvent) => (e.target as Element).closest('.vibe-letter, .lp-letter')?.classList.add('bop');
 const unbop = (e: AnimationEvent) => { if (e.animationName === 'lp-bop') (e.target as Element).classList.remove('bop'); };
 
 /** Keep each animation's place while it is offscreen, including SVG color flow. */
@@ -131,6 +131,40 @@ function useVisibleMotion() {
   return ref;
 }
 
+// Each lip span draws two copies (before and after), so these make eight steps down the depth.
+const LIP_STEPS = [0.125, 0.375, 0.625, 0.875];
+
+/** Text in the wordmark's ink, a span per letter; see `.lp-letter` in landing.css. */
+function Promise({ text }: { text: string }) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const mark = ref.current;
+    if (!mark) return;
+    // Each letter takes its slice of one gradient that spans the phrase.
+    const measure = () => {
+      const letters = [...mark.querySelectorAll<HTMLElement>('.lp-letter')];
+      const first = letters[0], last = letters[letters.length - 1];
+      if (!first || !last) return;
+      for (const el of letters) el.style.setProperty('--x', `${el.offsetLeft - first.offsetLeft}px`);
+      mark.style.setProperty('--w', `${Math.max(1, last.offsetLeft + last.offsetWidth - first.offsetLeft)}px`);
+    };
+    measure();
+    document.fonts?.ready.then(measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    if (mark.parentElement) observer?.observe(mark.parentElement);
+    return () => observer?.disconnect();
+  }, []);
+  let i = 0;
+  const words = text.split(' ');
+  return <mark ref={ref}>{words.map((word, w) => <Fragment key={w}>
+    <span className="lp-word">{[...word].map((ch) => {
+      const k = i++;
+      // An estimate until measured, so the prerendered page starts close.
+      return <span key={k} className="lp-letter" data-ch={ch} style={{ '--i': k, '--x': `${k * 0.52}em` } as CSSProperties}><span className="lp-face">{ch}</span>{LIP_STEPS.map((s) => <span key={s} className="lp-lip" data-ch={ch} style={{ '--s': s } as CSSProperties} />)}</span>;
+    })}</span>{w < words.length - 1 && ' '}
+  </Fragment>)}</mark>;
+}
+
 export function Landing() {
   const ref = useVisibleMotion();
   return <div className="landing" ref={ref}>
@@ -138,7 +172,7 @@ export function Landing() {
       <section className="lp-hero lp-wrap">
         <div className="lp-aurora" data-lp-motion="running" aria-hidden><i /><i /><i /></div>
         <div className="lp-wordmark-wrap" data-lp-motion="running" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" glow flow={12} /></div>
-        <h1 data-lp-motion="running">Make music.<br /><mark>Make it yours.</mark></h1>
+        <h1 data-lp-motion="running" onPointerOver={bop} onAnimationEnd={unbop}>Make music.<br /><Promise text="Make it yours." /></h1>
         <div className="lp-hero-actions" data-lp-motion="running"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /><span className="lp-sheen" aria-hidden /></a></div>
         <figure className="lp-hero-shot">
           <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.studio} alt="The Vibe studio: five tracks on the timeline with a new flute part outlined in the agent's gradient, the Producer's run and its Changes to review card on the right, and the mixer below." /></div>

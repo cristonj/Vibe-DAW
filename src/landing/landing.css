@@ -36,14 +36,35 @@
 .landing h2 { font-size: clamp(32px, 3.8vw, 50px); line-height: 1.06; }
 .landing h3 { font-size: 30px; line-height: 1.1; letter-spacing: -0.025em; }
 :where(.landing p) { color: var(--muted); margin: 0; }
-/* The promise, in the wordmark's ink and glow. The gradient runs there and back so it can drift. */
-.landing mark { color: transparent; -webkit-background-clip: text; background-clip: text; -webkit-box-decoration-break: clone; box-decoration-break: clone;
-  /* A slight raise, like the wordmark: a soft sheen down the letters and a thin lip below. */
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0) 56%, rgba(0, 0, 0, 0.14)), linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff);
-  background-size: 100% 100%, 220% 100%;
-  filter: drop-shadow(0 0.03em 0 rgba(0, 0, 0, 0.4)) drop-shadow(-0.14em 0 0.3em rgba(182, 156, 255, 0.2)) drop-shadow(0.14em 0 0.3em rgba(255, 181, 71, 0.15));
-  animation: lp-drift var(--flow-duration) ease-in-out infinite alternate; }
-@keyframes lp-drift { to { background-position: 0 0, 100% 0; } }
+/* The promise, drawn like the wordmark: each letter is its own span so it can rise, wave and bop
+   with the logo, carries the same layers (a blurred glow of itself, a darker lip of its own
+   gradient underneath, the sheen on top), and takes its slice of one gradient that spans the
+   phrase and drifts there and back like the wordmark's. Landing.tsx measures --x and --w. */
+@property --lp-flow { syntax: '<number>'; inherits: true; initial-value: 0; }
+.landing mark { background: none; color: inherit; --w: 6.6em; animation: lp-flow var(--flow-duration) ease-in-out infinite alternate; }
+@keyframes lp-flow { to { --lp-flow: 1; } }
+.lp-word { white-space: nowrap; }
+.lp-face, .lp-lip::before, .lp-lip::after, .lp-letter::after { color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-repeat: no-repeat, repeat-x; background-size: 100% 100%, calc(var(--w) * 2) 100%;
+  background-position: 0 0, calc(var(--lp-flow) * var(--w) - var(--x)) 0; }
+.lp-letter { --ink: linear-gradient(90deg, #b69cff, #ff8fcf 25%, #ffb547 50%, #ff8fcf 75%, #b69cff);
+  position: relative; z-index: 0; display: inline-block; transform-origin: 50% 100%; }
+/* The face: the letter in its slice of the gradient, under the sheen. */
+.lp-face { position: relative; display: inline-block;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0) 56%, rgba(0, 0, 0, 0.14)), var(--ink); }
+/* Every layer pads past the advance so tails and overhangs keep their paint, and shares one box. */
+.lp-face, .lp-lip::before, .lp-lip::after, .lp-letter::after { padding: 0.14em 0.08em; margin: -0.14em -0.08em; }
+.lp-lip::before, .lp-lip::after, .lp-letter::after { content: attr(data-ch); position: absolute; inset: 0; pointer-events: none; }
+/* The lip: the letter swept straight down in its own gradient under 40% black. Copies every
+   eighth of the depth make it solid, so hard corners read as one block, not a ghost below. */
+.lp-lip { position: absolute; inset: 0; z-index: -1; }
+.lp-lip::before, .lp-lip::after { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), var(--ink); transform: translateY(calc(var(--s) * 0.035em)); }
+.lp-lip::after { transform: translateY(calc((var(--s) + 0.125) * 0.035em)); }
+/* The glow: the letter blurred at a fifth strength, so it carries the gradient. */
+.lp-letter::after { z-index: -2; background-image: linear-gradient(transparent, transparent), var(--ink); filter: blur(0.07em); opacity: 0.2; }
+/* It rises in just after the logo and joins the logo's wave, as if the word ran on into it. */
+.lp-hero mark .lp-letter { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite; animation-delay: calc(420ms + var(--i) * 45ms), calc(3.1s + var(--i) * 60ms); }
+.lp-hero mark .lp-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 520ms cubic-bezier(0.3, 0, 0.3, 1); animation-delay: calc(420ms + var(--i) * 45ms), calc(3.1s + var(--i) * 60ms), 0ms; }
 
 /* The hero: centered, under a slow aurora in the brand colors. */
 .lp-hero { position: relative; overflow-x: clip; overflow-clip-margin: 0; display: flex; flex-direction: column; align-items: center; padding-top: 72px; text-align: center; }
@@ -87,7 +108,7 @@
 /* Offscreen and background-tab motion retains its place without painting. */
 [data-lp-motion] { --lp-play: running; }
 [data-lp-motion='paused'] { --lp-play: paused; }
-:is(.landing mark, .lp-aurora i, .lp-cta, .lp-cta::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-letter.bop, .lp-wordmark .vibe-dot) { animation-play-state: var(--lp-play, running); }
+:is(.landing mark, .lp-letter, .lp-letter.bop, .lp-aurora i, .lp-cta, .lp-cta::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-letter.bop, .lp-wordmark .vibe-dot) { animation-play-state: var(--lp-play, running); }
 #support { scroll-margin-top: 48px; }
 
 .lp-hero-shot { position: relative; width: 100%; margin-top: 56px; }
@@ -193,7 +214,7 @@
   .lp-aurora i { will-change: auto; }
   /* Still opens and closes, just without the motion. */
   .lp-qr-panel, .lp-qr-panel .lp-qr { animation-duration: 1ms; }
-  .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop { animation: none; }
+  .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop, .lp-hero mark .lp-letter, .lp-hero mark .lp-letter.bop { animation: none; }
 }
 .lp-legal { display:flex; flex-direction:column; align-items:center; gap:12px; padding-block:16px 40px; font-size:14px; }
 .lp-footer-brands { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:16px 36px; max-width:100%; }
