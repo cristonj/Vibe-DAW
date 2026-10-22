@@ -186,7 +186,7 @@ export function Landing() {
 
       <section className="lp-split lp-wrap lp-reveal">
         <div className="lp-copy">
-          <h2>Describe it.<br />Build it together.</h2>
+          <h2 onPointerOver={bop} onAnimationEnd={unbop}><Promise text="Describe it." /><br />Build it together.</h2>
         </div>
         <figure className="lp-frame lp-producer"><Shot shot={SHOTS.producer} alt="The Producer panel: a request for a breathy flute melody, the tools it used, its mix review, its reply, and the Changes to review card with Undo all and Keep." /></figure>
       </section>
@@ -195,18 +195,15 @@ export function Landing() {
         <div className="lp-split lp-wrap reverse">
           <figure className="lp-frame lp-inline"><Shot shot={SHOTS.inlineEdit} alt="Four bars of bass and pad selected across two tracks with the inline edit box open: Walk the bass up into the hook." /></figure>
           <div className="lp-copy">
-            <h2>Select it.<br />Shape it.</h2>
+            <h2 onPointerOver={bop} onAnimationEnd={unbop}>Select it.<br /><Promise text="Shape it." /></h2>
           </div>
         </div>
       </section>
 
       <section className="lp-daw lp-wrap">
-        <div className="lp-daw-head lp-reveal">
-          <h2>A whole studio.<br />In your browser.</h2>
-        </div>
         <div className="lp-grid">
-          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.pianoRoll} alt="The piano roll showing the flute melody with note velocities." /></figure>
           <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.drums} alt="The step sequencer with kick, snare, hat, rim and shaker lanes." /></figure>
+          <figure className="lp-frame wide lp-reveal"><Shot shot={SHOTS.pianoRoll} alt="The piano roll showing the flute melody with note velocities." /></figure>
           <figure className="lp-frame lp-mixer lp-reveal"><Shot shot={SHOTS.mixer} alt="The mixer with a channel strip for each track and the master bus." /></figure>
           <div className="lp-promise lp-reveal">
             <h3>Real notes.<br />Real instruments.</h3>

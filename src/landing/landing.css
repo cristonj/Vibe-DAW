@@ -71,9 +71,13 @@
 .lp-lip::after { transform: translateY(calc((var(--s) + 0.125) * 0.035em)); }
 /* The glow: the letter blurred at a fifth strength, so it carries the gradient. */
 .lp-letter::after { z-index: -2; background-image: linear-gradient(transparent, transparent), var(--ink); filter: blur(0.07em); opacity: 0.2; }
+/* Its own compositor layer, so a bop moves pixels instead of repainting the flowing gradient each frame. */
+.lp-letter { will-change: transform; }
+/* Outside the hero a letter only bops. */
+.lp-letter.bop { animation: lp-bop 640ms linear; }
 /* It rises in just after the logo and joins the logo's wave, as if the word ran on into it. */
 .lp-hero mark .lp-letter { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite; animation-delay: calc(420ms + var(--i) * 45ms), calc(3.1s + var(--i) * 60ms); }
-.lp-hero mark .lp-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 520ms cubic-bezier(0.3, 0, 0.3, 1); animation-delay: calc(420ms + var(--i) * 45ms), calc(3.1s + var(--i) * 60ms), 0ms; }
+.lp-hero mark .lp-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 640ms linear; animation-delay: calc(420ms + var(--i) * 45ms), calc(3.1s + var(--i) * 60ms), 0ms; }
 
 /* The hero: centered, under a slow aurora in the brand colors. */
 .lp-hero { position: relative; overflow-x: clip; overflow-clip-margin: 0; display: flex; flex-direction: column; align-items: center; padding-top: 72px; text-align: center; }
@@ -115,8 +119,16 @@
 @keyframes lp-wave { 0%, 10%, 100% { transform: none; } 3.5% { transform: translateY(-5%) scale(0.99, 1.03); } 7% { transform: translateY(0.6%); } }
 @keyframes lp-beat { 0%, 100% { filter: drop-shadow(0 0 calc(2.5 * var(--u, 1px)) rgba(255, 255, 255, 0.45)); } 12% { filter: drop-shadow(0 0 calc(6 * var(--u, 1px)) rgba(255, 255, 255, 0.7)); } }
 /* Each letter bounces on its own when you touch it. Keeping the other two in the list stops them restarting. */
-.lp-wordmark .vibe-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 520ms cubic-bezier(0.3, 0, 0.3, 1); animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms), 0ms; }
-@keyframes lp-bop { 30% { transform: translateY(-9%) scale(0.97, 1.04); } 60% { transform: translateY(1.5%) scale(1.03, 0.97); } 100% { transform: none; } }
+.lp-wordmark .vibe-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 640ms linear; animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms), 0ms; }
+/* A spring: each segment eases the way gravity would, so the motion never stalls between keys. */
+@keyframes lp-bop {
+  0% { transform: none; animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  32% { transform: translateY(-10%) scale(0.97, 1.04); animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.4); }
+  56% { transform: translateY(1.5%) scale(1.04, 0.96); animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  74% { transform: translateY(-2.5%) scale(0.995, 1.01); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  88% { transform: translateY(0.4%); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  100% { transform: none; }
+}
 
 /* Offscreen and background-tab motion retains its place without painting. */
 [data-lp-motion] { --lp-play: running; }
@@ -227,7 +239,7 @@
   .lp-aurora i, .lp-cta-fill::before, .lp-cta-glow, .lp-cta-glow::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-dot { will-change: auto; }
   /* Still opens and closes, just without the motion. */
   .lp-qr-panel, .lp-qr-panel .lp-qr { animation-duration: 1ms; }
-  .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop, .lp-hero mark .lp-letter, .lp-hero mark .lp-letter.bop { animation: none; }
+  .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop, .lp-hero mark .lp-letter, .lp-letter.bop { animation: none; }
 }
 .lp-legal { display:flex; flex-direction:column; align-items:center; gap:12px; padding-block:16px 40px; font-size:14px; }
 .lp-footer-brands { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:16px 36px; max-width:100%; }
