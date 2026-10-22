@@ -8,23 +8,32 @@
 
 .lp-btn { display: inline-flex; align-items: center; justify-content:center; gap:8px; min-height:48px; max-width:100%; padding:12px 22px; border-radius: var(--radius-m); background: var(--agent-fill); color: var(--agent-ink) !important; font-size: 15px; font-weight: 600; transition: transform 200ms, box-shadow 200ms; }
 /* The call to action: a flowing gradient with a glossy top, a breathing glow behind it, and a
-   sheen that sweeps across now and then. */
+   sheen that sweeps across now and then. The gradients flow by sliding wider layers under a
+   clip, so every frame is compositing alone: no repaint, and no reblur of the glow's source. */
 .landing .lp-cta { position: relative; isolation: isolate; gap: 10px; height: 58px; padding: 0 24px 0 30px; border-radius: 14px; font-size: 17px; font-weight: 650;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05) 50%, rgba(0, 0, 0, 0.14)), linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff);
-  background-size: 100% 100%, 220% 100%;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -2px 0 rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.5), -22px 0 36px -18px rgba(182, 156, 255, 0.85), 0 0 36px -18px rgba(255, 143, 207, 0.8), 22px 0 36px -18px rgba(255, 181, 71, 0.85);
-  animation: lp-cta-flow var(--flow-duration) ease-in-out infinite alternate; }
+  background: none;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.5), -22px 0 36px -18px rgba(182, 156, 255, 0.85), 0 0 36px -18px rgba(255, 143, 207, 0.8), 22px 0 36px -18px rgba(255, 181, 71, 0.85); }
 .landing .lp-cta:hover { transform: translateY(-2px); }
 .landing .lp-cta:active { transform: translateY(1px); }
 .lp-cta > * { position: relative; z-index: 1; }
-.lp-cta::before { content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 20px; background: var(--agent-flow) 0 0 / 200% 100%; filter: blur(20px); opacity: 0.36; animation: lp-cta-glow 3.4s ease-in-out infinite, lp-glow-flow var(--flow-duration) ease-in-out infinite alternate; }
+.lp-cta > .lp-cta-fill, .lp-cta > .lp-cta-glow { position: absolute; overflow: hidden; pointer-events: none; }
+/* The fill: a gradient 220% wide sliding 120% of the button, under the gloss and its edges. */
+.lp-cta > .lp-cta-fill { inset: 0; z-index: -2; border-radius: inherit; }
+.lp-cta-fill::before, .lp-cta-glow::before { content: ''; position: absolute; inset: 0 auto 0 0; will-change: transform; }
+.lp-cta-fill::before { width: 220%; background: linear-gradient(100deg, #b69cff, #ff8fcf, #ffb547, #ff8fcf, #b69cff); animation: lp-cta-flow var(--flow-duration) ease-in-out infinite alternate; }
+.lp-cta-fill::after { content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05) 50%, rgba(0, 0, 0, 0.14));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -2px 0 rgba(0, 0, 0, 0.18); }
+/* The glow: the same flow at 200%, clipped to its rounded box and blurred on the compositor. */
+.lp-cta > .lp-cta-glow { inset: -4px; z-index: -1; border-radius: 20px; filter: blur(20px); opacity: 0.36; will-change: transform, opacity, filter; animation: lp-cta-glow 3.4s ease-in-out infinite; }
+.lp-cta-glow::before { width: 200%; background: var(--agent-flow); animation: lp-glow-flow var(--flow-duration) ease-in-out infinite alternate; }
 .lp-cta > .lp-sheen { position: absolute; inset: 0; z-index: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
-.lp-sheen::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 250%;
+.lp-sheen::after { content: ''; will-change: transform; position: absolute; inset: 0 auto 0 0; width: 250%;
   background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.6) 50%, transparent 62%); transform: translateX(90%); animation: lp-cta-sheen 5s ease-in-out 1.8s infinite; }
 .lp-cta svg { transition: transform 200ms ease; }
 .lp-cta:hover svg { transform: translateX(4px); }
-@keyframes lp-cta-flow { to { background-position: 0 0, 100% 0; } }
-@keyframes lp-glow-flow { to { background-position: 100% 0; } }
+@keyframes lp-cta-flow { to { transform: translateX(-54.5454545%); } }
+@keyframes lp-glow-flow { to { transform: translateX(-50%); } }
 @keyframes lp-cta-glow { 50% { opacity: 0.58; transform: scale(1.04); } }
 @keyframes lp-cta-sheen { 0% { transform: translateX(90%); } 35%, 100% { transform: translateX(-150%); } }
 .lp-btn.ghost { background: var(--panel); color: var(--text) !important; box-shadow: inset 0 0 0 1px var(--line); }
@@ -71,11 +80,14 @@
 .lp-hero > * { position: relative; }
 .lp-aurora { position: absolute !important; z-index: 0; top: -100px; left: 50%; width: min(1240px, 140vw); height: 780px; translate: -50% 0; pointer-events: none; opacity: 0.3; }
 /* Blur each blob once, then composite its movement. Blurring their moving parent
-   rerasterized the whole 1240 x 780 surface on every frame, especially costly at phone DPR. */
-.lp-aurora i { position: absolute; border-radius: 50%; filter: blur(80px); will-change: transform; }
-.lp-aurora i:nth-child(1) { left: 12%; top: 6%; width: 44%; height: 60%; background: #b69cff; animation: lp-aurora-a 19s ease-in-out infinite alternate; }
-.lp-aurora i:nth-child(2) { left: 36%; top: 22%; width: 38%; height: 50%; background: #ff8fcf; animation: lp-aurora-b 23s ease-in-out infinite alternate; }
-.lp-aurora i:nth-child(3) { left: 54%; top: 2%; width: 34%; height: 46%; background: #ffb547; opacity: 0.5; animation: lp-aurora-c 17s ease-in-out infinite alternate; }
+   rerasterized the whole 1240 x 780 surface on every frame, especially costly at phone DPR,
+   and a filter on the moving layer itself reblurs it on every frame; the blur lives on a
+   child that is painted into the blob's layer once. */
+.lp-aurora i { position: absolute; border-radius: 50%; will-change: transform; }
+.lp-aurora i::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--c); filter: blur(80px); }
+.lp-aurora i:nth-child(1) { left: 12%; top: 6%; width: 44%; height: 60%; --c: #b69cff; animation: lp-aurora-a 19s ease-in-out infinite alternate; }
+.lp-aurora i:nth-child(2) { left: 36%; top: 22%; width: 38%; height: 50%; --c: #ff8fcf; animation: lp-aurora-b 23s ease-in-out infinite alternate; }
+.lp-aurora i:nth-child(3) { left: 54%; top: 2%; width: 34%; height: 46%; --c: #ffb547; opacity: 0.5; animation: lp-aurora-c 17s ease-in-out infinite alternate; }
 @keyframes lp-aurora-a { to { transform: translate(20%, 16%) scale(1.15); } }
 @keyframes lp-aurora-b { to { transform: translate(-24%, -12%) scale(0.88); } }
 @keyframes lp-aurora-c { to { transform: translate(-14%, 22%) scale(1.2); } }
@@ -86,6 +98,7 @@
 
 /* The letters rise in on the beat, then the dot drops onto the i: the finishing touch. After
    that the word does a small wave now and then, and the dot keeps time. */
+.lp-wordmark .vibe-letter, .lp-wordmark .vibe-dot { will-change: transform, opacity; }
 .lp-wordmark .vibe-letter { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite; animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms); }
 .lp-wordmark .vibe-i .vibe-dot { animation: lp-drop 1100ms cubic-bezier(0.3, 0, 0.3, 1) 520ms both, lp-beat 1.6s ease-out 2.2s infinite; }
 @keyframes lp-rise { from { transform: translateY(26%); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
@@ -100,7 +113,7 @@
   100% { transform: none; opacity: 1; }
 }
 @keyframes lp-wave { 0%, 10%, 100% { transform: none; } 3.5% { transform: translateY(-5%) scale(0.99, 1.03); } 7% { transform: translateY(0.6%); } }
-@keyframes lp-beat { 0%, 100% { filter: drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.45)); } 12% { filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7)); } }
+@keyframes lp-beat { 0%, 100% { filter: drop-shadow(0 0 calc(2.5 * var(--u, 1px)) rgba(255, 255, 255, 0.45)); } 12% { filter: drop-shadow(0 0 calc(6 * var(--u, 1px)) rgba(255, 255, 255, 0.7)); } }
 /* Each letter bounces on its own when you touch it. Keeping the other two in the list stops them restarting. */
 .lp-wordmark .vibe-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 520ms cubic-bezier(0.3, 0, 0.3, 1); animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms), 0ms; }
 @keyframes lp-bop { 30% { transform: translateY(-9%) scale(0.97, 1.04); } 60% { transform: translateY(1.5%) scale(1.03, 0.97); } 100% { transform: none; } }
@@ -108,7 +121,7 @@
 /* Offscreen and background-tab motion retains its place without painting. */
 [data-lp-motion] { --lp-play: running; }
 [data-lp-motion='paused'] { --lp-play: paused; }
-:is(.landing mark, .lp-letter, .lp-letter.bop, .lp-aurora i, .lp-cta, .lp-cta::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-letter.bop, .lp-wordmark .vibe-dot) { animation-play-state: var(--lp-play, running); }
+:is(.landing mark, .lp-letter, .lp-letter.bop, .lp-aurora i, .lp-cta-fill::before, .lp-cta-glow, .lp-cta-glow::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-letter.bop, .lp-wordmark .vibe-dot) { animation-play-state: var(--lp-play, running); }
 #support { scroll-margin-top: 48px; }
 
 .lp-hero-shot { position: relative; width: 100%; margin-top: 56px; }
@@ -210,8 +223,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing { scroll-behavior: auto; }
-  .landing mark, .lp-aurora i, .lp-btn, .lp-cta::before, .lp-sheen::after { animation: none; transition: none; }
-  .lp-aurora i { will-change: auto; }
+  .landing mark, .lp-aurora i, .lp-btn, .lp-cta-fill::before, .lp-cta-glow, .lp-cta-glow::before, .lp-sheen::after { animation: none; transition: none; }
+  .lp-aurora i, .lp-cta-fill::before, .lp-cta-glow, .lp-cta-glow::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-dot { will-change: auto; }
   /* Still opens and closes, just without the motion. */
   .lp-qr-panel, .lp-qr-panel .lp-qr { animation-duration: 1ms; }
   .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop, .lp-hero mark .lp-letter, .lp-hero mark .lp-letter.bop { animation: none; }
