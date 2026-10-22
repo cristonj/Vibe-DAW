@@ -120,6 +120,18 @@
 @keyframes lp-beat { 0%, 100% { filter: drop-shadow(0 0 calc(2.5 * var(--u, 1px)) rgba(255, 255, 255, 0.45)); } 12% { filter: drop-shadow(0 0 calc(6 * var(--u, 1px)) rgba(255, 255, 255, 0.7)); } }
 /* Each letter bounces on its own when you touch it. Keeping the other two in the list stops them restarting. */
 .lp-wordmark .vibe-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 640ms linear; animation-delay: calc(var(--i) * 90ms), calc(2.6s + var(--i) * 110ms), 0ms; }
+/* The i's dot pops off on its own and lands again the way it did on load. It fits inside the bop,
+   which takes the class away when it ends. */
+.lp-wordmark .vibe-i.bop .vibe-dot { animation: lp-drop 1100ms cubic-bezier(0.3, 0, 0.3, 1) 520ms both, lp-beat 1.6s ease-out 2.2s infinite, lp-hop 640ms linear; }
+@keyframes lp-hop {
+  0% { transform: none; animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  30% { transform: translateY(-150%) scale(0.94, 1.08); animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.4); }
+  54% { transform: translateY(0) scale(1.14, 0.84); animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  68% { transform: translateY(-40%) scale(0.96, 1.05); animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.4); }
+  80% { transform: translateY(0) scale(1.07, 0.93); animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  90% { transform: translateY(-10%); animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.4); }
+  100% { transform: none; }
+}
 /* A spring: each segment eases the way gravity would, so the motion never stalls between keys. */
 @keyframes lp-bop {
   0% { transform: none; animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
@@ -239,7 +251,7 @@
   .lp-aurora i, .lp-cta-fill::before, .lp-cta-glow, .lp-cta-glow::before, .lp-sheen::after, .lp-wordmark .vibe-letter, .lp-wordmark .vibe-dot { will-change: auto; }
   /* Still opens and closes, just without the motion. */
   .lp-qr-panel, .lp-qr-panel .lp-qr { animation-duration: 1ms; }
-  .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop, .lp-hero mark .lp-letter, .lp-letter.bop { animation: none; }
+  .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop, .lp-wordmark .vibe-i.bop .vibe-dot, .lp-hero mark .lp-letter, .lp-letter.bop { animation: none; }
 }
 .lp-legal { display:flex; flex-direction:column; align-items:center; gap:12px; padding-block:16px 40px; font-size:14px; }
 .lp-footer-brands { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:16px 36px; max-width:100%; }
