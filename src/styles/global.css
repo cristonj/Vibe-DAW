@@ -883,6 +883,10 @@ kbd {
   .browser.collapsed { width: min(300px, 86%); transform: translateX(-100%); }
   .agent.collapsed { width: min(420px, 100%); transform: translateX(100%); }
   .drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 44; background: rgba(0, 0, 0, 0.55); }
+  /* Edge to edge: the top bar and the dock paint under the status bar and home indicator. */
+  .app { grid-template-rows: calc(52px + var(--safe-top)) minmax(0, 1fr); padding-top: 0; padding-bottom: 0; }
+  .topbar { padding-top: var(--safe-top); }
+  .main { padding-bottom: var(--safe-bottom); background: var(--panel); }
 
   .topbar { gap: 4px; min-width: 0; }
   .topbar .btn-label { display: none; }
@@ -896,7 +900,7 @@ kbd {
 
 @media (max-width: 760px), (max-width: 900px) and (min-height: 600px) {
   .app { grid-template-rows: auto minmax(0, 1fr); }
-  .topbar { flex-wrap: wrap; row-gap: 6px; padding: 6px 8px; }
+  .topbar { flex-wrap: wrap; row-gap: 6px; padding: calc(6px + var(--safe-top)) 8px 6px; }
   .topbar-break { display: block; order: 2; flex-basis: 100%; height: 0; }
   .transport { order: 3; margin-left: 0; }
   .lcd { order: 3; flex: 1 1 0; min-width: 0; margin: 0 0 0 4px; overflow-x: auto; scrollbar-width: none; }

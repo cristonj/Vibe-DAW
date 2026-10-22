@@ -80,7 +80,7 @@
 .lp-hero mark .lp-letter.bop { animation: lp-rise 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both, lp-wave 7s ease-in-out infinite, lp-bop 640ms linear; animation-delay: calc(420ms + var(--i) * 45ms), calc(3.1s + var(--i) * 60ms), 0ms; }
 
 /* The hero: centered, under a slow aurora in the brand colors. */
-.lp-hero { position: relative; overflow-x: clip; overflow-clip-margin: 0; display: flex; flex-direction: column; align-items: center; padding-top: 72px; text-align: center; }
+.lp-hero { position: relative; overflow-x: clip; overflow-clip-margin: 0; display: flex; flex-direction: column; align-items: center; padding-top: calc(72px + max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px))); text-align: center; }
 .lp-hero > * { position: relative; }
 .lp-aurora { position: absolute !important; z-index: 0; top: -100px; left: 50%; width: min(1240px, 140vw); height: 780px; translate: -50% 0; pointer-events: none; opacity: 0.3; }
 /* Blur each blob once, then composite its movement. Blurring their moving parent
@@ -215,7 +215,7 @@
 @media (max-width: 720px) {
   .landing { font-size: 16px; }
   .lp-wrap { padding: 0 20px; }
-  .lp-hero { padding-top: 40px; }
+  .lp-hero { padding-top: calc(56px + max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px))); }
   .lp-hero h1 { margin-top: 28px; }
   .lp-hero-actions { margin-top: 32px; }
   .lp-hero-shot { margin-top: 48px; padding-bottom: 0; }
