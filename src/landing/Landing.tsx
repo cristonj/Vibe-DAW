@@ -131,6 +131,9 @@ function useVisibleMotion() {
   return ref;
 }
 
+// Each lip span draws two copies (before and after), so these make eight steps down the depth.
+const LIP_STEPS = [0.125, 0.375, 0.625, 0.875];
+
 /** Text in the wordmark's ink, a span per letter; see `.lp-letter` in landing.css. */
 function Promise({ text }: { text: string }) {
   const ref = useRef<HTMLElement>(null);
@@ -157,7 +160,7 @@ function Promise({ text }: { text: string }) {
     <span className="lp-word">{[...word].map((ch) => {
       const k = i++;
       // An estimate until measured, so the prerendered page starts close.
-      return <span key={k} className="lp-letter" data-ch={ch} style={{ '--i': k, '--x': `${k * 0.52}em` } as CSSProperties}><span className="lp-face">{ch}</span></span>;
+      return <span key={k} className="lp-letter" data-ch={ch} style={{ '--i': k, '--x': `${k * 0.52}em` } as CSSProperties}><span className="lp-face">{ch}</span>{LIP_STEPS.map((s) => <span key={s} className="lp-lip" data-ch={ch} style={{ '--s': s } as CSSProperties} />)}</span>;
     })}</span>{w < words.length - 1 && ' '}
   </Fragment>)}</mark>;
 }

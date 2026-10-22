@@ -44,7 +44,7 @@
 .landing mark { background: none; color: inherit; --w: 6.6em; animation: lp-flow var(--flow-duration) ease-in-out infinite alternate; }
 @keyframes lp-flow { to { --lp-flow: 1; } }
 .lp-word { white-space: nowrap; }
-.lp-face, .lp-letter::before, .lp-letter::after { color: transparent; -webkit-background-clip: text; background-clip: text;
+.lp-face, .lp-lip::before, .lp-lip::after, .lp-letter::after { color: transparent; -webkit-background-clip: text; background-clip: text;
   background-repeat: no-repeat, repeat-x; background-size: 100% 100%, calc(var(--w) * 2) 100%;
   background-position: 0 0, calc(var(--lp-flow) * var(--w) - var(--x)) 0; }
 .lp-letter { --ink: linear-gradient(90deg, #b69cff, #ff8fcf 25%, #ffb547 50%, #ff8fcf 75%, #b69cff);
@@ -53,10 +53,13 @@
 .lp-face { position: relative; display: inline-block;
   background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0) 56%, rgba(0, 0, 0, 0.14)), var(--ink); }
 /* Every layer pads past the advance so tails and overhangs keep their paint, and shares one box. */
-.lp-face, .lp-letter::before, .lp-letter::after { padding: 0.14em 0.08em; margin: -0.14em -0.08em; }
-.lp-letter::before, .lp-letter::after { content: attr(data-ch); position: absolute; inset: 0; pointer-events: none; }
-/* The lip: the letter again, a touch lower, in its own gradient under 40% black. */
-.lp-letter::before { z-index: -1; transform: translateY(0.035em); background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), var(--ink); }
+.lp-face, .lp-lip::before, .lp-lip::after, .lp-letter::after { padding: 0.14em 0.08em; margin: -0.14em -0.08em; }
+.lp-lip::before, .lp-lip::after, .lp-letter::after { content: attr(data-ch); position: absolute; inset: 0; pointer-events: none; }
+/* The lip: the letter swept straight down in its own gradient under 40% black. Copies every
+   eighth of the depth make it solid, so hard corners read as one block, not a ghost below. */
+.lp-lip { position: absolute; inset: 0; z-index: -1; }
+.lp-lip::before, .lp-lip::after { background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), var(--ink); transform: translateY(calc(var(--s) * 0.035em)); }
+.lp-lip::after { transform: translateY(calc((var(--s) + 0.125) * 0.035em)); }
 /* The glow: the letter blurred at a fifth strength, so it carries the gradient. */
 .lp-letter::after { z-index: -2; background-image: linear-gradient(transparent, transparent), var(--ink); filter: blur(0.07em); opacity: 0.2; }
 /* It rises in just after the logo and joins the logo's wave, as if the word ran on into it. */
