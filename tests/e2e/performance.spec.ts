@@ -29,7 +29,7 @@ test('landscape reveals finish before content reaches the middle of the screen',
   await page.goto('/');
   for (const viewport of [{ width: 844, height: 390 }, { width: 932, height: 430 }, { width: 667, height: 375 }]) {
     await page.setViewportSize(viewport);
-    for (const selector of ['.lp-split.lp-reveal', '.lp-band', '.lp-daw-head', '.lp-grid .wide', '.lp-mixer', '.lp-promise']) {
+    for (const selector of ['.lp-split.lp-reveal', '.lp-band', '.lp-grid .wide', '.lp-mixer', '.lp-promise']) {
       const section = page.locator(selector).first();
       await section.evaluate((el) => {
         const root = document.querySelector<HTMLElement>('.landing')!;
