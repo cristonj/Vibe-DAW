@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type AnimationEvent, type CSSProperties, type PointerEvent } from 'react';
-import { Wordmark } from '../brand/Wordmark';
+import { LayeredWordmark, Wordmark } from '../brand/Wordmark';
 import { MusicTheoryIdentity } from './MusicTheoryIdentity';
 import { donationWallets } from './donations';
 import './landing.css';
@@ -88,8 +88,13 @@ function Arrow() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5" /></svg>;
 }
 
-/** Bounce the letter under the pointer. A class rather than :hover, so it finishes the bounce. */
-const bop = (e: PointerEvent) => (e.target as Element).closest('.vibe-letter, .lp-letter')?.classList.add('bop');
+/** Bounce the letter under the pointer, and its glow with it. A class rather than :hover, so it finishes the bounce. */
+const bop = (e: PointerEvent) => {
+  const letter = (e.target as Element).closest<HTMLElement>('.vibe-letter, .lp-letter');
+  if (!letter) return;
+  const twins = letter.dataset.letter ? letter.parentElement!.querySelectorAll(`.vibe-letter[data-letter="${letter.dataset.letter}"]`) : [letter];
+  twins.forEach((el) => el.classList.add('bop'));
+};
 const unbop = (e: AnimationEvent) => { if (e.animationName === 'lp-bop') (e.target as Element).classList.remove('bop'); };
 
 /** Keep each animation's place while it is offscreen, including SVG color flow. */
@@ -171,9 +176,9 @@ export function Landing() {
     <main>
       <section className="lp-hero lp-wrap">
         <div className="lp-aurora" data-lp-motion="running" aria-hidden><i /><i /><i /></div>
-        <div className="lp-wordmark-wrap" data-lp-motion="running" onPointerOver={bop} onAnimationEnd={unbop}><Wordmark className="lp-wordmark" glow flow={12} /></div>
+        <div className="lp-wordmark-wrap" data-lp-motion="running" onPointerOver={bop} onAnimationEnd={unbop}><LayeredWordmark className="lp-wordmark" flow={12} /></div>
         <h1 data-lp-motion="running" onPointerOver={bop} onAnimationEnd={unbop}>Make music.<br /><Promise text="Make it yours." /></h1>
-        <div className="lp-hero-actions" data-lp-motion="running"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /><span className="lp-sheen" aria-hidden /></a></div>
+        <div className="lp-hero-actions" data-lp-motion="running"><a className="lp-btn lp-cta" href="/studio"><span className="lp-cta-glow" aria-hidden /><span className="lp-cta-fill" aria-hidden /><span>Open the studio</span><Arrow /><span className="lp-sheen" aria-hidden /></a></div>
         <figure className="lp-hero-shot">
           <div className="lp-frame lp-bleed"><Shot eager shot={SHOTS.studio} alt="The Vibe studio: five tracks on the timeline with a new flute part outlined in the agent's gradient, the Producer's run and its Changes to review card on the right, and the mixer below." /></div>
         </figure>
@@ -212,7 +217,7 @@ export function Landing() {
       <section className="lp-end lp-wrap" id="support">
         <h2>Free and open source.</h2>
         <p className="lp-key-note">The AI Producer uses your own Gemini API key.</p>
-        <div className="lp-actions" data-lp-motion="running"><a className="lp-btn lp-cta" href="/studio"><span>Open the studio</span><Arrow /><span className="lp-sheen" aria-hidden /></a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">Star it on GitHub</a></div>
+        <div className="lp-actions" data-lp-motion="running"><a className="lp-btn lp-cta" href="/studio"><span className="lp-cta-glow" aria-hidden /><span className="lp-cta-fill" aria-hidden /><span>Open the studio</span><Arrow /><span className="lp-sheen" aria-hidden /></a><a className="lp-btn ghost" href={REPO} target="_blank" rel="noreferrer">Star it on GitHub</a></div>
         <Support />
       </section>
 

@@ -17,11 +17,11 @@ test('landing loads only shared and landing styles and pauses offscreen motion',
     root.style.scrollBehavior = 'auto'; root.scrollTop = root.scrollHeight;
   });
   await expect(wordmark).toHaveAttribute('data-lp-motion', 'paused');
-  expect(await wordmark.locator('svg').evaluate((el) => (el as SVGSVGElement).animationsPaused())).toBe(true);
+  expect(await wordmark.locator('svg').first().evaluate((el) => (el as SVGSVGElement).animationsPaused())).toBe(true);
   expect(await wordmark.locator('.vibe-letter').first().evaluate((el) => getComputedStyle(el).animationPlayState.split(',').every((s) => s.trim() === 'paused'))).toBe(true);
   await page.evaluate(() => { document.querySelector('.landing')!.scrollTop = 0; });
   await expect(wordmark).toHaveAttribute('data-lp-motion', 'running');
-  expect(await wordmark.locator('svg').evaluate((el) => (el as SVGSVGElement).animationsPaused())).toBe(false);
+  expect(await wordmark.locator('svg').first().evaluate((el) => (el as SVGSVGElement).animationsPaused())).toBe(false);
 });
 
 test('landscape reveals finish before content reaches the middle of the screen', async ({ page }, info) => {
