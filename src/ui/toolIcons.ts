@@ -13,4 +13,5 @@ export const TOOL_ICONS: Record<string, Icon> = {
   search_online_sounds: Globe, import_online_sound: Download, update_plan: ListChecks, manage_context: Archive,
   add_annotation: StickyNote, edit_annotation: Pencil, delete_annotation: Trash, list_annotations: StickyNote,
   get_custom_effect: Code, list_library: Library, load_library_item: FolderOpen, save_library_item: Bookmark,
+  get_producer_skill: Library,
 };

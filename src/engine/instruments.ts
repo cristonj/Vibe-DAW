@@ -1,3 +1,4 @@
+import { VoicePool } from './voicePool';
 import * as Tone from 'tone';
 import { midiToFreq } from '../model/theory';
 import type { InstrumentSpec } from '../model/types';
@@ -185,10 +186,10 @@ function pluckGuitar(spec: InstrumentSpec): Instrument {
 
 // ------------------------------------------------------------------ synth presets
 
-type PolyVoice = Tone.PolySynth<Tone.Synth> | Tone.PolySynth<Tone.FMSynth> | Tone.PolySynth<Tone.MonoSynth> | Tone.PolySynth<Tone.AMSynth>;
+type PolyVoice = VoicePool<Tone.Synth> | VoicePool<Tone.FMSynth> | VoicePool<Tone.MonoSynth> | VoicePool<Tone.AMSynth>;
 
 function poly(voice: PolyVoice, chain: Tone.ToneAudioNode[], out: Tone.Gain, apply: (p: Record<string, number>) => void, params: Record<string, number>, extra: Array<{ dispose(): void }> = []): Instrument {
-  voice.maxPolyphony = 16; // bounds worst-case CPU on dense chords
+  voice.maxPolyphony = 24; // bounded pool steals release tails rather than dropping new notes
   let node: Tone.ToneAudioNode = voice;
   for (const c of chain) { node.connect(c); node = c; }
   node.connect(out);
@@ -208,7 +209,7 @@ function synth(spec: InstrumentSpec): Instrument {
   const out = new Tone.Gain(1);
   switch (spec.preset) {
     case 'analog_brass': {
-      const v = new Tone.PolySynth(Tone.MonoSynth, {
+      const v = new VoicePool(Tone.MonoSynth, {
         oscillator: { type: 'sawtooth' }, filter: { type: 'lowpass', Q: 1.2, rolloff: -24 },
         envelope: { attack: 0.04, decay: 0.3, sustain: 0.65, release: 0.6 },
         filterEnvelope: { attack: 0.06, decay: 0.4, sustain: 0.3, release: 0.5, baseFrequency: 300, octaves: 2.5 },
@@ -220,7 +221,7 @@ function synth(spec: InstrumentSpec): Instrument {
     case 'marimba':
     case 'kalimba': {
       const bass = spec.preset === 'fm_bass', kalimba = spec.preset === 'kalimba';
-      const v = new Tone.PolySynth(Tone.FMSynth, {
+      const v = new VoicePool(Tone.FMSynth, {
         harmonicity: bass ? 1 : kalimba ? 6.5 : 4,
         modulationIndex: params.bite,
         oscillator: { type: 'sine' }, modulation: { type: 'sine' },
@@ -231,18 +232,18 @@ function synth(spec: InstrumentSpec): Instrument {
       return poly(v, [], out, (p) => v.set({ modulationIndex: p.bite, envelope: { attack: p.attack ?? 0.002, release: p.release } }), params);
     }
     case 'chiptune': {
-      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'square' }, envelope: { attack: 0.002, decay: 0.1, sustain: 0.55, release: 0.12 } });
+      const v = new VoicePool(Tone.Synth, { oscillator: { type: 'square' }, envelope: { attack: 0.002, decay: 0.1, sustain: 0.55, release: 0.12 } });
       const filter = new Tone.Filter({ type: 'lowpass', frequency: params.cutoff, rolloff: -12 });
       out.gain.value = 0.25;
       return poly(v, [filter], out, (p) => { filter.frequency.value = p.cutoff; v.set({ envelope: { attack: p.attack, release: p.release } }); }, params);
     }
     case 'glass_pad': {
-      const v = new Tone.PolySynth(Tone.AMSynth, { harmonicity: params.shimmer, oscillator: { type: 'sine' }, modulation: { type: 'sine' }, envelope: { attack: 0.8, decay: 0.5, sustain: 0.8, release: 3 } });
+      const v = new VoicePool(Tone.AMSynth, { harmonicity: params.shimmer, oscillator: { type: 'sine' }, modulation: { type: 'sine' }, envelope: { attack: 0.8, decay: 0.5, sustain: 0.8, release: 3 } });
       out.gain.value = 0.65;
       return poly(v, [], out, (p) => v.set({ harmonicity: p.shimmer, envelope: { attack: p.attack, release: p.release } }), params);
     }
     case 'epiano': {
-      const v = new Tone.PolySynth(Tone.FMSynth, {
+      const v = new VoicePool(Tone.FMSynth, {
         harmonicity: 1,
         modulationIndex: 3,
         oscillator: { type: 'sine' },
@@ -257,12 +258,12 @@ function synth(spec: InstrumentSpec): Instrument {
       }, params);
     }
     case 'sub_bass': {
-      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.95, release: 0.2 } });
+      const v = new VoicePool(Tone.Synth, { oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.95, release: 0.2 } });
       out.gain.value = 1.2;
       return poly(v, [], out, (p) => v.set({ envelope: { attack: p.attack, release: p.release } }), params);
     }
     case 'reese': {
-      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 2, spread: 36 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.9, release: 0.25 } });
+      const v = new VoicePool(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 2, spread: 36 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.9, release: 0.25 } });
       const f = new Tone.Filter({ type: 'lowpass', frequency: 900, Q: 1.5, rolloff: -24 });
       out.gain.value = 0.55;
       return poly(v, [f], out, (p) => { f.frequency.value = p.cutoff; v.set({ oscillator: { spread: p.detune * 2 } as never }); }, params);
@@ -270,7 +271,7 @@ function synth(spec: InstrumentSpec): Instrument {
     case 'pad':
     case 'dark_pad': {
       const dark = spec.preset === 'dark_pad';
-      const v = new Tone.PolySynth(Tone.Synth, {
+      const v = new VoicePool(Tone.Synth, {
         oscillator: { type: dark ? 'fattriangle' : 'fatsawtooth', count: 3, spread: dark ? 20 : 32 },
         envelope: { attack: 0.6, decay: 1, sustain: 0.85, release: 2.5 },
       });
@@ -286,14 +287,14 @@ function synth(spec: InstrumentSpec): Instrument {
       }, params);
     }
     case 'strings': {
-      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 3, spread: 26 }, envelope: { attack: 0.25, decay: 0.5, sustain: 0.85, release: 1.2 } });
+      const v = new VoicePool(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 3, spread: 26 }, envelope: { attack: 0.25, decay: 0.5, sustain: 0.85, release: 1.2 } });
       const f = new Tone.Filter({ type: 'lowpass', frequency: 3200, Q: 0.5, rolloff: -24 });
       const vib = new Tone.Vibrato({ frequency: 5, depth: 0.04 });
       out.gain.value = 0.35;
       return poly(v, [vib, f], out, (p) => v.set({ envelope: { attack: p.attack, release: p.release } }), params);
     }
     case 'choir': {
-      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 2, spread: 18 }, envelope: { attack: 0.4, decay: 0.5, sustain: 0.9, release: 1.8 } });
+      const v = new VoicePool(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 2, spread: 18 }, envelope: { attack: 0.4, decay: 0.5, sustain: 0.9, release: 1.8 } });
       const f1 = new Tone.Filter({ type: 'bandpass', frequency: 750, Q: 4 });
       const f2 = new Tone.Filter({ type: 'bandpass', frequency: 1150, Q: 5 });
       const sum = new Tone.Gain(1.4);
@@ -319,7 +320,7 @@ function synth(spec: InstrumentSpec): Instrument {
     case 'bell':
     case 'music_box': {
       const box = spec.preset === 'music_box';
-      const v = new Tone.PolySynth(Tone.FMSynth, {
+      const v = new VoicePool(Tone.FMSynth, {
         harmonicity: box ? 5.07 : 3.01,
         modulationIndex: box ? 3 : 12,
         oscillator: { type: 'sine' },
@@ -332,7 +333,7 @@ function synth(spec: InstrumentSpec): Instrument {
       return poly(v, [hp], out, (p) => v.set({ envelope: { release: p.release }, ...(p.harmonicity ? { harmonicity: p.harmonicity } : {}) }), params);
     }
     case 'pluck': {
-      const v = new Tone.PolySynth(Tone.MonoSynth, {
+      const v = new VoicePool(Tone.MonoSynth, {
         oscillator: { type: 'sawtooth' },
         filter: { Q: 2, type: 'lowpass', rolloff: -24 },
         envelope: { attack: 0.002, decay: 0.35, sustain: 0, release: 0.2 },
@@ -378,7 +379,7 @@ function synth(spec: InstrumentSpec): Instrument {
       };
     }
     case 'supersaw': {
-      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 3, spread: 60 }, envelope: { attack: 0.005, decay: 0.3, sustain: 0.8, release: 0.4 } });
+      const v = new VoicePool(Tone.Synth, { oscillator: { type: 'fatsawtooth', count: 3, spread: 60 }, envelope: { attack: 0.005, decay: 0.3, sustain: 0.8, release: 0.4 } });
       const f = new Tone.Filter({ type: 'lowpass', frequency: 6000, rolloff: -12 });
       out.gain.value = 0.22;
       return poly(v, [f], out, (p) => {
@@ -388,7 +389,7 @@ function synth(spec: InstrumentSpec): Instrument {
     }
     default: {
       // Generic fallback (also used when a sampled instrument can't download).
-      const v = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.4, sustain: 0.4, release: 0.8 } });
+      const v = new VoicePool(Tone.Synth, { oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.4, sustain: 0.4, release: 0.8 } });
       out.gain.value = 0.6;
       return poly(v, [], out, () => {}, params);
     }

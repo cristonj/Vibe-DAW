@@ -23,7 +23,8 @@ Listen closely and report what is actually audible - never guess from the descri
 Be concrete and critical like a top mix engineer and A&R: name the instruments you hear, the vibe, groove, tuning/key clashes,
 timing problems, low-end conflicts (kick vs 808), muddiness, harshness, masking, stereo image, levels, energy and arrangement.
 Use bar numbers when pointing at moments (the user tells you which bar the excerpt starts on and the bar length in seconds).
-Keep it under 180 words, as short bullet points. End with the 1-3 highest-impact fixes.`;
+Separate audible observations from interpretations and uncertain guesses. The declared project key and instrument labels are context, not proof of what sounds. Do not invent exact pitches, frequencies, clipping, or whole-song structure from an excerpt. A low peak is not by itself a problem; preserve intentional dynamics, sparse arrangements, distortion and genre character.
+Keep it under 110 words: Works (one specific strength); Issues (at most 2 supported problems with bar/time and evidence); Next (one highest-impact fix). Answer the focused question. If no meaningful issue is audible, say so. Judge against the brief, not a generic loud/bright/wide target.`;
 
 export interface ListenRequest {
   project: Project;
@@ -49,11 +50,11 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
   const bpb = beatsPerBar(p);
   const lastBar = Math.ceil(projectLength(p) / bpb) + 1;
   const startBar = Math.max(1, Math.min(lastBar - 1, Math.floor(req.startBar ?? 1)));
-  let endBar = Math.min(lastBar, Math.ceil(req.endBar ?? lastBar));
+  let endBar = Math.min(lastBar, Math.ceil(req.endBar ?? startBar + 4));
   const barSec = beatsToSeconds(p, bpb);
   if ((endBar - startBar) * barSec > MAX_LISTEN_SECONDS) endBar = startBar + Math.floor(MAX_LISTEN_SECONDS / barSec);
   if (endBar <= startBar) endBar = startBar + 1;
-  const endBeat = Math.min(barToBeat(p, endBar), barToBeat(p, startBar) + secondsToBeats(p, MAX_LISTEN_SECONDS));
+  const endBeat = Math.min(barToBeat(p, endBar), barToBeat(p, startBar) + secondsToBeats(p, req.endBar === undefined ? 12 : MAX_LISTEN_SECONDS));
   endBar = beatToBar(p, endBeat);
   const { listeningQuality, listeningChannels } = useSettings.getState();
   const cacheKey = JSON.stringify([startBar, endBar, req.trackIds, req.question, req.goal, listeningQuality, listeningChannels]);
@@ -69,12 +70,16 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
   req.signal?.throwIfAborted();
   const audio = prepareListeningAudio(pcm, listeningQuality, listeningChannels);
   const stats = mixStats(audio.pcm);
+  if (stats.peakDb <= -90) return {
+    heard: 'The rendered excerpt is silent or effectively silent (measured peak at or below -90 dBFS). Check the chosen bars, mute/solo, clips, instrument and sample loading. No model listening call was made.',
+    stats: describeStats(stats), seconds: stats.durationSec, startBar, endBar,
+  };
   const trackNames = req.trackIds?.length
     ? p.tracks.filter((t) => req.trackIds!.includes(t.id)).map((t) => t.name).join(', ')
     : 'full mix';
 
   const prompt = [
-    `Excerpt: bars ${startBar}–${endBar - 1} (${trackNames}). ${p.bpm} BPM, ${formatKey(p.key)}, ${p.timeSignature.join('/')}. One bar = ${barSec.toFixed(2)} s; 0:00 in the audio is the start of bar ${startBar}.`,
+    `Excerpt: bars [${startBar}, ${endBar}) (${trackNames}); end is exclusive. ${p.bpm} BPM, ${formatKey(p.key)}, ${p.timeSignature.join('/')}. One bar = ${barSec.toFixed(2)} s; 0:00 in the audio is the start of bar ${startBar}.`,
     req.goal ? `What the producer is going for: ${req.goal}` : '',
     `Measured: ${describeStats(stats)}.`,
     `Audio provided: ${audio.label}. ${listeningChannels === 'mono' ? 'This is a mono downmix; do not judge stereo width or panning.' : ''}`,
@@ -84,12 +89,12 @@ export async function listen(req: ListenRequest): Promise<ListenResult> {
   const heard = await generateText({
     system: EARS_SYSTEM,
     contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'audio/wav', data: arrayBufferToBase64(audio.wav) } }, { text: prompt }] }],
-    thinking: 'LOW',
+    thinking: 'MINIMAL',
     signal: req.signal,
-    maxOutputTokens: 1600,
+    maxOutputTokens: 700,
   });
   req.signal?.throwIfAborted();
-  const result = { heard: concise(heard, 2400), stats: describeStats(stats), seconds: stats.durationSec, startBar, endBar };
+  const result = { heard: concise(heard, 1400), stats: describeStats(stats), seconds: stats.durationSec, startBar, endBar };
   const cache = listenCache.get(p) ?? new Map<string, ListenResult>();
   if (cache.size >= 12) cache.delete(cache.keys().next().value!);
   cache.set(cacheKey, result);

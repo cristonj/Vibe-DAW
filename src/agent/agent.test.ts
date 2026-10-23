@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LlmRequest, LlmResult } from './llm';
-const mocks = vi.hoisted(() => ({ stream: vi.fn(), tool: vi.fn() }));
+const mocks = vi.hoisted(() => ({ stream: vi.fn(), tool: vi.fn(), listening: false }));
 vi.mock('./llm', () => ({ streamGenerate: mocks.stream, explainError: (e: Error) => e.message }));
-vi.mock('./tools', () => ({ runTool: mocks.tool, toolDeclarations: () => [] }));
+vi.mock('./tools', () => ({ runTool: mocks.tool, toolDeclarations: () => mocks.listening ? [{ name: 'listen' }] : [] }));
 vi.mock('./prompts', () => ({ systemPrompt: () => 'Producer' }));
 vi.mock('../state/settings', () => ({ aiAvailable: () => ({ ok: true }), useSettings: { getState: () => ({ thinking: 'LOW' }) } }));
 import { keepChanges, revertTo, runAgent, steerAgent, stopAgent, useAgent } from './agent';
@@ -18,7 +18,7 @@ function deferred<T>() {
 const answer = (): LlmResult => ({ content: { role: 'model', parts: [{ text: 'Done' }] } });
 const calls = (): LlmResult => ({ content: { role: 'model', parts: [{ thoughtSignature: 'sig', functionCall: { name: 'edit', id: 'a' } }, { functionCall: { name: 'edit', id: 'b' } }] } });
 
-beforeEach(() => { mocks.stream.mockReset(); mocks.tool.mockReset(); useAgent.getState().clear(); useDaw.getState().replaceProject(createProject()); });
+beforeEach(() => { mocks.stream.mockReset(); mocks.tool.mockReset(); mocks.listening = false; useAgent.getState().clear(); useDaw.getState().replaceProject(createProject()); });
 
 describe('agent steering', () => {
   it('accepts follow-ups while streaming and skips stale tool calls before replanning', async () => {
@@ -180,5 +180,50 @@ describe('selection delivery to the producer', () => {
     expect(mocks.stream.mock.calls[1][0].system).toContain('selected-hit:');
     expect(mocks.stream.mock.calls[0][0].system).not.toContain('other-hit:');
     expect(mocks.tool.mock.calls[0][2].selection).toEqual(selection);
+  });
+});
+
+describe('production review completion', () => {
+  async function prepareSong() {
+    const { createMidiClip, createTrack } = await import('../model/project');
+    const p = createProject(); const t = createTrack(p, 'instrument', { preset: 'pad' });
+    const c = createMidiClip(p, 0, 16);
+    c.notes = [{ id: 'n1', pitch: 60, start: 0, duration: 4, velocity: 0.7 }];
+    t.clips.push(c); p.tracks.push(t); useDaw.getState().replaceProject(p);
+  }
+  const call = (name: string, args = {}): LlmResult => ({ content: { role: 'model', parts: [{ functionCall: { name, args } }] } });
+  const editVolume = async () => {
+    useDaw.getState().update('Adjust level', (p) => { p.tracks[0].volumeDb -= 3; });
+    return { result: { ok: true }, summary: 'Adjusted level' };
+  };
+
+  it('continues past premature completion and reviews the edited mix', async () => {
+    await prepareSong(); mocks.listening = true;
+    mocks.stream.mockResolvedValueOnce(call('update_track')).mockResolvedValueOnce(answer()).mockResolvedValueOnce(call('listen')).mockResolvedValueOnce(answer());
+    mocks.tool.mockImplementationOnce(editVolume).mockResolvedValueOnce({ result: { heard: 'Balanced, no further fix needed.', bars: '1–5' }, summary: 'Listened' });
+    await runAgent('Make the pad quieter');
+    expect(mocks.stream).toHaveBeenCalledTimes(4);
+    expect(JSON.stringify(mocks.stream.mock.calls[2][0].contents)).toContain('Before finishing');
+    expect(mocks.stream.mock.calls[3][0].system).toContain('Current mix reviewed: 1–5');
+    expect(useAgent.getState().items.filter((item) => item.kind === 'error')).toEqual([]);
+  });
+
+  it('does not add a listening obligation when the user disabled it', async () => {
+    await prepareSong();
+    mocks.stream.mockResolvedValueOnce(call('update_track')).mockResolvedValueOnce(answer());
+    mocks.tool.mockImplementationOnce(editVolume);
+    await runAgent('Make the pad quieter');
+    expect(mocks.stream).toHaveBeenCalledTimes(2);
+    expect(mocks.stream.mock.calls[1][0].system).toContain('Listening is disabled');
+  });
+
+  it('bounds final-review retries and reports missing verification honestly', async () => {
+    await prepareSong(); mocks.listening = true;
+    mocks.stream.mockResolvedValueOnce(call('update_track')).mockResolvedValue(answer());
+    mocks.tool.mockImplementationOnce(editVolume);
+    await runAgent('Improve the mix');
+    expect(mocks.stream).toHaveBeenCalledTimes(3);
+    expect(useAgent.getState().items.some((item) => item.kind === 'error' && item.text.includes('listening review'))).toBe(true);
+    expect(useDaw.getState().transaction).toBeNull();
   });
 });

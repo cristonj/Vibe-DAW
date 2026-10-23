@@ -17,6 +17,23 @@ beforeEach(() => {
 });
 
 describe('ears audio parity', () => {
+  it('defaults to a short excerpt and a compact critique while honoring explicit ranges', async () => {
+    const p = createProject();
+    const { createTrack, createMidiClip } = await import('../model/project');
+    const t = createTrack(p, 'instrument'); t.clips.push(createMidiClip(p, 0, 256)); p.tracks.push(t);
+    p.bpm = 60;
+    await listen({ project: p });
+    expect(mocks.render.mock.calls[0][1].endBeat).toBe(12);
+    expect(mocks.generate.mock.calls[0][0].maxOutputTokens).toBe(700);
+    await listen({ project: p, startBar: 1, endBar: 9 });
+    expect(mocks.render.mock.calls[1][1].endBeat).toBe(32);
+  });
+  it('does not spend a model call on a measured silent render', async () => {
+    mocks.render.mockResolvedValueOnce({ sampleRate: 44100, channels: [new Float32Array(4410)] });
+    const result = await listen({ project: createProject() });
+    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(result.heard).toContain('silent');
+  });
   it('sends full-quality stereo to the model and retains only text findings', async () => {
     const result = await listen({ project: createProject(), startBar: 1, endBar: 2 });
     const request = mocks.generate.mock.calls[0][0];

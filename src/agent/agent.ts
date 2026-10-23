@@ -14,6 +14,8 @@ import { diffProjects } from './diff';
 import { findClip } from '../model/project';
 import { compactHistory, CONTEXT_BUDGET, historySize, summarizeHistory, withProjectState } from './history';
 import { arrayBufferToBase64 } from '../engine/wav';
+import { ProductionReview } from './productionReview';
+import { productionSkills } from './skills';
 
 // The agent loop: stream a turn, run whatever tools the model calls, feed results
 // back, repeat until it answers in plain text. All edits land in one undo step and
@@ -181,6 +183,8 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
   let history: Content[] = [...useAgent.getState().history, { role: 'user', parts: userParts }];
   const settings = useSettings.getState();
   const tools = toolDeclarations(mode);
+  const review = new ProductionReview(checkpoint);
+  const canListen = tools.some((tool) => tool.name === 'listen');
   const system = systemPrompt(mode) + '\n\nUse manage_context to inspect the context budget or compact your working memory with a concise summary of goals, steering, decisions, useful sample/track ids, listening findings and unfinished work. Automatic compaction also runs when needed. Latest steering supersedes conflicting earlier instructions; skipped tool calls were not executed.';
   let planId: string | null = null;
   let plan: PlanStep[] = [];
@@ -224,7 +228,7 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
       const res = await streamGenerate(
         // Keep the live checklist outside compacted history so progress is never
         // lost when old tool exchanges are summarized.
-        { system: system + (activeSelection ? `\n\n${describeSelection(getProject(), activeSelection).text}` : '') + `\n\n<checklist_state>\n${plan.length ? plan.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join('\n') : 'No checklist yet for this run.'}\n</checklist_state>`, contents: withVoices(history), tools, thinking: settings.thinking, signal: abort.signal },
+        { system: system + (activeSelection ? `\n\n${describeSelection(getProject(), activeSelection).text}` : '') + `\n\n${productionSkills(goal, !!activeSelection)}\n\n<checklist_state>\n${plan.length ? plan.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join('\n') : 'No checklist yet for this run.'}\n</checklist_state>\n\n${review.context(getProject(), canListen)}`, contents: withVoices(history), tools, thinking: settings.thinking, signal: abort.signal },
         {
           onText: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, text: it.text + d } : it)); },
           onThought: (d) => { if (active()) patch(aid, (it) => (it.kind === 'assistant' ? { ...it, thinking: it.thinking + d } : it)); },
@@ -251,10 +255,19 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
         if (res.finishReason && res.finishReason !== 'STOP') throw new Error(`The model stopped early (${res.finishReason}).`);
         break;
       }
+      if (res.finishReason && res.finishReason !== 'STOP') throw new Error(`The model stopped early (${res.finishReason}). Continue to finish the work; the partial response was not treated as completion.`);
       history = [...history, res.content];
       const calls = res.content.parts.filter((p) => p.functionCall).map((p) => p.functionCall!);
       if (!calls.length) {
         if (useAgent.getState().steering.length) continue;
+        const reminder = mode === 'agent' ? review.completionReminder(getProject(), canListen) : null;
+        if (reminder) {
+          // Do not leave a premature "Done" bubble above the actual review.
+          useAgent.setState((s) => ({ items: s.items.filter((item) => item.id !== aid) }));
+          history = [...history, { role: 'user', parts: [{ text: reminder }] }];
+          continue;
+        }
+        if (mode === 'agent' && canListen && review.needsReview(getProject())) push({ kind: 'error', id: nid(), text: 'Audio edits were made, but a listening review of the current full mix was not completed.' });
         completed = true;
         break;
       }
@@ -269,10 +282,12 @@ export async function runAgent(text: string, opts: RunOptions = {}) {
         const tid = nid();
         push({ kind: 'tool', id: tid, name: call.name, args: call.args ?? {}, status: 'running', summary: '' });
         setStatus(statusFor(call.name));
+        const beforeTool = getProject();
         const out = await runTool(call.name, call.args ?? {}, { signal: abort.signal, goal, plan, selection: activeSelection, context: { chars: historySize(history), budget: CONTEXT_BUDGET } }, mode);
         checkActive();
         if (out.contextSummary !== undefined) requestedSummary = out.contextSummary;
         const failed = 'error' in out.result;
+        if (call.name === 'listen' && !failed) review.record(beforeTool, call.args ?? {}, out.result);
         patch(tid, (it) => (it.kind === 'tool' ? { ...it, status: failed ? 'error' : 'done', summary: out.summary, heard: out.heard, sampleIds: out.sampleIds, clipIds: out.clipIds } : it));
         if (out.plan && !failed) {
           plan = out.plan;

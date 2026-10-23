@@ -6,6 +6,18 @@ import { runTool, toolDeclarations, type PlanStep } from './tools';
 const plan: PlanStep[] = [{ title: 'Build drums', status: 'active' }, { title: 'Balance bass', status: 'pending' }];
 const context = () => ({ signal: new AbortController().signal, goal: 'Make a beat', plan });
 
+describe('producer skills', () => {
+  it('reads one task or genre guide without changing the project, including Ask mode', async () => {
+    const before = useDaw.getState().project;
+    const task = await runTool('get_producer_skill', { name: 'rhythm' }, context(), 'ask');
+    expect(task.result.guide).toContain('steps_per_bar');
+    const genre = await runTool('get_producer_skill', { name: 'house' }, context(), 'agent');
+    expect(genre.result.guide).toContain('Four-on-the-floor');
+    expect(useDaw.getState().project).toBe(before);
+    expect((await runTool('get_producer_skill', { name: '__proto__' }, context(), 'agent')).result).toHaveProperty('error');
+  });
+});
+
 describe('checklist tool', () => {
   it('creates a checklist and returns its canonical state', async () => {
     const out = await runTool('update_plan', { steps: plan }, context(), 'agent');

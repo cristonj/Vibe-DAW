@@ -20,6 +20,7 @@ import { saveToLibrary, loadFromLibrary } from '../ui/presetActions';
 import { usePresets } from '../state/presetLibrary';
 import { PRESET_KINDS, type PresetKind } from '../model/presets';
 import { selectedNotes, selectionClips, type EditSelection } from '../model/selection';
+import { PRODUCER_SKILLS, GENRE_SKILLS } from './skills';
 
 // The agent's hands. Every tool validates its input, edits the project through the
 // same store the UI uses (so it's all undoable), and returns a compact result.
@@ -211,6 +212,16 @@ function annotationArgs(p: Project, a: Record<string, unknown>, old?: Annotation
 }
 
 const TOOLS: ToolDef[] = [
+  {
+    readOnly: true,
+    decl: { name: 'get_producer_skill', description: 'Read one production procedure or genre guide when not already attached. Read custom_effect before custom DSP. Do not fetch all skills.', parameters: obj({ name: S('Skill to read', { enum: [...Object.keys(PRODUCER_SKILLS), ...Object.keys(GENRE_SKILLS)] }) }, ['name']) },
+    run: (a) => {
+      const skills = { ...PRODUCER_SKILLS, ...GENRE_SKILLS };
+      const name = String(a.name);
+      if (!Object.hasOwn(skills, name)) throw new ToolError(`Unknown skill. Choose ${Object.keys(skills).join(', ')}.`);
+      return { result: { name, guide: skills[name as keyof typeof skills] }, summary: `Read ${name} production skill` };
+    },
+  },
   {
     readOnly: true,
     decl: { name: 'list_annotations', description: 'Read timed production notes and lyrics, including full text. These cues need no vocal track. Optional bar range and kind filter.', parameters: obj({ start_bar: N('From bar'), end_bar: N('To bar, exclusive'), kind: S('Cue kind', { enum: ['note', 'lyric'] }) }) },
@@ -524,7 +535,7 @@ Use loop_bars to write a short pattern once and repeat it across length_bars.`,
       name: 'write_drums',
       description: `Write a drum pattern clip with step strings, one per lane. Per step: x hit, X accent, o ghost, . rest, and 2/3/4 = a roll of that many hits inside one step (trap hat rolls).
 Spaces and | are ignored. A pattern shorter than the clip repeats. steps_per_bar defaults to 16 (16ths); use 32 for fast hats, 12 or 24 for triplet feel.
-Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.x.x.x.3.x.x.x.x.x.x.x.4...x." with steps_per_bar 32.`,
+Example half-time trap bar, ALL lanes steps_per_bar=16: kick "x......x..x.....", snare "........x.......", hat "x.x.x.x.x.x.x.x.". Snare on beat 3 differs from a beats-2-and-4 backbeat.`,
       parameters: obj({
         track_id: S('Drum track id'),
         start_bar: N('First bar (1-based)'),
@@ -1055,7 +1066,7 @@ Example trap bar: kick "x......x..x.....", snare "....x.......x...", hat "x.x.x.
     enabled: () => useSettings.getState().autoListen,
     decl: {
       name: 'listen',
-      description: 'Bounce part of the song and LISTEN to the same full-quality stereo mix as the editor, returning an honest critique plus measured levels/spectrum. Use after building each layer and before finishing. Max ~60 s per listen; listen to additional ranges separately.',
+      description: 'Render and critique a representative passage with measured levels. Defaults to 4 bars, capped at 12 seconds unless end_bar is explicit (explicit ranges max 60 s). Usually ONE focused full-mix review; inspect notes/timing first. Re-listen only to resolve a specific issue. Extra audio and calls cost tokens.',
       parameters: obj({
         start_bar: N('From bar (default 1)'),
         end_bar: N('To bar, exclusive (default end of song)'),
