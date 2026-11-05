@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useRef, useState, type AnimationEvent, type CSSProperties, type PointerEvent } from 'react';
-import { LayeredWordmark, Wordmark } from '../brand/Wordmark';
+import { LayeredWordmark } from '../brand/Wordmark';
 import { MusicTheoryIdentity } from './MusicTheoryIdentity';
 import { donationWallets } from './donations';
+import { CreatorProjects } from '@cristonj/project-footer';
+import '@cristonj/project-footer/styles.css';
 import './landing.css';
 
 const REPO = 'https://github.com/cristonj/Vibe-DAW';
@@ -231,9 +233,9 @@ export function Landing() {
 
     </main>
     <footer className="lp-legal lp-wrap" aria-label="Footer">
-      <div className="lp-footer-brands"><a href="/" aria-label="Vibe home"><Wordmark className="lp-footer-vibe" label="" glow /></a><a href="https://musictheory.work/" target="_blank" rel="noopener noreferrer" aria-label="MusicTheory.Work"><img src="/related/musictheory-wordmark.svg" width="1144" height="120" alt="" /></a></div>
-      <div className="lp-footer-links"><a href="/terms/">Terms</a><a href="/privacy/">Privacy</a><a href={REPO} target="_blank" rel="noreferrer">GitHub</a></div>
-      <p>Created by <a href="https://www.linkedin.com/in/criston-jackson/">Criston Jackson</a></p>
+      <CreatorProjects currentProject="vibe" style={{ '--cj-muted': '#9999a3' }}>
+        <nav className="lp-footer-links" aria-label="Legal"><a href="/terms/">Terms</a><a href="/privacy/">Privacy</a><a href={REPO} target="_blank" rel="noreferrer">GitHub</a></nav>
+      </CreatorProjects>
     </footer>
   </div>;
 }
