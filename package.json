@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
+    "@cristonj/project-footer": "file:vendor/cristonj-project-footer-0.2.1.tgz",
     "@google/genai": "^2.30.0",
     "firebase": "^13.0.0",
     "idb-keyval": "^6.3.0",

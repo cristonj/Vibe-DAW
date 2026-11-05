@@ -254,14 +254,8 @@
   .lp-wordmark .vibe-letter, .lp-wordmark .vibe-i .vibe-dot, .lp-wordmark .vibe-letter.bop, .lp-wordmark .vibe-i.bop .vibe-dot, .lp-hero mark .lp-letter, .lp-letter.bop { animation: none; }
 }
 .lp-legal { display:flex; flex-direction:column; align-items:center; gap:12px; padding-block:16px 40px; font-size:14px; }
-.lp-footer-brands { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:16px 36px; max-width:100%; }
-.lp-footer-brands a { display:flex; align-items:center; min-height:44px; max-width:100%; }
-.lp-footer-brands .lp-footer-vibe { width:84px; height:auto; }
-.lp-footer-brands img { width:210px; max-width:100%; height:auto; }
 .lp-footer-links { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 24px; }
 .lp-footer-links a { display:inline-flex; min-height:44px; align-items:center; }
 .lp-legal a { text-underline-offset:4px; }
 .lp-legal a:hover { text-decoration:underline; }
-.lp-legal > p { font-size:13px; }
-.lp-legal > p a { color:var(--text); }
 .lp-legal a:focus-visible { outline:2px solid var(--agent,#b69cff); outline-offset:5px; border-radius:3px; }
